@@ -8,8 +8,6 @@ void initialize_luaugdext_module(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE)
 		return;
 
-    print_line("Luau GDExt Initialized");
-
     LuauEngine::init();
 }
 

@@ -28,6 +28,9 @@ public:
 	// PackedStringArray _get_classes_used(const String &p_path) const override;
 	Variant _load(const String &p_path, const String &p_original_path, bool p_use_sub_threads, int32_t p_cache_mode) const override;
 
+	LuauScriptLoader();
+	~LuauScriptLoader();
+
 protected:
     static void _bind_methods() {}
 };
@@ -47,6 +50,9 @@ public:
 	PackedStringArray _get_recognized_extensions(const Ref<Resource> &p_resource) const override;
 	bool _recognize_path(const Ref<Resource> &p_resource, const String &p_path) const override;
     
+	LuauScriptSaver();
+	~LuauScriptSaver();
+	
 protected:
     static void _bind_methods() {}
 };

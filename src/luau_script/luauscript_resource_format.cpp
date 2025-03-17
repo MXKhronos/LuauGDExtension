@@ -13,10 +13,16 @@ using namespace godot;
 LuauScriptLoader *LuauScriptLoader::singleton;
 
 LuauScriptLoader *LuauScriptLoader::get_singleton() {
-	if (singleton) return singleton;
-	
-	singleton = memnew(LuauScriptLoader);
 	return singleton;
+}
+
+LuauScriptLoader::LuauScriptLoader() {
+	if (singleton) return;
+	singleton = this;
+}
+
+LuauScriptLoader::~LuauScriptLoader() {
+	singleton = nullptr;
 }
 
 PackedStringArray LuauScriptLoader::_get_recognized_extensions() const {
@@ -28,7 +34,7 @@ bool LuauScriptLoader::_recognize_path(const String &p_path, const StringName &p
 }
 
 bool LuauScriptLoader::_handles_type(const StringName &p_type) const {
-	return p_type == StringName("Luau");
+	return p_type == LuauCommon::get_string_name();
 }
 
 String LuauScriptLoader::_get_resource_type(const String &p_path) const {
@@ -61,10 +67,16 @@ Variant LuauScriptLoader::_load(const String &p_path, const String &p_original_p
 LuauScriptSaver *LuauScriptSaver::singleton;
 
 LuauScriptSaver *LuauScriptSaver::get_singleton() {
-	if (singleton) return singleton;
-	
-	singleton = memnew(LuauScriptSaver);
 	return singleton;
+}
+
+LuauScriptSaver::LuauScriptSaver() {
+	if (singleton) return;
+	singleton = this;
+}
+
+LuauScriptSaver::~LuauScriptSaver() {
+	singleton = nullptr;
 }
 
 Error LuauScriptSaver::_save(const Ref<Resource> &p_resource, const String &p_path, uint32_t p_flags) {

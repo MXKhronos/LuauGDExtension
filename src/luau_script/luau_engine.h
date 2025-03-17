@@ -3,6 +3,8 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 
+#include <debug_tools/backward.hpp>
+
 using namespace godot;
 
 class LuauEngine {

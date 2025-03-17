@@ -9,7 +9,6 @@ class LuauScript : public ScriptExtension {
 	GDCLASS(LuauScript, ScriptExtension);
 
 	friend class LuauLanguage;
-	String origin_path;
 	String source;
 
 public:
@@ -20,7 +19,7 @@ public:
     Ref<Script> _get_base_script() const override;
     // StringName _get_global_name() const;
     // bool _inherits_script(const Ref<Script> &p_script) const;
-    // StringName _get_instance_base_type() const;
+    StringName _get_instance_base_type() const override;
     void *_instance_create(Object *p_for_object) const override;
     void *_placeholder_instance_create(Object *p_for_object) const override;
     // bool _instance_has(Object *p_object) const;
@@ -36,7 +35,7 @@ public:
     // Variant _get_script_method_argument_count(const StringName &p_method) const;
     // Dictionary _get_method_info(const StringName &p_method) const;
     bool _is_tool() const override;
-    // bool _is_valid() const;
+    bool _is_valid() const override;
     // bool _is_abstract() const;
     ScriptLanguage *_get_language() const override;
     // bool _has_script_signal(const StringName &p_signal) const;

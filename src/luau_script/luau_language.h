@@ -18,8 +18,8 @@ public:
 	void _init() override {};
 	String _get_type() const override;
 	String _get_extension() const override;
-	// void _finish();
-	// PackedStringArray _get_reserved_words() const;
+	void _finish() override;
+	PackedStringArray _get_reserved_words() const override;
 	// bool _is_control_flow_keyword(const String &p_keyword) const;
 	// PackedStringArray _get_comment_delimiters() const;
 	PackedStringArray _get_doc_comment_delimiters() const override;
@@ -29,7 +29,7 @@ public:
 	bool _is_using_templates() override;
 	Dictionary _validate(const String &p_script, const String &p_path, bool p_validate_functions, bool p_validate_errors, bool p_validate_warnings, bool p_validate_safe_lines) const override;
 	String _validate_path(const String &p_path) const override;
-	// Object *_create_script() const;
+	Object *_create_script() const override;
 	// bool _has_named_classes() const;
 	bool _supports_builtin_mode() const override;
 	// bool _supports_documentation() const;
@@ -44,8 +44,8 @@ public:
 	// Dictionary _lookup_code(const String &p_code, const String &p_symbol, const String &p_path, Object *p_owner) const;
 	// String _auto_indent_code(const String &p_code, int32_t p_from_line, int32_t p_to_line) const;
 	// void _add_global_constant(const StringName &p_name, const Variant &p_value);
-	// void _add_named_global_constant(const StringName &p_name, const Variant &p_value);
-	// void _remove_named_global_constant(const StringName &p_name);
+	void _add_named_global_constant(const StringName &p_name, const Variant &p_value) override;
+	void _remove_named_global_constant(const StringName &p_name) override;
 	void _thread_enter() override {};
 	void _thread_exit() override {};
 	// String _debug_get_error() const;
@@ -73,7 +73,7 @@ public:
 	// int32_t _profiling_get_frame_data(ScriptLanguageExtensionProfilingInfo *p_info_array, int32_t p_info_max);
 	void _frame() override {};
 	bool _handles_global_class_type(const String &p_type) const override;
-	// Dictionary _get_global_class_name(const String &p_path) const;
+	Dictionary _get_global_class_name(const String &p_path) const override;
 
     LuauLanguage();
     ~LuauLanguage();

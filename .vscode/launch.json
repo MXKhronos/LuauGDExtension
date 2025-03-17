@@ -14,7 +14,8 @@
                 "--path", 
                 "Y:/Repo/luau_gamedemo",
                 "-e",
-                "-v"
+                //"-v",
+                "-d"
             ],
             "console": "integratedTerminal", 
             "cwd": "${workspaceFolder}",

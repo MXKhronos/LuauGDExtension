@@ -4,10 +4,14 @@
 using namespace godot;
 
 namespace LuauCommon {
+    static const StringName get_string_name() {
+        return StringName("Luau");
+    }
+
     static const String get_name() {
         return "Luau";
     }
-    
+
     static const String get_primary_extension() {
         return "luau";
     }

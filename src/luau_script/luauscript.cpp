@@ -1,6 +1,8 @@
 #include <luau_script/luauscript.h>
 #include <luau_script/luau_language.h>
 
+#include <luau_script/luau_common.h>
+
 GDExtensionScriptInstanceInfo3 instance_info;
 
 class LuauScriptInstance {
@@ -8,6 +10,10 @@ class LuauScriptInstance {
 
 Ref<Script> LuauScript::_get_base_script() const {
 	return nullptr;
+}
+
+StringName LuauScript::_get_instance_base_type() const {
+	return LuauCommon::get_string_name();
 }
 
 void *LuauScript::_instance_create(Object *p_for_object) const {
@@ -31,6 +37,10 @@ String LuauScript::_get_source_code() const {
 
 bool LuauScript::_is_tool() const {
 	return false;
+}
+
+bool LuauScript::_is_valid() const {
+	return true;
 }
 
 ScriptLanguage *LuauScript::_get_language() const {
