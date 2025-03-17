@@ -17,7 +17,7 @@
                 "-v"
             ],
             "console": "integratedTerminal", 
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
         }
     ]
 }

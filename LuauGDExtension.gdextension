@@ -1,0 +1,12 @@
+[configuration]
+
+entry_symbol = "luaugdext_library_init"
+compatibility_minimum = "4.1"
+reloadable = true
+
+[libraries]
+
+windows.debug.x86_64 = "res://addons/LuauGDExtension/LuauGDExtension.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://bin/LuauGDExtension/LuauGDExtension.windows.template_release.x86_64.dll"
+linux.debug.x86_64 = "res://bin/LuauGDExtension/LuauGDExtension.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://bin/LuauGDExtension/LuauGDExtension.linux.template_release.x86_64.so"

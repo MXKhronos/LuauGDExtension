@@ -25,7 +25,7 @@ library = env.SharedLibrary(
     source=sources,
 )
 
-# Copy the KoreDevKit.gdextension file to the library's directory
+# Copy the .gdextension file to the library's directory
 gdextension_copy = env.Command(
     output_dir + f"{extTitle}.gdextension",
     f"{extTitle}.gdextension",
