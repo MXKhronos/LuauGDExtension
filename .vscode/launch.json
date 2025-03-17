@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?link...
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "cppvsdbg",
+            "request": "launch",
+            "name": "Debug",
+            "preLaunchTask": "build",
+            "program": "Z:/Godot/Godot_v4.4-stable_mono_win64/Godot_v4.4-stable_mono_win64.exe",
+            "args": [
+                "--path", 
+                "Y:/Repo/luau_gamedemo",
+                "-e",
+                "-v"
+            ],
+            "console": "integratedTerminal", 
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

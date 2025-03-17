@@ -1,0 +1,8 @@
+{
+    "cmake.ignoreCMakeListsMissing": true,
+    "files.exclude": {
+        "**/*.dblite": true,
+        "**/*.lib": true,
+        "**/*.obj": true
+    }
+}

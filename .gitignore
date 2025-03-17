@@ -1,0 +1,10 @@
+*.obj
+*.uid
+*.dblite
+*.lib
+*.obj
+*.tmp
+*.pdb
+*.pyc
+*.lib
+/gen/**/*
