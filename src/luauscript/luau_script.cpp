@@ -3,6 +3,8 @@
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/templates/local_vector.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
 
 #include "nobind.h"
 #include "luau_engine.h"
@@ -11,6 +13,732 @@
 
 using namespace godot;
 
+//MARK: ScriptInstance
+#define COMMON_SELF ((ScriptInstance *)p_self)
+
+void ScriptInstance::init_script_instance_info_common(GDExtensionScriptInstanceInfo3 &p_info) {
+	// Must initialize potentially unused struct fields to nullptr
+	// (if not, causes segfault on MSVC).
+	p_info.property_can_revert_func = nullptr;
+	p_info.property_get_revert_func = nullptr;
+
+	p_info.call_func = nullptr;
+	p_info.notification_func = nullptr;
+
+	p_info.to_string_func = nullptr;
+
+	p_info.refcount_incremented_func = nullptr;
+	p_info.refcount_decremented_func = nullptr;
+
+	p_info.is_placeholder_func = nullptr;
+
+	p_info.set_fallback_func = nullptr;
+	p_info.get_fallback_func = nullptr;
+
+	p_info.set_func = [](void *p_self, GDExtensionConstStringNamePtr p_name, GDExtensionConstVariantPtr p_value) -> GDExtensionBool {
+		return COMMON_SELF->set(*(const StringName *)p_name, *(const Variant *)p_value);
+	};
+
+	p_info.get_func = [](void *p_self, GDExtensionConstStringNamePtr p_name, GDExtensionVariantPtr r_ret) -> GDExtensionBool {
+		return COMMON_SELF->get(*(const StringName *)p_name, *(Variant *)r_ret);
+	};
+
+	p_info.get_property_list_func = [](void *p_self, uint32_t *r_count) -> const GDExtensionPropertyInfo * {
+		return COMMON_SELF->get_property_list(r_count);
+	};
+
+	p_info.free_property_list_func = [](void *p_self, const GDExtensionPropertyInfo *p_list, uint32_t p_count) {
+		COMMON_SELF->free_property_list(p_list, p_count);
+	};
+
+	p_info.validate_property_func = [](void *p_self, GDExtensionPropertyInfo *p_property) -> GDExtensionBool {
+		return COMMON_SELF->validate_property(p_property);
+	};
+
+	p_info.get_owner_func = [](void *p_self) {
+		return COMMON_SELF->get_owner()->_owner;
+	};
+
+	p_info.get_property_state_func = [](void *p_self, GDExtensionScriptInstancePropertyStateAdd p_add_func, void *p_userdata) {
+		COMMON_SELF->get_property_state(p_add_func, p_userdata);
+	};
+
+	p_info.get_method_list_func = [](void *p_self, uint32_t *r_count) -> const GDExtensionMethodInfo * {
+		return COMMON_SELF->get_method_list(r_count);
+	};
+
+	p_info.free_method_list_func = [](void *p_self, const GDExtensionMethodInfo *p_list, uint32_t p_count) {
+		COMMON_SELF->free_method_list(p_list, p_count);
+	};
+
+	p_info.get_property_type_func = [](void *p_self, GDExtensionConstStringNamePtr p_name, GDExtensionBool *r_is_valid) -> GDExtensionVariantType {
+		return (GDExtensionVariantType)COMMON_SELF->get_property_type(*(const StringName *)p_name, (bool *)r_is_valid);
+	};
+
+	p_info.has_method_func = [](void *p_self, GDExtensionConstStringNamePtr p_name) -> GDExtensionBool {
+		return COMMON_SELF->has_method(*(const StringName *)p_name);
+	};
+
+	p_info.get_script_func = [](void *p_self) {
+		return COMMON_SELF->get_script().ptr()->_owner;
+	};
+
+	p_info.get_language_func = [](void *p_self) {
+		return COMMON_SELF->get_language()->_owner;
+	};
+}
+
+static String *string_alloc(const String &p_str) {
+	String *ptr = memnew(String);
+	*ptr = p_str;
+
+	return ptr;
+}
+
+static StringName *stringname_alloc(const String &p_str) {
+	StringName *ptr = memnew(StringName);
+	*ptr = p_str;
+
+	return ptr;
+}
+
+void ScriptInstance::copy_prop(const GDProperty &p_src, GDExtensionPropertyInfo &p_dst) {
+	p_dst.type = p_src.type;
+	p_dst.name = stringname_alloc(p_src.name);
+	p_dst.class_name = stringname_alloc(p_src.class_name);
+	p_dst.hint = p_src.hint;
+	p_dst.hint_string = string_alloc(p_src.hint_string);
+	p_dst.usage = p_src.usage;
+}
+
+void ScriptInstance::free_prop(const GDExtensionPropertyInfo &p_prop) {
+	// smelly
+	memdelete((StringName *)p_prop.name);
+	memdelete((StringName *)p_prop.class_name);
+	memdelete((String *)p_prop.hint_string);
+}
+
+void ScriptInstance::get_property_state(GDExtensionScriptInstancePropertyStateAdd p_add_func, void *p_userdata) {
+	// ! refer to script_language.cpp get_property_state
+	// the default implementation is not carried over to GDExtension
+
+	uint32_t count = 0;
+	GDExtensionPropertyInfo *props = get_property_list(&count);
+
+	for (int i = 0; i < count; i++) {
+		StringName *name = (StringName *)props[i].name;
+
+		if (props[i].usage & PROPERTY_USAGE_STORAGE) {
+			Variant value;
+			bool is_valid = get(*name, value);
+
+			if (is_valid)
+				p_add_func(name, &value, p_userdata);
+		}
+	}
+
+	free_property_list(props, count);
+}
+
+static void add_to_state(GDExtensionConstStringNamePtr p_name, GDExtensionConstVariantPtr p_value, void *p_userdata) {
+	List<Pair<StringName, Variant>> *list = reinterpret_cast<List<Pair<StringName, Variant>> *>(p_userdata);
+	list->push_back({ *(const StringName *)p_name, *(const Variant *)p_value });
+}
+
+void ScriptInstance::get_property_state(List<Pair<StringName, Variant>> &p_list) {
+	get_property_state(add_to_state, &p_list);
+}
+
+void ScriptInstance::free_property_list(const GDExtensionPropertyInfo *p_list, uint32_t p_count) const {
+	if (!p_list)
+		return;
+
+	for (int i = 0; i < p_count; i++)
+		free_prop(p_list[i]);
+
+	memfree((GDExtensionPropertyInfo *)p_list);
+}
+
+GDExtensionMethodInfo *ScriptInstance::get_method_list(uint32_t *r_count) const {
+	LocalVector<GDExtensionMethodInfo> methods;
+	HashSet<StringName> defined;
+
+	const LuauScript *s = get_script().ptr();
+
+	while (s) {
+		for (const KeyValue<StringName, GDMethod> &pair : s->get_definition().methods) {
+			if (defined.has(pair.key))
+				continue;
+
+			defined.insert(pair.key);
+
+			const GDMethod &src = pair.value;
+
+			GDExtensionMethodInfo dst;
+
+			dst.name = stringname_alloc(src.name);
+			copy_prop(src.return_val, dst.return_value);
+			dst.flags = src.flags;
+			dst.argument_count = src.arguments.size();
+
+			if (dst.argument_count > 0) {
+				GDExtensionPropertyInfo *arg_list = memnew_arr(GDExtensionPropertyInfo, dst.argument_count);
+
+				for (int j = 0; j < dst.argument_count; j++)
+					copy_prop(src.arguments[j], arg_list[j]);
+
+				dst.arguments = arg_list;
+			}
+
+			dst.default_argument_count = src.default_arguments.size();
+
+			if (dst.default_argument_count > 0) {
+				Variant *defargs = memnew_arr(Variant, dst.default_argument_count);
+
+				for (int j = 0; j < dst.default_argument_count; j++)
+					defargs[j] = src.default_arguments[j];
+
+				dst.default_arguments = (GDExtensionVariantPtr *)defargs;
+			}
+
+			methods.push_back(dst);
+		}
+
+		s = s->get_base().ptr();
+	}
+
+	int size = methods.size();
+	*r_count = size;
+
+	GDExtensionMethodInfo *list = (GDExtensionMethodInfo *)memalloc(sizeof(GDExtensionMethodInfo) * size);
+	memcpy(list, methods.ptr(), sizeof(GDExtensionMethodInfo) * size);
+
+	return list;
+}
+
+void ScriptInstance::free_method_list(const GDExtensionMethodInfo *p_list, uint32_t p_count) const {
+	if (!p_list)
+		return;
+
+	for (int i = 0; i < p_count; i++) {
+		const GDExtensionMethodInfo &method = p_list[i];
+
+		memdelete((StringName *)method.name);
+
+		free_prop(method.return_value);
+
+		if (method.argument_count > 0) {
+			for (int i = 0; i < method.argument_count; i++)
+				free_prop(method.arguments[i]);
+
+			memdelete(method.arguments);
+		}
+
+		if (method.default_argument_count > 0)
+			memdelete((Variant *)method.default_arguments);
+	}
+
+	memdelete((GDExtensionMethodInfo *)p_list);
+}
+
+ScriptLanguage *ScriptInstance::get_language() const {
+	return LuauLanguage::get_singleton();
+}
+
+
+
+
+//MARK: LuauScriptInstance
+#define INSTANCE_SELF ((LuauScriptInstance *)p_self)
+
+static GDExtensionScriptInstanceInfo3 init_script_instance_info() {
+	GDExtensionScriptInstanceInfo3 info;
+	ScriptInstance::init_script_instance_info_common(info);
+
+	info.property_can_revert_func = [](void *p_self, GDExtensionConstStringNamePtr p_name) -> GDExtensionBool {
+		return INSTANCE_SELF->property_can_revert(*((StringName *)p_name));
+	};
+
+	info.property_get_revert_func = [](void *p_self, GDExtensionConstStringNamePtr p_name, GDExtensionVariantPtr r_ret) -> GDExtensionBool {
+		return INSTANCE_SELF->property_get_revert(*((StringName *)p_name), (Variant *)r_ret);
+	};
+
+	info.call_func = [](void *p_self, GDExtensionConstStringNamePtr p_method, const GDExtensionConstVariantPtr *p_args, GDExtensionInt p_argument_count, GDExtensionVariantPtr r_return, GDExtensionCallError *r_error) {
+		return INSTANCE_SELF->call(*((StringName *)p_method), (const Variant **)p_args, p_argument_count, (Variant *)r_return, r_error);
+	};
+
+	info.notification_func = [](void *p_self, int32_t p_what, GDExtensionBool p_reversed) {
+		INSTANCE_SELF->notification(p_what);
+	};
+
+	info.to_string_func = [](void *p_self, GDExtensionBool *r_is_valid, GDExtensionStringPtr r_out) {
+		INSTANCE_SELF->to_string(r_is_valid, (String *)r_out);
+	};
+
+	info.free_func = [](void *p_self) {
+		memdelete(INSTANCE_SELF);
+	};
+
+	info.refcount_decremented_func = [](void *) -> GDExtensionBool {
+		// If false (default), object cannot die
+		return true;
+	};
+
+	return info;
+}
+const GDExtensionScriptInstanceInfo3 LuauScriptInstance::INSTANCE_INFO = init_script_instance_info();
+
+bool LuauScriptInstance::property_can_revert(const StringName &p_name) {
+    #define PROPERTY_CAN_REVERT_NAME "_PropertyCanRevert"
+
+    const LuauScript *s = script.ptr();
+
+    // while (s) {
+    //     if (s->methods.has(PROPERTY_CAN_REVERT_NAME)) {
+    //         lua_State *ET = lua_newthread(T);
+
+    //         LuaStackOp<String>::push(ET, p_name);
+    //         int status = call_internal(PROPERTY_CAN_REVERT_NAME, ET, 1, 1);
+
+    //         if (status != OK) {
+    //             lua_pop(T, 1); // thread
+    //             return false;
+    //         }
+
+    //         if (lua_type(ET, -1) != LUA_TBOOLEAN) {
+    //             s->error("LuauScriptInstance::property_can_revert", "Expected " PROPERTY_CAN_REVERT_NAME " to return a boolean", 1);
+    //             lua_pop(T, 1); // thread
+    //             return false;
+    //         }
+
+    //         bool ret = lua_toboolean(ET, -1);
+    //         lua_pop(T, 1); // thread
+    //         return ret;
+    //     }
+
+    //     s = s->base.ptr();
+    // }
+
+    return false;
+}
+
+bool LuauScriptInstance::property_get_revert(const StringName &p_name, Variant *r_ret) {
+    #define PROPERTY_GET_REVERT_NAME "_PropertyGetRevert"
+
+    const LuauScript *s = script.ptr();
+
+    // while (s) {
+    //     if (s->methods.has(PROPERTY_GET_REVERT_NAME)) {
+    //         lua_State *ET = lua_newthread(T);
+
+    //         LuaStackOp<String>::push(ET, p_name);
+    //         int status = call_internal(PROPERTY_GET_REVERT_NAME, ET, 1, 1);
+
+    //         if (status != OK) {
+    //             lua_pop(T, 1); // thread
+    //             return false;
+    //         }
+
+    //         if (!LuaStackOp<Variant>::is(ET, -1)) {
+    //             s->error("LuauScriptInstance::property_get_revert", "Expected " PROPERTY_GET_REVERT_NAME " to return a Variant", 1);
+    //             lua_pop(T, 1); // thread
+    //             return false;
+    //         }
+
+    //         *r_ret = LuaStackOp<Variant>::get(ET, -1);
+    //         lua_pop(T, 1); // thread
+    //         return true;
+    //     }
+
+    //     s = s->base.ptr();
+    // }
+
+    return false;
+}
+
+void LuauScriptInstance::call(
+    const StringName &p_method,
+    const Variant *const *p_args, const GDExtensionInt p_argument_count,
+    Variant *r_return, GDExtensionCallError *r_error) {
+    // const LuauScript *s = script.ptr();
+
+    // while (s) {
+    //     StringName actual_name = p_method;
+
+    //     // check name given and name converted to pascal
+    //     // (e.g. if Node::_ready is called -> _Ready)
+    //     if (s->has_method(p_method, &actual_name)) {
+    //         const GDMethod &method = s->get_definition().methods[actual_name];
+
+    //         // Check argument count
+    //         int args_allowed = method.arguments.size();
+    //         int args_default = method.default_arguments.size();
+    //         int args_required = args_allowed - args_default;
+
+    //         if (p_argument_count < args_required) {
+    //             r_error->error = GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS;
+    //             r_error->argument = args_required;
+
+    //             return;
+    //         }
+
+    //         if (p_argument_count > args_allowed) {
+    //             r_error->error = GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS;
+    //             r_error->argument = args_allowed;
+
+    //             return;
+    //         }
+
+    //         // Prepare for call
+    //         lua_State *ET = lua_newthread(T); // execution thread
+
+    //         for (int i = 0; i < p_argument_count; i++) {
+    //             const Variant &arg = *p_args[i];
+
+    //             if (!(method.arguments[i].usage & PROPERTY_USAGE_NIL_IS_VARIANT) &&
+    //                     !Utils::variant_types_compatible(arg.get_type(), Variant::Type(method.arguments[i].type))) {
+    //                 r_error->error = GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT;
+    //                 r_error->argument = i;
+    //                 r_error->expected = method.arguments[i].type;
+
+    //                 lua_pop(T, 1); // thread
+    //                 return;
+    //             }
+
+    //             LuaStackOp<Variant>::push(ET, arg);
+    //         }
+
+    //         for (int i = p_argument_count - args_required; i < args_default; i++)
+    //             LuaStackOp<Variant>::push(ET, method.default_arguments[i]);
+
+    //         // Call
+    //         r_error->error = GDEXTENSION_CALL_OK;
+
+    //         int status = call_internal(actual_name, ET, args_allowed, 1);
+
+    //         if (status == LUA_OK) {
+    //             *r_return = LuaStackOp<Variant>::get(ET, -1);
+    //         } else if (status == LUA_YIELD) {
+    //             if (method.return_val.type != GDEXTENSION_VARIANT_TYPE_NIL) {
+    //                 lua_pop(T, 1); // thread
+    //                 ERR_FAIL_MSG("Non-void method yielded unexpectedly");
+    //             }
+
+    //             *r_return = Variant();
+    //         }
+
+    //         lua_pop(T, 1); // thread
+    //         return;
+    //     }
+
+    //     s = s->base.ptr();
+    // }
+
+    // r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
+}
+
+void LuauScriptInstance::notification(int32_t p_what) {
+    #define NOTIF_NAME "_Notification"
+
+    // These notifications will fire at program exit; see ~LuauScriptInstance
+    // 3: NOTIFICATION_PREDELETE_CLEANUP (not bound)
+    // if ((p_what == Object::NOTIFICATION_PREDELETE || p_what == 3) && !LuauEngine::get_singleton()) {
+    //     return;
+    // }
+
+    // const LuauScript *s = script.ptr();
+
+    // while (s) {
+    //     if (s->methods.has(NOTIF_NAME)) {
+    //         lua_State *ET = lua_newthread(T);
+
+    //         LuaStackOp<int32_t>::push(ET, p_what);
+    //         call_internal(NOTIF_NAME, ET, 1, 0);
+
+    //         lua_pop(T, 1); // thread
+    //     }
+
+    //     s = s->base.ptr();
+    // }
+}
+
+void LuauScriptInstance::to_string(GDExtensionBool *r_is_valid, String *r_out) {
+    #define TO_STRING_NAME "_ToString"
+
+    // const LuauScript *s = script.ptr();
+
+    // while (s) {
+    //     if (s->methods.has(TO_STRING_NAME)) {
+    //         lua_State *ET = lua_newthread(T);
+
+    //         int status = call_internal(TO_STRING_NAME, ET, 0, 1);
+
+    //         if (status == LUA_OK)
+    //             *r_out = LuaStackOp<String>::get(ET, -1);
+
+    //         if (r_is_valid)
+    //             *r_is_valid = status == LUA_OK;
+
+    //         lua_pop(T, 1); // thread
+    //         return;
+    //     }
+
+    //     s = s->base.ptr();
+    // }
+}
+
+
+
+
+//MARK: PlaceholderScriptInstance
+#ifdef TOOLS_ENABLED
+#define PLACEHOLDER_SELF ((PlaceHolderScriptInstance *)p_self)
+
+static GDExtensionScriptInstanceInfo3 init_placeholder_instance_info() {
+	// Methods which essentially have no utility (e.g. call) are implemented here instead of in the class.
+
+	GDExtensionScriptInstanceInfo3 info;
+	ScriptInstance::init_script_instance_info_common(info);
+
+	info.property_can_revert_func = [](void *, GDExtensionConstStringNamePtr) -> GDExtensionBool {
+		return false;
+	};
+
+	info.property_get_revert_func = [](void *, GDExtensionConstStringNamePtr, GDExtensionVariantPtr) -> GDExtensionBool {
+		return false;
+	};
+
+	info.call_func = [](void *p_self, GDExtensionConstStringNamePtr p_method, const GDExtensionConstVariantPtr *p_args, GDExtensionInt p_argument_count, GDExtensionVariantPtr r_return, GDExtensionCallError *r_error) {
+		r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
+		*(Variant *)r_return = Variant();
+	};
+
+	info.is_placeholder_func = [](void *) -> GDExtensionBool {
+		return true;
+	};
+
+	info.set_fallback_func = [](void *p_self, GDExtensionConstStringNamePtr p_name, GDExtensionConstVariantPtr p_value) -> GDExtensionBool {
+		return PLACEHOLDER_SELF->property_set_fallback(*(const StringName *)p_name, *(const Variant *)p_value);
+	};
+
+	info.get_fallback_func = [](void *p_self, GDExtensionConstStringNamePtr p_name, GDExtensionVariantPtr r_ret) -> GDExtensionBool {
+		return PLACEHOLDER_SELF->property_get_fallback(*(const StringName *)p_name, *(Variant *)r_ret);
+	};
+
+	info.free_func = [](void *p_self) {
+		memdelete(PLACEHOLDER_SELF);
+	};
+
+	return info;
+}
+
+const GDExtensionScriptInstanceInfo3 PlaceHolderScriptInstance::INSTANCE_INFO = init_placeholder_instance_info();
+
+bool PlaceHolderScriptInstance::set(const StringName &p_name, const Variant &p_value, PropertySetGetError *r_err) {
+	if (script->_is_placeholder_fallback_enabled()) {
+		if (r_err)
+			*r_err = PROP_NOT_FOUND;
+
+		return false;
+	}
+
+	if (values.has(p_name)) {
+		if (script->_has_property_default_value(p_name)) {
+			Variant defval = script->_get_property_default_value(p_name);
+
+			Variant op_result;
+			bool op_valid = false;
+			Variant::evaluate(Variant::OP_EQUAL, defval, p_value, op_result, op_valid);
+
+			if (op_valid && op_result.operator bool()) {
+				values.erase(p_name);
+				return true;
+			}
+		}
+
+		values[p_name] = p_value;
+		return true;
+	} else {
+		if (script->_has_property_default_value(p_name)) {
+			Variant defval = script->get_property_default_value(p_name);
+
+			Variant op_result;
+			bool op_valid = false;
+			Variant::evaluate(Variant::OP_NOT_EQUAL, defval, p_value, op_result, op_valid);
+
+			if (op_valid && op_result.operator bool())
+				values[p_name] = p_value;
+
+			return true;
+		}
+	}
+
+	if (r_err)
+		*r_err = PROP_NOT_FOUND;
+
+	return false;
+}
+
+bool PlaceHolderScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err) {
+	if (values.has(p_name)) {
+		r_ret = values[p_name];
+		return true;
+	}
+
+	if (constants.has(p_name)) {
+		r_ret = constants[p_name];
+		return true;
+	}
+
+	if (!script->_is_placeholder_fallback_enabled() && script->_has_property_default_value(p_name)) {
+		r_ret = script->_get_property_default_value(p_name);
+		return true;
+	}
+
+	if (r_err)
+		*r_err = PROP_NOT_FOUND;
+
+	return false;
+}
+
+bool PlaceHolderScriptInstance::property_set_fallback(const StringName &p_name, const Variant &p_value) {
+	if (script->_is_placeholder_fallback_enabled()) {
+		HashMap<StringName, Variant>::Iterator E = values.find(p_name);
+
+		if (E) {
+			E->value = p_value;
+		} else {
+			values.insert(p_name, p_value);
+		}
+
+		bool found = false;
+		for (const GDProperty &F : properties) {
+			if (F.name == p_name) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			GDProperty pinfo;
+
+			pinfo.type = (GDExtensionVariantType)p_value.get_type();
+			pinfo.name = p_name;
+			pinfo.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_SCRIPT_VARIABLE;
+
+			properties.push_back(pinfo);
+		}
+	}
+
+	return false;
+}
+
+bool PlaceHolderScriptInstance::property_get_fallback(const StringName &p_name, Variant &r_ret) {
+	if (script->_is_placeholder_fallback_enabled()) {
+		HashMap<StringName, Variant>::ConstIterator E = values.find(p_name);
+
+		if (E) {
+			r_ret = E->value;
+			return true;
+		}
+
+		E = constants.find(p_name);
+
+		if (E) {
+			r_ret = E->value;
+			return true;
+		}
+	}
+
+	r_ret = Variant();
+	return false;
+}
+
+GDExtensionPropertyInfo *PlaceHolderScriptInstance::get_property_list(uint32_t *r_count) {
+	LocalVector<GDExtensionPropertyInfo> props;
+
+	int size = properties.size();
+	props.resize(size);
+
+	if (script->_is_placeholder_fallback_enabled()) {
+		for (int i = 0; i < size; i++) {
+			GDExtensionPropertyInfo dst;
+			copy_prop(properties[i], dst);
+
+			props[i] = dst;
+		}
+	} else {
+		for (int i = 0; i < size; i++) {
+			GDExtensionPropertyInfo &pinfo = props[i];
+			copy_prop(properties[i], pinfo);
+
+			if (!values.has(properties[i].name))
+				pinfo.usage |= PROPERTY_USAGE_SCRIPT_DEFAULT_VALUE;
+		}
+	}
+
+	*r_count = size;
+
+	GDExtensionPropertyInfo *list = (GDExtensionPropertyInfo *)memalloc(sizeof(GDExtensionPropertyInfo) * size);
+	memcpy(list, props.ptr(), sizeof(GDExtensionPropertyInfo) * size);
+
+	return list;
+}
+
+Variant::Type PlaceHolderScriptInstance::get_property_type(const StringName &p_name, bool *r_is_valid) const {
+	if (values.has(p_name)) {
+		if (r_is_valid)
+			*r_is_valid = true;
+
+		return values[p_name].get_type();
+	}
+
+	if (constants.has(p_name)) {
+		if (r_is_valid)
+			*r_is_valid = true;
+
+		return constants[p_name].get_type();
+	}
+
+	if (r_is_valid)
+		*r_is_valid = false;
+
+	return Variant::NIL;
+}
+
+bool PlaceHolderScriptInstance::has_method(const StringName &p_name) const {
+	if (script->_is_placeholder_fallback_enabled())
+		return false;
+
+	if (script.is_valid())
+		return script->_has_method(p_name);
+
+	return false;
+}
+
+PlaceHolderScriptInstance::PlaceHolderScriptInstance(const Ref<LuauScript> &p_script, Object *p_owner) {
+    script = p_script;
+    owner = p_owner;
+
+	// Placeholder instance creation takes place in a const method.
+	script->placeholders.insert(p_owner->get_instance_id(), this);
+	//script->update_exports_internal(this);
+}
+
+PlaceHolderScriptInstance::~PlaceHolderScriptInstance()
+{
+    if (script.is_valid()) {
+		script->_placeholder_erased(this);
+	}
+}
+
+#endif // TOOLS_ENABLED
+
+
+
+
+
+//MARK: LuauScript
 void LuauScript::_set_source_code(const String &p_code) {
     source = p_code;
     source_changed_cache = true;
@@ -48,6 +776,15 @@ StringName LuauScript::_get_instance_base_type() const {
     return StringName();
 }
 
+void *godot::LuauScript::_placeholder_instance_create(Object *p_for_object) const {
+    #ifdef TOOLS_ENABLED
+	    PlaceHolderScriptInstance *internal = memnew(PlaceHolderScriptInstance(Ref<LuauScript>(this), p_for_object));
+	    return internal::gdextension_interface_script_instance_create3(&PlaceHolderScriptInstance::INSTANCE_INFO, internal);
+    #else
+        return nullptr;
+    #endif // TOOLS_ENABLED
+}
+
 // bool godot::LuauScript::_can_instantiate() const {
 //     return false;
 // }
@@ -57,6 +794,12 @@ Ref<Script> LuauScript::_get_base_script() const
     return Ref<Script>();
 }
 
+
+
+
+
+
+//MARK: LuauLanguage
 LuauLanguage *LuauLanguage::singleton = nullptr;
 
 void LuauLanguage::_init() {

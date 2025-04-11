@@ -4,5 +4,9 @@
         "**/*.dblite": true,
         "**/*.lib": true,
         "**/*.obj": true
+    },
+    "files.associations": {
+        "istream": "cpp",
+        "set": "cpp"
     }
 }
