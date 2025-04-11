@@ -28,6 +28,7 @@ namespace godot {
         GDCLASS(LuauScript, ScriptExtension);
 
         friend class LuauLanguage;
+        friend class LuauCache;
 
     public:
         enum LoadStage {
@@ -100,6 +101,7 @@ namespace godot {
 
         static LuauLanguage *singleton;
         LuauEngine *luau = nullptr;
+        LuauCache *cache = nullptr;
 
         uint64_t ticks_usec = 0;
         HashMap<StringName, Variant> global_constants;
@@ -114,7 +116,7 @@ namespace godot {
         String _get_type() const override { return LUAUSCRIPT_TYPE; };
         String _get_extension() const override { return LUAUSCRIPT_EXTENSION; };
         void _init() override;
-        void _finish() override {};
+        void _finish() override;
         // virtual PackedStringArray _get_reserved_words() const;
         // virtual bool _is_control_flow_keyword(const String &p_keyword) const;
         // virtual PackedStringArray _get_comment_delimiters() const;

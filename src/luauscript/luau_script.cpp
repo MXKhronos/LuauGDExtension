@@ -6,6 +6,7 @@
 
 #include "nobind.h"
 #include "luau_engine.h"
+#include "luau_cache.h"
 #include "luau_constants.h"
 
 using namespace godot;
@@ -60,6 +61,16 @@ LuauLanguage *LuauLanguage::singleton = nullptr;
 
 void LuauLanguage::_init() {
    luau = memnew(LuauEngine);
+   cache = memnew(LuauCache);
+}
+
+void LuauLanguage::_finish() {
+    if (luau) {
+        memdelete(luau);
+    }
+    if (cache) {
+        memdelete(cache);    
+    }
 }
 
 PackedStringArray LuauLanguage::_get_recognized_extensions() const {
