@@ -54,7 +54,7 @@ namespace godot {
 
         // virtual bool _editor_can_reload_from_file();
         // virtual void _placeholder_erased(void *p_placeholder);
-        bool _can_instantiate() const override;
+        // virtual bool _can_instantiate() const override;
         Ref<Script> _get_base_script() const override;
         // virtual StringName _get_global_name() const;
         // virtual bool _inherits_script(const Ref<Script> &p_script) const;

@@ -47,9 +47,9 @@ StringName LuauScript::_get_instance_base_type() const {
     return StringName();
 }
 
-bool godot::LuauScript::_can_instantiate() const {
-    return false;
-}
+// bool godot::LuauScript::_can_instantiate() const {
+//     return false;
+// }
 
 Ref<Script> LuauScript::_get_base_script() const
 {
