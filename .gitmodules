@@ -1,7 +1,8 @@
-[submodule "extern/luau"]
-	path = extern/luau
-	url = https://github.com/luau-lang/luau
 [submodule "extern/godot-cpp"]
 	path = extern/godot-cpp
 	url = https://github.com/godotengine/godot-cpp
 	branch = 4.4
+[submodule "extern/luau"]
+	path = extern/luau
+	url = https://github.com/luau-lang/luau
+	branch = 0.668

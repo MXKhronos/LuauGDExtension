@@ -3,19 +3,6 @@
     "files.exclude": {
         "**/*.dblite": true,
         "**/*.lib": true,
-        "**/*.obj": true,
-        "**/*.pdb": true
-    },
-    "files.associations": {
-        "array": "cpp",
-        "*.tcc": "cpp",
-        "memory": "cpp",
-        "format": "cpp",
-        "istream": "cpp",
-        "functional": "cpp",
-        "tuple": "cpp",
-        "utility": "cpp",
-        "variant": "cpp",
-        "string_view": "cpp"
+        "**/*.obj": true
     }
 }

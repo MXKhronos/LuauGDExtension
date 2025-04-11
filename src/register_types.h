@@ -1,5 +1,5 @@
-#ifndef LUAU_GDEXT_REGISTER_TYPES_H
-#define LUAU_GDEXT_REGISTER_TYPES_H
+#ifndef LUAUGDEXT_REGISTER_TYPES_H
+#define LUAUGDEXT_REGISTER_TYPES_H
 
 #include <gdextension_interface.h>
 #include <godot_cpp/godot.hpp>

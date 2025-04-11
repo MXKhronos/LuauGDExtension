@@ -14,22 +14,6 @@
                 "panel": "shared"
             },
             "problemMatcher": "$gcc"
-        },
-        {
-            "label": "run",
-            "type": "shell",
-            "command": "godot --path Y:/Repo/luau_gamedemo -e -d",
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "procdump",
-            "type": "shell",
-            "command": "procdump -e -x ./dumps Z:/Godot/Godot_v4.4-stable_mono_win64/Godot_v4.4-stable_mono_win64.exe --path Y:/Repo/luau_gamedemo -e -d",
-            "problemMatcher": [
-                "$gcc"
-            ]
         }
     ]
 }

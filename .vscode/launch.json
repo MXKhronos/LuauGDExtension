@@ -12,13 +12,12 @@
             "program": "Z:/Godot/Godot_v4.4-stable_mono_win64/Godot_v4.4-stable_mono_win64.exe",
             "args": [
                 "--path", 
-                "Y:/Repo/luau_gamedemo",
+                "Z:/Workspace/Dev/PolyNebula/Projects/Kore",
                 "-e",
-                //"-v",
-                "-d"
+                "-v"
             ],
             "console": "integratedTerminal", 
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

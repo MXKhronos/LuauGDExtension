@@ -1,3 +1,5 @@
+
+
 *.obj
 *.uid
 *.dblite
@@ -8,5 +10,5 @@
 *.pyc
 *.lib
 /gen/**/*
-
-/dumps/**/*
+extern/godot-cpp/**/*
+extern/luau/**/*
