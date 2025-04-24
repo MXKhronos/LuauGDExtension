@@ -8,6 +8,7 @@
 #include <godot_cpp/classes/multiplayer_peer.hpp>
 
 #include "nobind.h"
+#include "luauscript/luau_engine.h"
 
 namespace {
     constexpr char const* LUAUSCRIPT_NAME = "Luau";
@@ -16,7 +17,6 @@ namespace {
 }
 
 namespace godot {
-    class LuauEngine;
     class LuauScript;
     class LuauCache;
 
@@ -203,6 +203,7 @@ namespace godot {
     class LuauScriptInstance : public ScriptInstance {
         Object *owner = nullptr;
         Ref<LuauScript> script;
+        LuauEngine::VMType vm_type;
         
     public:
         static const GDExtensionScriptInstanceInfo3 INSTANCE_INFO;
@@ -213,15 +214,18 @@ namespace godot {
         void notification(int32_t p_what);
         void to_string(GDExtensionBool *r_is_valid, String *r_out);    	
         
-        // virtual bool set(const StringName &p_name, const Variant &p_value, PropertySetGetError *r_err = nullptr) = 0;
-	    // virtual bool get(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err = nullptr) = 0;
-        // virtual GDExtensionPropertyInfo *get_property_list(uint32_t *r_count) = 0;
+        bool set(const StringName &p_name, const Variant &p_value, PropertySetGetError *r_err = nullptr) override;
+	    bool get(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err = nullptr) override;
+        GDExtensionPropertyInfo *get_property_list(uint32_t *r_count) override;
         // virtual bool validate_property(GDExtensionPropertyInfo *p_property) const { return false; }
-        // virtual Variant::Type get_property_type(const StringName &p_name, bool *r_is_valid) const = 0;
+        Variant::Type get_property_type(const StringName &p_name, bool *r_is_valid) const override;
         // virtual GDExtensionMethodInfo *get_method_list(uint32_t *r_count) const;
-        // virtual bool has_method(const StringName &p_name) const = 0;
-        // virtual Object *get_owner() const = 0;
-        // virtual Ref<LuauScript> get_script() const = 0;
+        bool has_method(const StringName &p_name) const override;
+        virtual Object *get_owner() const override;
+        Ref<LuauScript> get_script() const override;
+
+        LuauScriptInstance(const Ref<LuauScript> &p_script, Object *p_owner, LuauEngine::VMType p_vmtype);
+        ~LuauScriptInstance();
     };
 
 
@@ -312,7 +316,7 @@ namespace godot {
         // virtual StringName _get_global_name() const;
         // virtual bool _inherits_script(const Ref<Script> &p_script) const;
         StringName _get_instance_base_type() const override;
-        // virtual void *_instance_create(Object *p_for_object) const;
+        void *_instance_create(Object *p_for_object) const override;
         void *_placeholder_instance_create(Object *p_for_object) const;
         // virtual bool _instance_has(Object *p_object) const;
         // virtual bool _has_source_code() const;
@@ -323,7 +327,7 @@ namespace godot {
         // virtual TypedArray<Dictionary> _get_documentation() const;
         // virtual String _get_class_icon_path() const;
         // virtual bool _has_method(const StringName &p_method) const;
-        // virtual bool _has_static_method(const StringName &p_method) const;
+        bool _has_static_method(const StringName &p_method) const override;
         // virtual Variant _get_script_method_argument_count(const StringName &p_method) const;
         // virtual Dictionary _get_method_info(const StringName &p_method) const;
         // virtual bool _is_tool() const;

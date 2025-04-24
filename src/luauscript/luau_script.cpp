@@ -438,7 +438,7 @@ void LuauScriptInstance::call(
 }
 
 void LuauScriptInstance::notification(int32_t p_what) {
-    #define NOTIF_NAME "_Notification"
+#define NOTIF_NAME "_Notification"
 
     // These notifications will fire at program exit; see ~LuauScriptInstance
     // 3: NOTIFICATION_PREDELETE_CLEANUP (not bound)
@@ -463,7 +463,7 @@ void LuauScriptInstance::notification(int32_t p_what) {
 }
 
 void LuauScriptInstance::to_string(GDExtensionBool *r_is_valid, String *r_out) {
-    #define TO_STRING_NAME "_ToString"
+#define TO_STRING_NAME "_ToString"
 
     // const LuauScript *s = script.ptr();
 
@@ -487,8 +487,55 @@ void LuauScriptInstance::to_string(GDExtensionBool *r_is_valid, String *r_out) {
     // }
 }
 
+bool LuauScriptInstance::set(const StringName &p_name, const Variant &p_value, PropertySetGetError *r_err) {
+	
+	return false;
+}
 
+bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err) {
+    return false;
+}
 
+GDExtensionPropertyInfo *LuauScriptInstance::get_property_list(uint32_t *r_count) {
+    
+	GDExtensionPropertyInfo *list = (GDExtensionPropertyInfo *)memalloc(sizeof(GDExtensionPropertyInfo) * 0);
+	memcpy(list, 0, sizeof(GDExtensionPropertyInfo) * 0);
+	
+	return list;
+}
+
+Variant::Type godot::LuauScriptInstance::get_property_type(const StringName &p_name, bool *r_is_valid) const {
+
+    return Variant::NIL;
+}
+
+bool godot::LuauScriptInstance::has_method(const StringName &p_name) const {
+    return false;
+}
+
+Object *LuauScriptInstance::get_owner() const
+{
+    return owner;
+}
+
+Ref<LuauScript> LuauScriptInstance::get_script() const
+{
+    return script;
+}
+
+LuauScriptInstance::LuauScriptInstance(
+	const Ref<LuauScript> &p_script, 
+	Object *p_owner, 
+	LuauEngine::VMType p_vmtype) 
+	: 
+	script(p_script), 
+	owner(p_owner), 
+	vm_type(p_vmtype) {
+
+}
+
+LuauScriptInstance::~LuauScriptInstance() {
+}
 
 //MARK: PlaceholderScriptInstance
 #ifdef TOOLS_ENABLED
@@ -744,6 +791,10 @@ void LuauScript::_set_source_code(const String &p_code) {
     source_changed_cache = true;
 }
 
+bool LuauScript::_has_static_method(const StringName &p_method) const {
+    return false;
+}
+
 ScriptLanguage *LuauScript::_get_language() const {
     return LuauLanguage::get_singleton();
 }
@@ -776,7 +827,15 @@ StringName LuauScript::_get_instance_base_type() const {
     return StringName();
 }
 
-void *godot::LuauScript::_placeholder_instance_create(Object *p_for_object) const {
+void *LuauScript::_instance_create(Object *p_for_object) const {
+	LuauEngine::VMType type = LuauEngine::VM_USER;
+	
+	LuauScriptInstance *internal = memnew( LuauScriptInstance(Ref<Script>(this), p_for_object, type) );
+
+    return nullptr;
+}
+
+void *LuauScript::_placeholder_instance_create(Object *p_for_object) const {
     #ifdef TOOLS_ENABLED
 	    PlaceHolderScriptInstance *internal = memnew(PlaceHolderScriptInstance(Ref<LuauScript>(this), p_for_object));
 	    return internal::gdextension_interface_script_instance_create3(&PlaceHolderScriptInstance::INSTANCE_INFO, internal);
