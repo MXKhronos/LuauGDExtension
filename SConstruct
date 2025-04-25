@@ -48,7 +48,7 @@ if env["platform"] == "windows":
 godot_cpp_lib += "." + env["target"] + "." + env["arch"] + env["LIBSUFFIX"]
 
 # Define output directory
-output_dir = "Z:/Workspace/Dev/PolyNebula/Projects/Kore/bin/LuauGDExt/"
+output_dir = "Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/"
 
 # Link against Luau libraries
 library = env.SharedLibrary(
@@ -64,5 +64,13 @@ gdextension_copy = env.Command(
     Copy("$TARGET", "$SOURCE") # type: ignore
 )
 
+# Copy the LuauScript.svg file
+gdext_icon_copy = env.Command(
+    output_dir + "LuauScript.svg",
+    "LuauScript.svg",
+    Copy("$TARGET", "$SOURCE") # type: ignore
+)
+
 env.Depends(library, gdextension_copy)
+env.Depends(library, gdext_icon_copy)
 env.Default(library)
