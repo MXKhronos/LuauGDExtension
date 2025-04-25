@@ -9,10 +9,10 @@
             "request": "launch",
             "name": "Debug",
             "preLaunchTask": "build",
-            "program": "Z:/Godot/Godot_v4.4-stable_mono_win64/Godot_v4.4-stable_mono_win64.exe",
+            "program": "Z:/Test/godot/bin/godot.windows.editor.x86_64.exe",
             "args": [
                 "--path", 
-                "Z:/Workspace/Dev/PolyNebula/Projects/Kore",
+                "Z:/Workspace/Dev/K/LuauDev",
                 "-e",
                 "-v"
             ],
