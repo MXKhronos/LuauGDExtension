@@ -8,26 +8,25 @@
 
 using namespace godot;
 
-
 //MARK: Loader
 String LuauResourceFormatLoader::get_resource_type(const String &p_path) {
-	return p_path.get_extension().to_lower() == LUAUSCRIPT_EXTENSION ? LUAUSCRIPT_TYPE : "";
+	return p_path.get_extension().to_lower() == luau::LUAUSCRIPT_EXTENSION ? luau::LUAUSCRIPT_TYPE : "";
 }
 
 bool LuauResourceFormatLoader::_recognize_path(const String &p_path, const StringName &p_type) const {
-    return p_path.get_extension().to_lower() == LUAUSCRIPT_EXTENSION;
+    return p_path.get_extension().to_lower() == luau::LUAUSCRIPT_EXTENSION;
 }
 
 PackedStringArray LuauResourceFormatLoader::_get_recognized_extensions() const
 {
     PackedStringArray extensions;
-    extensions.push_back(LUAUSCRIPT_EXTENSION);
+    extensions.push_back(luau::LUAUSCRIPT_EXTENSION);
 
     return extensions;
 }
 
 bool LuauResourceFormatLoader::_handles_type(const StringName &p_type) const {
-    return p_type == StringName(LUAUSCRIPT_TYPE);
+    return p_type == StringName(luau::LUAUSCRIPT_TYPE);
 }
 
 String LuauResourceFormatLoader::_get_resource_type(const String &p_path) const {
@@ -45,7 +44,7 @@ PackedStringArray LuauResourceFormatSaver::_get_recognized_extensions(const Ref<
 	PackedStringArray extensions;
 	Ref<LuauScript> ref = p_resource;
 	if (ref.is_valid()) {
-		extensions.push_back(LUAUSCRIPT_EXTENSION);
+		extensions.push_back(luau::LUAUSCRIPT_EXTENSION);
 	}
 	return extensions;
 }
@@ -79,7 +78,7 @@ Error LuauResourceFormatSaver::_save(const Ref<Resource> &p_resource, const Stri
 }
 
 bool LuauResourceFormatSaver::_recognize_path(const Ref<Resource> &p_resource, const String &p_path) const {
-    return p_path.get_extension().to_lower() == LUAUSCRIPT_EXTENSION;
+    return p_path.get_extension().to_lower() == luau::LUAUSCRIPT_EXTENSION;
 }
 
 // Error LuauResourceFormatSaver::_set_uid(const String &p_path, int64_t p_uid) {

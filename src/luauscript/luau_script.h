@@ -6,15 +6,11 @@
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/classes/multiplayer_api.hpp>
 #include <godot_cpp/classes/multiplayer_peer.hpp>
+#include <godot_cpp/templates/self_list.hpp>
 
 #include "nobind.h"
+#include "luau_constants.h"
 #include "luauscript/luau_engine.h"
-
-namespace {
-    constexpr char const* LUAUSCRIPT_NAME = "Luau";
-    constexpr char const* LUAUSCRIPT_EXTENSION = "luau";
-    constexpr char const* LUAUSCRIPT_TYPE = "LuauScript";
-}
 
 namespace godot {
     class LuauScript;
@@ -319,8 +315,8 @@ namespace godot {
         void *_instance_create(Object *p_for_object) const override;
         void *_placeholder_instance_create(Object *p_for_object) const;
         // virtual bool _instance_has(Object *p_object) const;
-        // virtual bool _has_source_code() const;
-        // virtual String _get_source_code() const;
+        bool _has_source_code() const override;
+        String _get_source_code() const override;
         void _set_source_code(const String &p_code) override;
         // virtual Error _reload(bool p_keep_state);
         // virtual StringName _get_doc_class_name() const;
@@ -330,7 +326,7 @@ namespace godot {
         bool _has_static_method(const StringName &p_method) const override;
         // virtual Variant _get_script_method_argument_count(const StringName &p_method) const;
         // virtual Dictionary _get_method_info(const StringName &p_method) const;
-        // virtual bool _is_tool() const;
+        bool _is_tool() const override;
         // virtual bool _is_valid() const;
         // virtual bool _is_abstract() const;
         ScriptLanguage *_get_language() const override;
@@ -356,12 +352,68 @@ namespace godot {
         
         friend class LuauScript;
 
+        Ref<Mutex> lock;
+
         static LuauLanguage *singleton;
         LuauEngine *luau = nullptr;
         LuauCache *cache = nullptr;
 
         uint64_t ticks_usec = 0;
         HashMap<StringName, Variant> global_constants;
+        
+        SelfList<LuauScript>::List script_list;
+
+#ifdef TOOLS_ENABLED   
+        HashMap<LuauScriptInstance *, void *> instance_to_godot;
+    
+        struct DebugInfo {
+            struct StackInfo {
+                // These are presumably unstable pointers, but they should be read
+                // by Godot by the time they are collected/changed.
+                const char *source;
+                const char *name;
+                int line = 0;
+    
+                operator Dictionary() const;
+            };
+    
+            struct BreakStackInfo : public StackInfo {
+                HashMap<String, Variant> members;
+                HashMap<String, Variant> locals;
+    
+                void *instance = nullptr;
+            };
+    
+            Ref<Mutex> call_lock;
+            // STL is faster. The call_stack path especially is extremely hot (made
+            // on every engine call in the editor).
+            std::vector<StackInfo> call_stack;
+            std::vector<BreakStackInfo> break_call_stack;
+    
+            int thread_ref = 0;
+            lua_State *L = nullptr;
+            String error;
+            int break_depth = -1;
+    
+            String base_break_source;
+            int base_break_line = -1;
+    
+            int breakhits[LuauEngine::VM_MAX] = { 0 };
+    
+            uint64_t interrupt_reset = 0;
+        } debug;
+    
+        // void debug_init();
+        // void debug_reset();
+    
+        // static void lua_interrupt(lua_State *L, int p_gc);
+        // static void lua_debuginterrupt(lua_State *L, lua_Debug *ar);
+        // static void lua_debugbreak(lua_State *L, lua_Debug *ar);
+        // static void lua_debugstep(lua_State *L, lua_Debug *ar);
+        // static void lua_debugprotectederror(lua_State *L);
+    
+        // static bool ar_to_si(lua_Debug &p_ar, DebugInfo::StackInfo &p_si);
+#endif // TOOLS_ENABLED
 
     protected:
         static void _bind_methods() {};
@@ -369,31 +421,36 @@ namespace godot {
     public:
         static LuauLanguage *get_singleton() { return singleton; };
         
-        String _get_name() const override { return LUAUSCRIPT_NAME; };
-        String _get_type() const override { return LUAUSCRIPT_TYPE; };
-        String _get_extension() const override { return LUAUSCRIPT_EXTENSION; };
+#ifdef TOOLS_ENABLED
+        List<Ref<LuauScript>> get_scripts() const;
+
+#endif
+
+        String _get_name() const override { return luau::LUAUSCRIPT_NAME; };
+        String _get_type() const override { return luau::LUAUSCRIPT_TYPE; };
+        String _get_extension() const override { return luau::LUAUSCRIPT_EXTENSION; };
         void _init() override;
         void _finish() override;
-        // virtual PackedStringArray _get_reserved_words() const;
-        // virtual bool _is_control_flow_keyword(const String &p_keyword) const;
-        // virtual PackedStringArray _get_comment_delimiters() const;
+        PackedStringArray _get_reserved_words() const override;
+        bool _is_control_flow_keyword(const String &p_keyword) const override;
+        PackedStringArray _get_comment_delimiters() const override;
         // virtual PackedStringArray _get_doc_comment_delimiters() const;
-        // virtual PackedStringArray _get_string_delimiters() const;
+        PackedStringArray _get_string_delimiters() const override;
         // virtual Ref<Script> _make_template(const String &p_template, const String &p_class_name, const String &p_base_class_name) const;
         // virtual TypedArray<Dictionary> _get_built_in_templates(const StringName &p_object) const;
         // virtual bool _is_using_templates();
-        // virtual Dictionary _validate(const String &p_script, const String &p_path, bool p_validate_functions, bool p_validate_errors, bool p_validate_warnings, bool p_validate_safe_lines) const;
+        Dictionary _validate(const String &p_script, const String &p_path, bool p_validate_functions, bool p_validate_errors, bool p_validate_warnings, bool p_validate_safe_lines) const override;
         // virtual String _validate_path(const String &p_path) const;
         Object *_create_script() const override;
         // virtual bool _has_named_classes() const;
         // virtual bool _supports_builtin_mode() const;
-        // virtual bool _supports_documentation() const;
+        bool _supports_documentation() const override;
         // virtual bool _can_inherit_from_file() const;
         // virtual int32_t _find_function(const String &p_function, const String &p_code) const;
         // virtual String _make_function(const String &p_class_name, const String &p_function_name, const PackedStringArray &p_function_args) const;
         // virtual bool _can_make_function() const;
         // virtual Error _open_in_external_editor(const Ref<Script> &p_script, int32_t p_line, int32_t p_column);
-        // virtual bool _overrides_external_editor();
+        bool _overrides_external_editor() override;
         // virtual ScriptLanguage::ScriptNameCasing _preferred_file_name_casing() const;
         // virtual Dictionary _complete_code(const String &p_code, const String &p_path, Object *p_owner) const;
         // virtual Dictionary _lookup_code(const String &p_code, const String &p_symbol, const String &p_path, Object *p_owner) const;
@@ -403,7 +460,7 @@ namespace godot {
         // virtual void _remove_named_global_constant(const StringName &p_name);
         void _thread_enter() override {};
         void _thread_exit() override {};
-        // virtual String _debug_get_error() const;
+        String _debug_get_error() const override;
         // virtual int32_t _debug_get_stack_level_count() const;
         // virtual int32_t _debug_get_stack_level_line(int32_t p_level) const;
         // virtual String _debug_get_stack_level_function(int32_t p_level) const;
@@ -414,13 +471,13 @@ namespace godot {
         // virtual Dictionary _debug_get_globals(int32_t p_max_subitems, int32_t p_max_depth);
         // virtual String _debug_parse_stack_level_expression(int32_t p_level, const String &p_expression, int32_t p_max_subitems, int32_t p_max_depth);
         // virtual TypedArray<Dictionary> _debug_get_current_stack_info();
-        // virtual void _reload_all_scripts();
+        void _reload_all_scripts() override;
         // virtual void _reload_scripts(const Array &p_scripts, bool p_soft_reload);
         // virtual void _reload_tool_script(const Ref<Script> &p_script, bool p_soft_reload);
         PackedStringArray _get_recognized_extensions() const override;
-        // virtual TypedArray<Dictionary> _get_public_functions() const;
-        // virtual Dictionary _get_public_constants() const;
-        // virtual TypedArray<Dictionary> _get_public_annotations() const;
+        TypedArray<Dictionary> _get_public_functions() const override;
+        Dictionary _get_public_constants() const override;
+        TypedArray<Dictionary> _get_public_annotations() const override;
         // virtual void _profiling_start();
         // virtual void _profiling_stop();
         // virtual void _profiling_set_save_native_calls(bool p_enable);
@@ -429,6 +486,9 @@ namespace godot {
         void _frame();
         bool _handles_global_class_type(const String &p_type) const;
         Dictionary _get_global_class_name(const String &p_path) const;
+
+        LuauLanguage();
+        ~LuauLanguage();
     };
     
 }

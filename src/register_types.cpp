@@ -5,19 +5,11 @@
 using namespace godot;
 
 void initialize_luaugdext_module(ModuleInitializationLevel p_level) {
-    if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-        return;
-    }
-
-    luauGDExt_initialize();
+    initialize_luau_module(p_level);
 }
 
 void uninitialize_luaugdext_module(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-
-    luauGDExt_uninitialize();
+    uninitialize_luau_module(p_level);
 }
 
 // Initialization.

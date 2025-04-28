@@ -10,8 +10,10 @@
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/resource_saver.hpp>
+#include <godot_cpp/classes/script_editor.hpp>
 #include <godot_cpp/classes/time.hpp>
 #include <godot_cpp/classes/wrapped.hpp>
+#include <godot_cpp/classes/editor_plugin.hpp>
 #include <godot_cpp/godot.hpp>
 
 using namespace godot;
@@ -51,6 +53,7 @@ typedef WrappedNoBinding<godot::Time> Time;
 typedef WrappedNoBinding<godot::EditorInterface> EditorInterface;
 typedef WrappedNoBinding<godot::ClassDBSingleton> ClassDB;
 typedef WrappedNoBinding<godot::EngineDebugger> EngineDebugger;
+typedef WrappedNoBinding<godot::EditorPlugin> EditorPlugin;
 
 } // namespace nobind
 

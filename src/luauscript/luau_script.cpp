@@ -5,11 +5,13 @@
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
+#include <godot_cpp/templates/self_list.hpp>
 
 #include "nobind.h"
 #include "luau_engine.h"
 #include "luau_cache.h"
 #include "luau_constants.h"
+#include "luauscript_resource_format.h"
 
 using namespace godot;
 
@@ -772,8 +774,7 @@ PlaceHolderScriptInstance::PlaceHolderScriptInstance(const Ref<LuauScript> &p_sc
 	//script->update_exports_internal(this);
 }
 
-PlaceHolderScriptInstance::~PlaceHolderScriptInstance()
-{
+PlaceHolderScriptInstance::~PlaceHolderScriptInstance() {
     if (script.is_valid()) {
 		script->_placeholder_erased(this);
 	}
@@ -781,11 +782,15 @@ PlaceHolderScriptInstance::~PlaceHolderScriptInstance()
 
 #endif // TOOLS_ENABLED
 
+bool LuauScript::_has_source_code() const {
+    return !source.is_empty();
+}
 
+String LuauScript::_get_source_code() const {
+    return source;
+}
 
-
-
-//MARK: LuauScript
+// MARK: LuauScript
 void LuauScript::_set_source_code(const String &p_code) {
     source = p_code;
     source_changed_cache = true;
@@ -793,6 +798,10 @@ void LuauScript::_set_source_code(const String &p_code) {
 
 bool LuauScript::_has_static_method(const StringName &p_method) const {
     return false;
+}
+
+bool godot::LuauScript::_is_tool() const {
+	return definition.is_tool;
 }
 
 ScriptLanguage *LuauScript::_get_language() const {
@@ -848,8 +857,7 @@ void *LuauScript::_placeholder_instance_create(Object *p_for_object) const {
 //     return false;
 // }
 
-Ref<Script> LuauScript::_get_base_script() const
-{
+Ref<Script> LuauScript::_get_base_script() const {
     return Ref<Script>();
 }
 
@@ -861,9 +869,33 @@ Ref<Script> LuauScript::_get_base_script() const
 //MARK: LuauLanguage
 LuauLanguage *LuauLanguage::singleton = nullptr;
 
+#ifdef TOOLS_ENABLED
+List<Ref<LuauScript>> LuauLanguage::get_scripts() const {
+    List<Ref<LuauScript>> scripts;
+    
+	{
+		MutexLock lock(*this->lock.ptr());
+
+		const SelfList<LuauScript> *item = script_list.first();
+
+		while (item) {
+			String path = item->self()->get_path();
+
+			if (LuauResourceFormatLoader::get_resource_type(path) == luau::LUAUSCRIPT_TYPE) {
+				scripts.push_back(Ref<LuauScript>(item->self()));
+			}
+
+			item = item->next();
+		}
+	}
+
+	return scripts;
+}
+#endif //TOOLS_ENABLED
+
 void LuauLanguage::_init() {
-   luau = memnew(LuauEngine);
-   cache = memnew(LuauCache);
+    luau = memnew(LuauEngine);
+    cache = memnew(LuauCache);
 }
 
 void LuauLanguage::_finish() {
@@ -875,19 +907,147 @@ void LuauLanguage::_finish() {
     }
 }
 
+PackedStringArray LuauLanguage::_get_reserved_words() const {
+    static const char *_reserved_words[] = {
+		"and",
+		"break",
+		"do",
+		"else",
+		"elseif",
+		"end",
+		"false",
+		"for",
+		"function",
+		"if",
+		"in",
+		"local",
+		"nil",
+		"not",
+		"or",
+		"repeat",
+		"return",
+		"then",
+		"true",
+		"until",
+		"while",
+		"continue",
+		nullptr
+	};
+
+	PackedStringArray keywords;
+	const char **w = _reserved_words;
+
+	while (*w) {
+		keywords.push_back(*w);
+		w++;
+	}
+
+	return keywords;
+}
+
+bool LuauLanguage::_is_control_flow_keyword(const String &p_keyword) const {
+    return p_keyword == "break" 
+		|| p_keyword == "else"
+		|| p_keyword == "elseif"
+		|| p_keyword == "for"
+		|| p_keyword == "if"
+		|| p_keyword == "repeat" 
+		|| p_keyword == "return"
+		|| p_keyword == "until"
+		|| p_keyword == "while";
+}
+
+PackedStringArray LuauLanguage::_get_comment_delimiters() const {
+	PackedStringArray delimiters;
+	delimiters.push_back("--");
+	delimiters.push_back("--[[ ]]");
+
+	return delimiters;
+}
+
+PackedStringArray LuauLanguage::_get_string_delimiters() const {
+	PackedStringArray delimiters;
+	delimiters.push_back("\" \"");
+	delimiters.push_back("' '");
+	delimiters.push_back("[[ ]]");
+	delimiters.push_back("` `");
+
+	return delimiters;
+}
+
+
+void LuauLanguage::_reload_all_scripts() {
+#ifdef TOOLS_ENABLED
+	List<Ref<LuauScript>> scripts = get_scripts();
+	
+	for (Ref<LuauScript> &script : scripts) {
+		//script->unload_module();
+	}
+
+	for (Ref<LuauScript> &script : scripts) {
+		script->load_source_code(script->get_path());
+		script->_reload(true);
+	}
+#endif // TOOLS_ENABLED
+}
+
 PackedStringArray LuauLanguage::_get_recognized_extensions() const {
     PackedStringArray extension;
-    extension.push_back(LUAUSCRIPT_EXTENSION);
+    extension.push_back(luau::LUAUSCRIPT_EXTENSION);
     return extension;
 }
 
-Object *LuauLanguage::_create_script() const {
+TypedArray<Dictionary> LuauLanguage::_get_public_functions() const {
+    return TypedArray<Dictionary>();
+}
+
+Dictionary LuauLanguage::_get_public_constants() const {
+    return Dictionary();
+}
+
+TypedArray<Dictionary> LuauLanguage::_get_public_annotations() const {
+    return TypedArray<Dictionary>();
+}
+
+Dictionary LuauLanguage::_validate(
+	const String &p_script, 
+	const String &p_path, 
+	bool p_validate_functions, 
+	bool p_validate_errors, 
+	bool p_validate_warnings, 
+	bool p_validate_safe_lines
+) const {
+	Dictionary ret;
+
+	ret["valid"] = true;
+
+	return ret;
+}
+
+Object *LuauLanguage::_create_script() const
+{
     return memnew(LuauScript);
+}
+
+bool LuauLanguage::_supports_documentation() const {
+    return false;
+}
+
+bool LuauLanguage::_overrides_external_editor() {
+    return false;
 }
 
 void LuauLanguage::_add_named_global_constant(const StringName &p_name, const Variant &p_value)
 {
     global_constants[p_name] = p_value;
+}
+
+String LuauLanguage::_debug_get_error() const {
+#ifdef TOOLS_ENABLED
+	return debug.error;
+#else
+	return "";
+#endif // TOOLS_ENABLED
 }
 
 void LuauLanguage::_frame() {
@@ -914,4 +1074,13 @@ Dictionary LuauLanguage::_get_global_class_name(const String &p_path) const {
     #endif // TOOLS_ENABLED
 
     return Dictionary();
+}
+
+LuauLanguage::LuauLanguage() {
+	singleton = this;
+	lock.instantiate();
+}
+
+LuauLanguage::~LuauLanguage() {
+	singleton = nullptr;
 }
