@@ -2,10 +2,14 @@
 
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/classes/file_access.hpp>
+#include <godot_cpp/classes/editor_settings.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/typed_array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/templates/self_list.hpp>
+#include <godot_cpp/templates/pair.hpp>
 
 #include "nobind.h"
 #include "luau_engine.h"
@@ -14,6 +18,54 @@
 #include "luauscript_resource_format.h"
 
 using namespace godot;
+
+//MARK: GDProperty
+GDProperty::operator Dictionary() const {
+	Dictionary dict;
+
+	dict["type"] = type;
+	dict["usage"] = usage;
+
+	dict["name"] = name;
+	dict["class_name"] = class_name;
+
+	dict["hint"] = hint;
+	dict["hint_string"] = hint_string;
+
+	return dict;
+}
+
+GDProperty::operator Variant() const {
+	return operator Dictionary();
+}
+
+//MARK: GDMethod
+GDMethod::operator Dictionary() const {
+	Dictionary dict;
+
+	dict["name"] = name;
+	dict["return"] = return_val;
+	dict["flags"] = flags;
+
+	Array args;
+	for (const GDProperty &arg : arguments)
+		args.push_back(arg);
+
+	dict["args"] = args;
+
+	Array default_args;
+	for (const Variant &default_arg : default_arguments)
+		default_args.push_back(default_arg);
+
+	dict["default_args"] = default_args;
+
+	return dict;
+}
+
+GDMethod::operator Variant() const {
+	return operator Dictionary();
+}
+
 
 //MARK: ScriptInstance
 #define COMMON_SELF ((ScriptInstance *)p_self)
@@ -796,16 +848,128 @@ void LuauScript::_set_source_code(const String &p_code) {
     source_changed_cache = true;
 }
 
+Error LuauScript::_reload(bool p_keep_state) {
+	// if (_is_module)
+	// 	return OK;
+
+	{
+		MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
+		ERR_FAIL_COND_V(!p_keep_state && instances.size() > 0, ERR_ALREADY_IN_USE);
+	}
+
+	return load(LOAD_FULL, true);
+}
+
+TypedArray<Dictionary> LuauScript::_get_documentation() const {
+	return TypedArray<Dictionary>();
+}
+
 bool LuauScript::_has_static_method(const StringName &p_method) const {
     return false;
 }
 
-bool godot::LuauScript::_is_tool() const {
+bool LuauScript::_is_tool() const {
 	return definition.is_tool;
+}
+
+bool LuauScript::_is_valid() const {
+	return true; //MARK: TODO
 }
 
 ScriptLanguage *LuauScript::_get_language() const {
     return LuauLanguage::get_singleton();
+}
+
+TypedArray<Dictionary> LuauScript::_get_script_signal_list() const {
+	TypedArray<Dictionary> signals;
+
+	const LuauScript *s = this;
+
+	while (s) {
+		for (const KeyValue<StringName, GDMethod> &pair : s->definition.signals)
+			signals.push_back(pair.value);
+
+		s = s->base.ptr();
+	}
+
+	return signals;
+}
+
+bool LuauScript::_has_property_default_value(const StringName &p_property) const {
+	HashMap<StringName, uint64_t>::ConstIterator E = definition.property_indices.find(p_property);
+
+	if (E && definition.properties[E->value].default_value != Variant())
+		return true;
+
+	if (base.is_valid())
+		return base->_has_property_default_value(p_property);
+
+	return false;
+}
+
+Variant LuauScript::_get_property_default_value(const StringName &p_property) const {
+	HashMap<StringName, uint64_t>::ConstIterator E = definition.property_indices.find(p_property);
+
+	if (E && definition.properties[E->value].default_value != Variant())
+		return definition.properties[E->value].default_value;
+
+	if (base.is_valid())
+		return base->_get_property_default_value(p_property);
+
+	return Variant();
+}
+
+void LuauScript::_update_exports() {
+#ifdef TOOLS_ENABLED
+	// if (_is_module)
+	// 	return;
+
+	// update_exports_internal(nullptr);
+
+	// Update old dependent scripts.
+	List<Ref<LuauScript>> scripts = LuauLanguage::get_singleton()->get_scripts();
+
+	// for (Ref<LuauScript> &scr : scripts) {
+	// 	// Check dependent to avoid endless loop.
+	// 	if (scr->has_dependency(this) && !this->has_dependency(scr))
+	// 		scr->_update_exports();
+	// }
+#endif // TOOLS_ENABLED
+}
+
+TypedArray<Dictionary> LuauScript::_get_script_property_list() const {
+	TypedArray<Dictionary> properties;
+
+	const LuauScript *s = this;
+
+	// while (s) {
+	// 	// Reverse to add properties from base scripts first.
+	// 	for (int i = definition.properties.size() - 1; i >= 0; i--) {
+	// 		const GDClassProperty &prop = definition.properties[i];
+	// 		properties.push_front(prop.property.operator Dictionary());
+	// 	}
+
+	// 	s = s->base.ptr();
+	// }
+
+	return properties;
+}
+
+Dictionary LuauScript::_get_constants() const {
+	Dictionary constants_dict;
+
+	for (const KeyValue<StringName, Variant> &pair : constants)
+		constants_dict[pair.key] = pair.value;
+
+	return constants_dict;
+}
+
+bool LuauScript::_is_placeholder_fallback_enabled() const {
+#ifdef TOOLS_ENABLED
+	return placeholder_fallback_enabled;
+#else
+	return false;
+#endif // TOOLS_ENABLED
 }
 
 Error LuauScript::load_source_code(const String &p_path) {
@@ -833,7 +997,15 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 }
 
 StringName LuauScript::_get_instance_base_type() const {
-    return StringName();
+	StringName extends = StringName(definition.extends);
+
+	if (extends != StringName() && nobind::ClassDB::get_singleton()->class_exists(extends))
+		return extends;
+
+	if (base.is_valid() && base->_is_valid())
+		return base->_get_instance_base_type();
+
+	return StringName();
 }
 
 void *LuauScript::_instance_create(Object *p_for_object) const {
@@ -853,15 +1025,53 @@ void *LuauScript::_placeholder_instance_create(Object *p_for_object) const {
     #endif // TOOLS_ENABLED
 }
 
-// bool godot::LuauScript::_can_instantiate() const {
-//     return false;
-// }
-
-Ref<Script> LuauScript::_get_base_script() const {
-    return Ref<Script>();
+bool LuauScript::instance_has(uint64_t p_obj_id) const {
+	MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
+	return instances.has(p_obj_id);
 }
 
+bool LuauScript::_instance_has(Object *p_object) const {
+	return instance_has(p_object->get_instance_id());
+}
 
+bool LuauScript::_editor_can_reload_from_file() {
+	return true;
+}
+
+void LuauScript::_placeholder_erased(void *p_placeholder) {
+#ifdef TOOLS_ENABLED
+	placeholders.erase(((PlaceHolderScriptInstance *)p_placeholder)->get_owner()->get_instance_id());
+#endif // TOOLS_ENABLED
+}
+
+bool LuauScript::_can_instantiate() const {
+    return true;
+}
+
+Ref<Script> LuauScript::_get_base_script() const {
+    return base;
+}
+
+StringName LuauScript::_get_global_name() const {
+	return definition.name;
+}
+
+bool LuauScript::_inherits_script(const Ref<Script> &p_script) const {
+	Ref<LuauScript> script = p_script;
+	if (script.is_null())
+		return false;
+
+	const LuauScript *s = this;
+
+	while (s) {
+		if (s == script.ptr())
+			return true;
+
+		s = s->base.ptr();
+	}
+
+	return false;
+}
 
 
 
@@ -874,14 +1084,14 @@ List<Ref<LuauScript>> LuauLanguage::get_scripts() const {
     List<Ref<LuauScript>> scripts;
     
 	{
-		MutexLock lock(*this->lock.ptr());
+		MutexLock lock(*this->mutex.ptr());
 
 		const SelfList<LuauScript> *item = script_list.first();
 
 		while (item) {
 			String path = item->self()->get_path();
 
-			if (LuauResourceFormatLoader::get_resource_type(path) == luau::LUAUSCRIPT_TYPE) {
+			if (ResourceFormatLoaderLuau::get_resource_type(path) == luau::LUAUSCRIPT_TYPE) {
 				scripts.push_back(Ref<LuauScript>(item->self()));
 			}
 
@@ -896,6 +1106,7 @@ List<Ref<LuauScript>> LuauLanguage::get_scripts() const {
 void LuauLanguage::_init() {
     luau = memnew(LuauEngine);
     cache = memnew(LuauCache);
+
 }
 
 void LuauLanguage::_finish() {
@@ -975,7 +1186,99 @@ PackedStringArray LuauLanguage::_get_string_delimiters() const {
 	return delimiters;
 }
 
+bool LuauLanguage::_is_using_templates() {
+	return true;
+}
 
+Ref<Script> LuauLanguage::_make_template(const String &p_template, const String &p_class_name, const String &p_base_class_name) const {
+#ifdef TOOLS_ENABLED
+	Ref<LuauScript> scr;
+	scr.instantiate();
+
+	Ref<EditorSettings> settings = nobind::EditorInterface::get_singleton()->get_editor_settings();
+	bool indent_spaces = settings->get_setting("text_editor/behavior/indent/type");
+	int indent_size = settings->get_setting("text_editor/behavior/indent/size");
+	String indent = indent_spaces ? String(" ").repeat(indent_size) : "\t";
+
+	String contents = p_template.replace("_CLASS_NAME_", p_class_name)
+								.replace("_BASE_CLASS_", p_base_class_name)
+								.replace("_I_", indent);
+
+	scr->_set_source_code(contents);
+
+	return scr;
+#else
+	return Ref<Script>();
+#endif
+}
+
+TypedArray<Dictionary> LuauLanguage::_get_built_in_templates(const StringName &p_object) const {
+#ifdef TOOLS_ENABLED
+
+	TypedArray<Dictionary> templates;
+
+	if (p_object == StringName("Object")) {
+		Dictionary t;
+		t["inherit"] = "Object";
+		t["name"] = "Default";
+		t["description"] = "Default template for Objects";
+		t["content"] = R"TEMPLATE(--- @class
+--- @extends _BASE_CLASS_
+local _CLASS_NAME_ = {}
+local _CLASS_NAME_C = gdclass(_CLASS_NAME_)
+
+export type _CLASS_NAME_ = _BASE_CLASS_ & typeof(_CLASS_NAME_) & {
+_I_-- Put properties, signals, and non-registered table fields here
+}
+
+return _CLASS_NAME_C
+)TEMPLATE";
+
+		t["id"] = 0;
+		t["origin"] = 0; // TEMPLATE_BUILT_IN
+
+		templates.push_back(t);
+	}
+
+	if (p_object == StringName("Node")) {
+		Dictionary t;
+		t["inherit"] = "Node";
+		t["name"] = "Default";
+		t["description"] = "Default template for Nodes with _Ready and _Process callbacks";
+		t["content"] = R"TEMPLATE(--- @class
+--- @extends _BASE_CLASS_
+local _CLASS_NAME_ = {}
+local _CLASS_NAME_C = gdclass(_CLASS_NAME_)
+
+export type _CLASS_NAME_ = _BASE_CLASS_ & typeof(_CLASS_NAME_) & {
+_I_-- Put properties, signals, and non-registered table fields here
+}
+
+--- @registerMethod
+function _CLASS_NAME_._Ready(self: _CLASS_NAME_)
+_I_-- Called when the node enters the scene tree
+end
+
+--- @registerMethod
+function _CLASS_NAME_._Process(self: _CLASS_NAME_, delta: number)
+_I_-- Called every frame
+end
+
+return _CLASS_NAME_C
+)TEMPLATE";
+
+		t["id"] = 0;
+		t["origin"] = 0; // TEMPLATE_BUILT_IN
+
+		templates.push_back(t);
+	}
+
+	return templates;
+#else
+	return TypedArray<Dictionary>();
+#endif
+}
+		
 void LuauLanguage::_reload_all_scripts() {
 #ifdef TOOLS_ENABLED
 	List<Ref<LuauScript>> scripts = get_scripts();
@@ -990,6 +1293,13 @@ void LuauLanguage::_reload_all_scripts() {
 	}
 #endif // TOOLS_ENABLED
 }
+
+void LuauLanguage::_reload_tool_script(const Ref<Script> &p_script, bool p_soft_reload) {
+#ifdef TOOLS_ENABLED
+
+#endif
+}
+
 
 PackedStringArray LuauLanguage::_get_recognized_extensions() const {
     PackedStringArray extension;
@@ -1024,8 +1334,11 @@ Dictionary LuauLanguage::_validate(
 	return ret;
 }
 
-Object *LuauLanguage::_create_script() const
-{
+String LuauLanguage::_validate_path(const String &p_path) const {
+	return "";
+}
+
+Object *LuauLanguage::_create_script() const {
     return memnew(LuauScript);
 }
 
@@ -1033,14 +1346,51 @@ bool LuauLanguage::_supports_documentation() const {
     return false;
 }
 
+bool LuauLanguage::_can_inherit_from_file() const {
+	return true;
+}
+
+int32_t LuauLanguage::_find_function(const String &p_function, const String &p_code) const {
+	return -1;
+}
+
+String LuauLanguage::_make_function(const String &p_class_name, const String &p_function_name, const PackedStringArray &p_function_args) const {
+	return String();
+}
+
+bool LuauLanguage::_supports_builtin_mode() const {
+	return false;
+}
+
 bool LuauLanguage::_overrides_external_editor() {
     return false;
 }
 
-void LuauLanguage::_add_named_global_constant(const StringName &p_name, const Variant &p_value)
-{
+Dictionary LuauLanguage::_complete_code(const String &p_code, const String &p_path, Object *p_owner) const {
+	return Dictionary();
+}
+
+Dictionary LuauLanguage::_lookup_code(const String &p_code, const String &p_symbol, const String &p_path, Object *p_owner) const {
+	return Dictionary();
+}
+
+String LuauLanguage::_auto_indent_code(const String &p_code, int32_t p_from_line, int32_t p_to_line) const {
+	return String();
+}
+
+
+void LuauLanguage::_add_global_constant(const StringName &p_name, const Variant &p_value) {
+	_add_named_global_constant(p_name, p_value);
+}
+
+void LuauLanguage::_add_named_global_constant(const StringName &p_name, const Variant &p_value) {
     global_constants[p_name] = p_value;
 }
+
+void LuauLanguage::_remove_named_global_constant(const StringName &p_name) {
+	global_constants.erase(p_name);
+}
+
 
 String LuauLanguage::_debug_get_error() const {
 #ifdef TOOLS_ENABLED
@@ -1078,7 +1428,7 @@ Dictionary LuauLanguage::_get_global_class_name(const String &p_path) const {
 
 LuauLanguage::LuauLanguage() {
 	singleton = this;
-	lock.instantiate();
+	mutex.instantiate();
 }
 
 LuauLanguage::~LuauLanguage() {

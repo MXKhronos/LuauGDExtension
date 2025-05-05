@@ -7,8 +7,8 @@
 
 namespace godot {
 
-    class LuauResourceFormatLoader : public ResourceFormatLoader {
-        GDCLASS(LuauResourceFormatLoader, ResourceFormatLoader);
+    class ResourceFormatLoaderLuau : public ResourceFormatLoader {
+        GDCLASS(ResourceFormatLoaderLuau, ResourceFormatLoader);
 
     protected:
         static void _bind_methods() {}
@@ -21,11 +21,17 @@ namespace godot {
         bool _handles_type(const StringName &p_type) const override;
         String _get_resource_type(const String &p_path) const override;
         Variant _load(const String &p_path, const String &p_original_path, bool p_use_sub_threads, int32_t p_cache_mode) const override;
+        // virtual String _get_resource_script_class(const String &p_path) const;
+        // virtual int64_t _get_resource_uid(const String &p_path) const;
+        // virtual PackedStringArray _get_dependencies(const String &p_path, bool p_add_types) const;
+        // virtual Error _rename_dependencies(const String &p_path, const Dictionary &p_renames) const;
+        // virtual bool _exists(const String &p_path) const;
+        // virtual PackedStringArray _get_classes_used(const String &p_path) const;
     };
 
 
-    class LuauResourceFormatSaver : public ResourceFormatSaver {
-        GDCLASS(LuauResourceFormatSaver, ResourceFormatSaver);
+    class ResourceFormatSaverLuau : public ResourceFormatSaver {
+        GDCLASS(ResourceFormatSaverLuau, ResourceFormatSaver);
 
     protected:
         static void _bind_methods() {};

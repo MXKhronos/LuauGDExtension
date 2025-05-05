@@ -9,38 +9,53 @@
 using namespace godot;
 
 //MARK: Loader
-String LuauResourceFormatLoader::get_resource_type(const String &p_path) {
-	return p_path.get_extension().to_lower() == luau::LUAUSCRIPT_EXTENSION ? luau::LUAUSCRIPT_TYPE : "";
+String ResourceFormatLoaderLuau::get_resource_type(const String &p_path) {
+	String extension = p_path.get_extension().to_lower();
+
+	if (extension == luau::LUAUSCRIPT_EXTENSION) {
+		return luau::LUAUSCRIPT_TYPE;
+	}
+
+	return "";
 }
 
-bool LuauResourceFormatLoader::_recognize_path(const String &p_path, const StringName &p_type) const {
-    return p_path.get_extension().to_lower() == luau::LUAUSCRIPT_EXTENSION;
+bool ResourceFormatLoaderLuau::_recognize_path(const String &p_path, const StringName &p_type) const {
+	String extension = p_path.get_extension().to_lower();
+    return extension == luau::LUAUSCRIPT_EXTENSION;
 }
 
-PackedStringArray LuauResourceFormatLoader::_get_recognized_extensions() const
-{
+PackedStringArray ResourceFormatLoaderLuau::_get_recognized_extensions() const {
     PackedStringArray extensions;
     extensions.push_back(luau::LUAUSCRIPT_EXTENSION);
 
     return extensions;
 }
 
-bool LuauResourceFormatLoader::_handles_type(const StringName &p_type) const {
-    return p_type == StringName(luau::LUAUSCRIPT_TYPE);
+bool ResourceFormatLoaderLuau::_handles_type(const StringName &p_type) const {
+	return p_type == StringName("Script") || p_type == LuauLanguage::get_singleton()->_get_type();
 }
 
-String LuauResourceFormatLoader::_get_resource_type(const String &p_path) const {
+String ResourceFormatLoaderLuau::_get_resource_type(const String &p_path) const {
     return get_resource_type(p_path);
 }
 
-Variant LuauResourceFormatLoader::_load(const String &p_path, const String &p_original_path, bool p_use_sub_threads, int32_t p_cache_mode) const {
-	Error err = OK;
-	return LuauCache::get_singleton()->get_script(p_path, err, p_cache_mode == CACHE_MODE_IGNORE);
+Variant ResourceFormatLoaderLuau::_load(const String &p_path, const String &p_original_path, bool p_use_sub_threads, int32_t p_cache_mode) const {
+	Error err;
+	bool ignoring = p_cache_mode == CACHE_MODE_IGNORE || p_cache_mode == CACHE_MODE_IGNORE_DEEP;
+	
+	Ref<LuauScript> scr = LuauCache::get_singleton()->get_script(p_path, err, ignoring);
+
+	if (err && scr.is_valid()) {
+		// If !scr.is_valid(), the error was likely from scr->load_source_code(), which already generates an error.
+		ERR_PRINT(vformat(R"(Failed to load script "%s" with error(s).)", p_original_path));
+	}
+
+	return scr;
 }
 
 
 //MARK: Saver
-PackedStringArray LuauResourceFormatSaver::_get_recognized_extensions(const Ref<Resource> &p_resource) const {
+PackedStringArray ResourceFormatSaverLuau::_get_recognized_extensions(const Ref<Resource> &p_resource) const {
 	PackedStringArray extensions;
 	Ref<LuauScript> ref = p_resource;
 	if (ref.is_valid()) {
@@ -49,12 +64,12 @@ PackedStringArray LuauResourceFormatSaver::_get_recognized_extensions(const Ref<
 	return extensions;
 }
 
-bool LuauResourceFormatSaver::_recognize(const Ref<Resource> &p_resource) const {
+bool ResourceFormatSaverLuau::_recognize(const Ref<Resource> &p_resource) const {
 	Ref<LuauScript> ref = p_resource;
 	return ref.is_valid();
 }
 
-Error LuauResourceFormatSaver::_save(const Ref<Resource> &p_resource, const String &p_path, uint32_t p_flags) {
+Error ResourceFormatSaverLuau::_save(const Ref<Resource> &p_resource, const String &p_path, uint32_t p_flags) {
 	Ref<LuauScript> script = p_resource;
 	ERR_FAIL_COND_V(script.is_null(), ERR_INVALID_PARAMETER);
 
@@ -77,10 +92,10 @@ Error LuauResourceFormatSaver::_save(const Ref<Resource> &p_resource, const Stri
 	return OK;
 }
 
-bool LuauResourceFormatSaver::_recognize_path(const Ref<Resource> &p_resource, const String &p_path) const {
+bool ResourceFormatSaverLuau::_recognize_path(const Ref<Resource> &p_resource, const String &p_path) const {
     return p_path.get_extension().to_lower() == luau::LUAUSCRIPT_EXTENSION;
 }
 
-// Error LuauResourceFormatSaver::_set_uid(const String &p_path, int64_t p_uid) {
+// Error ResourceFormatSaverLuau::_set_uid(const String &p_path, int64_t p_uid) {
 //     return Error();
 // }

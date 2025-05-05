@@ -17,8 +17,8 @@
 using namespace godot;
 
 LuauLanguage *script_language_luau = nullptr;
-Ref<LuauResourceFormatLoader> resource_loader_luau;
-Ref<LuauResourceFormatSaver> resource_saver_luau;
+Ref<ResourceFormatLoaderLuau> resource_loader_luau;
+Ref<ResourceFormatSaverLuau> resource_saver_luau;
 
 void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_CORE) {
@@ -34,22 +34,22 @@ void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
         print_line("Initializing Luau GDExtension Editor.");
     }
 
-    if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
+    if (p_level == MODULE_INITIALIZATION_LEVEL_CORE) {
         GDREGISTER_CLASS(LuauScript);
+
         GDREGISTER_CLASS(LuauLanguage);
-        GDREGISTER_CLASS(LuauResourceFormatLoader);
-        GDREGISTER_CLASS(LuauResourceFormatSaver);
-        
         script_language_luau = memnew(LuauLanguage);
         Error reg_script_lang = nobind::Engine::get_singleton()->register_script_language(script_language_luau);
         ERR_FAIL_COND_MSG(reg_script_lang != OK,
             "Failed to register Luau language.");
 
+        GDREGISTER_CLASS(ResourceFormatLoaderLuau);
         resource_loader_luau.instantiate();
         ERR_FAIL_COND_MSG(!resource_loader_luau.is_valid(), 
             "Failed to instantiate Luau resource loader.");
         nobind::ResourceLoader::get_singleton()->add_resource_format_loader(resource_loader_luau);
 
+        GDREGISTER_CLASS(ResourceFormatSaverLuau);
         resource_saver_luau.instantiate();
         ERR_FAIL_COND_MSG(!resource_saver_luau.is_valid(), 
             "Failed to instantiate Luau resource saver.");
