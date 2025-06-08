@@ -7,6 +7,9 @@
     },
     "files.associations": {
         "istream": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "memory": "cpp",
+        "system_error": "cpp",
+        "xmemory": "cpp"
     }
 }

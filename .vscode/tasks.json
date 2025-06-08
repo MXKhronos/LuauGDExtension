@@ -4,7 +4,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "scons target=editor",
+            "command": "scons target=editor custom_api_file=Z:/Test/godot/bin/extension_api.json",
             "group": {
                 "kind": "build",
                 "isDefault": true
