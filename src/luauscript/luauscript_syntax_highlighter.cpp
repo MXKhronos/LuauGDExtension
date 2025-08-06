@@ -1,27 +1,432 @@
 
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/classes/text_edit.hpp>
+#include <godot_cpp/classes/editor_settings.hpp>
+#include <godot_cpp/classes/editor_interface.hpp>
 #include "luauscript_syntax_highlighter.h"
 #include "luau_constants.h"
+#include "nobind.h"
 
 using namespace godot;
 
 Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) const {
+    Dictionary color_map;
     
-    return Dictionary();
+    TextEdit* text_edit = get_text_edit();
+    if (!text_edit) {
+        return color_map;
+    }
+    
+    String line_text = text_edit->get_line(p_line);
+    if (line_text.is_empty()) {
+        return color_map;
+    }
+    
+    Color current_color = font_color;
+    bool in_string = false;
+    bool in_multiline_string = false;
+    bool in_comment = false;
+    bool in_multiline_comment = false;
+    char32_t string_delimiter = 0;
+    
+    // Track multiline state from previous lines
+    static HashMap<int, bool> multiline_comment_state;
+    static HashMap<int, bool> multiline_string_state;
+    
+    if (p_line > 0) {
+        if (multiline_comment_state.has(p_line - 1)) {
+            in_multiline_comment = multiline_comment_state[p_line - 1];
+        }
+        if (multiline_string_state.has(p_line - 1)) {
+            in_multiline_string = multiline_string_state[p_line - 1];
+        }
+        if (in_multiline_comment) {
+            in_comment = true;
+            current_color = comment_color;
+        } else if (in_multiline_string) {
+            in_string = true;
+            current_color = string_color;
+        }
+    }
+    
+    int32_t line_length = line_text.length();
+    
+    for (int32_t j = 0; j < line_length; j++) {
+        Dictionary highlighter_info;
+        Color color = current_color;
+        
+        char32_t current_char = line_text[j];
+        char32_t next_char = (j + 1 < line_length) ? line_text[j + 1] : 0;
+        char32_t prev_char = (j > 0) ? line_text[j - 1] : 0;
+        
+        // Handle multiline comment end first
+        if (in_multiline_comment) {
+            color = comment_color;
+            if (current_char == ']' && next_char == ']') {
+                highlighter_info["color"] = color;
+                color_map[j] = highlighter_info;
+                j++; // Skip next ]
+                Dictionary end_info;
+                end_info["color"] = comment_color;
+                color_map[j] = end_info;
+                in_multiline_comment = false;
+                in_comment = false;
+                current_color = font_color;
+                continue;
+            }
+            highlighter_info["color"] = color;
+            color_map[j] = highlighter_info;
+            continue;
+        }
+        
+        // Handle multiline string end
+        if (in_multiline_string && !in_comment) {
+            color = string_color;
+            if (current_char == ']' && next_char == ']') {
+                highlighter_info["color"] = color;
+                color_map[j] = highlighter_info;
+                j++; // Skip next ]
+                Dictionary end_info;
+                end_info["color"] = string_color;
+                color_map[j] = end_info;
+                in_multiline_string = false;
+                in_string = false;
+                current_color = font_color;
+                continue;
+            }
+            highlighter_info["color"] = color;
+            color_map[j] = highlighter_info;
+            continue;
+        }
+        
+        // Handle regular string end
+        if (in_string && !in_multiline_string && !in_comment) {
+            color = string_color;
+            // Check for escape sequence
+            if (prev_char == '\\' && j > 1 && line_text[j - 2] != '\\') {
+                highlighter_info["color"] = string_color;
+                color_map[j] = highlighter_info;
+                continue;
+            }
+            if (current_char == string_delimiter) {
+                highlighter_info["color"] = string_color;
+                color_map[j] = highlighter_info;
+                in_string = false;
+                current_color = font_color;
+                continue;
+            }
+            highlighter_info["color"] = color;
+            color_map[j] = highlighter_info;
+            continue;
+        }
+        
+        // Skip rest of single-line comment
+        if (in_comment && !in_multiline_comment) {
+            highlighter_info["color"] = comment_color;
+            color_map[j] = highlighter_info;
+            continue;
+        }
+        
+        // Check for comment start
+        if (!in_string && current_char == '-' && next_char == '-') {
+            if (j + 3 < line_length && line_text[j + 2] == '[' && line_text[j + 3] == '[') {
+                // Multiline comment --[[
+                in_multiline_comment = true;
+                in_comment = true;
+                color = comment_color;
+                for (int k = 0; k < 4 && j < line_length; k++, j++) {
+                    Dictionary comment_info;
+                    comment_info["color"] = comment_color;
+                    color_map[j] = comment_info;
+                }
+                j--; // Adjust for loop increment
+                current_color = comment_color;
+                continue;
+            } else {
+                // Single line comment --
+                in_comment = true;
+                color = comment_color;
+                highlighter_info["color"] = color;
+                color_map[j] = highlighter_info;
+                current_color = comment_color;
+                continue;
+            }
+        }
+        
+        // Check for string literals
+        if (!in_string && !in_comment) {
+            // Check for multiline string [[
+            if (current_char == '[' && next_char == '[') {
+                in_string = true;
+                in_multiline_string = true;
+                color = string_color;
+                highlighter_info["color"] = color;
+                color_map[j] = highlighter_info;
+                j++; // Skip next [
+                Dictionary bracket_info;
+                bracket_info["color"] = string_color;
+                color_map[j] = bracket_info;
+                current_color = string_color;
+                continue;
+            }
+            // Check for regular strings
+            else if (current_char == '"' || current_char == '\'' || current_char == '`') {
+                in_string = true;
+                string_delimiter = current_char;
+                color = string_color;
+                highlighter_info["color"] = color;
+                color_map[j] = highlighter_info;
+                current_color = string_color;
+                continue;
+            }
+        }
+        
+        // Check for numbers
+        if (!in_string && !in_comment) {
+            if (is_digit(current_char) || (current_char == '.' && j + 1 < line_length && is_digit(line_text[j + 1]))) {
+                // Don't highlight numbers that are part of identifiers
+                if (j > 0 && is_ascii_identifier_char(line_text[j - 1])) {
+                    color = current_color;
+                } else {
+                    color = number_color;
+                    int number_start = j;
+                    
+                    // Check for hex numbers (0x)
+                    if (current_char == '0' && next_char == 'x') {
+                        j += 2;
+                        while (j < line_length && is_hex_digit(line_text[j])) {
+                            j++;
+                        }
+                    }
+                    // Check for binary numbers (0b)
+                    else if (current_char == '0' && next_char == 'b') {
+                        j += 2;
+                        while (j < line_length && is_binary_digit(line_text[j])) {
+                            j++;
+                        }
+                    }
+                    // Regular number with optional decimal and exponent
+                    else {
+                        bool has_dot = false;
+                        bool has_exp = false;
+                        while (j < line_length) {
+                            if (is_digit(line_text[j])) {
+                                j++;
+                            } else if (!has_dot && line_text[j] == '.') {
+                                has_dot = true;
+                                j++;
+                            } else if (!has_exp && (line_text[j] == 'e' || line_text[j] == 'E')) {
+                                has_exp = true;
+                                j++;
+                                if (j < line_length && (line_text[j] == '+' || line_text[j] == '-')) {
+                                    j++;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Color all number characters
+                    for (int k = number_start; k < j; k++) {
+                        Dictionary num_info;
+                        num_info["color"] = number_color;
+                        color_map[k] = num_info;
+                    }
+                    j--; // Adjust for loop increment
+                    current_color = font_color;
+                    continue;
+                }
+            }
+        }
+        
+        // Check for identifiers and keywords
+        if (!in_string && !in_comment && is_ascii_identifier_char(current_char) && !is_digit(current_char)) {
+            int identifier_start = j;
+            while (j < line_length && is_ascii_identifier_char(line_text[j])) {
+                j++;
+            }
+            
+            String identifier = line_text.substr(identifier_start, j - identifier_start);
+            
+            // Determine color based on identifier type
+            if (control_flow_keywords.has(identifier)) {
+                color = control_flow_keyword_color;
+            } else if (keywords.has(identifier)) {
+                color = keyword_color;
+            } else if (built_in_types.has(identifier)) {
+                color = type_color;
+            } else if (built_in_functions.has(identifier)) {
+                color = global_function_color;
+            } else {
+                // Check context for function calls and member access
+                int next_non_space = j;
+                while (next_non_space < line_length && line_text[next_non_space] == ' ') {
+                    next_non_space++;
+                }
+                
+                if (next_non_space < line_length && line_text[next_non_space] == '(') {
+                    // Function call
+                    color = function_color;
+                } else if (identifier_start > 0 && (line_text[identifier_start - 1] == '.' || line_text[identifier_start - 1] == ':')) {
+                    // Member access
+                    color = member_variable_color;
+                } else {
+                    // Regular identifier
+                    color = font_color;
+                }
+            }
+            
+            // Color all identifier characters
+            for (int k = identifier_start; k < j; k++) {
+                Dictionary id_info;
+                id_info["color"] = color;
+                color_map[k] = id_info;
+            }
+            j--; // Adjust for loop increment
+            current_color = font_color;
+            continue;
+        }
+        
+        // Check for symbols
+        if (!in_string && !in_comment && is_symbol(current_char)) {
+            color = symbol_color;
+            highlighter_info["color"] = color;
+            color_map[j] = highlighter_info;
+            current_color = font_color;
+            continue;
+        }
+        
+        // Default color
+        if (!color_map.has(j)) {
+            highlighter_info["color"] = color;
+            color_map[j] = highlighter_info;
+        }
+    }
+    
+    // Store multiline state for next line
+    multiline_comment_state[p_line] = in_multiline_comment;
+    multiline_string_state[p_line] = in_multiline_string;
+    
+    return color_map;
 }
 
 void LuauSyntaxHighlighter::_clear_highlighting_cache() {
+    keywords.clear();
+    control_flow_keywords.clear();
+    built_in_types.clear();
+    built_in_functions.clear();
+    color_regions.clear();
 }
 
 void LuauSyntaxHighlighter::_update_cache() {
-    TextEdit* text_edit = get_text_edit();
-
-	font_color = text_edit->get_theme_color("text_editor/theme/highlighting/function_color"); //font_color
-	symbol_color = text_edit->get_theme_color("text_editor/theme/highlighting/symbol_color");
-	function_color = text_edit->get_theme_color("text_editor/theme/highlighting/function_color");
-	number_color = text_edit->get_theme_color("text_editor/theme/highlighting/number_color");
-
+    // Get theme colors from editor settings
+    Ref<EditorSettings> settings = nobind::EditorInterface::get_singleton()->get_editor_settings();
+    
+    // Get colors from theme
+    font_color = settings->get_setting("text_editor/theme/highlighting/text_color");
+    symbol_color = settings->get_setting("text_editor/theme/highlighting/symbol_color");
+    function_color = settings->get_setting("text_editor/theme/highlighting/function_color");
+    number_color = settings->get_setting("text_editor/theme/highlighting/number_color");
+    member_variable_color = settings->get_setting("text_editor/theme/highlighting/member_variable_color");
+    keyword_color = settings->get_setting("text_editor/theme/highlighting/keyword_color");
+    control_flow_keyword_color = settings->get_setting("text_editor/theme/highlighting/control_flow_keyword_color");
+    comment_color = settings->get_setting("text_editor/theme/highlighting/comment_color");
+    string_color = settings->get_setting("text_editor/theme/highlighting/string_color");
+    type_color = settings->get_setting("text_editor/theme/highlighting/base_type_color");
+    global_function_color = settings->get_setting("text_editor/theme/highlighting/engine_type_color");
+    built_in_type_color = settings->get_setting("text_editor/theme/highlighting/user_type_color");
+    function_definition_color = settings->get_setting("text_editor/theme/highlighting/function_definition_color");
+    
+    // Initialize Luau keywords
+    keywords.clear();
+    keywords.insert("and");
+    keywords.insert("break");
+    keywords.insert("do");
+    keywords.insert("else");
+    keywords.insert("elseif");
+    keywords.insert("end");
+    keywords.insert("false");
+    keywords.insert("for");
+    keywords.insert("function");
+    keywords.insert("if");
+    keywords.insert("in");
+    keywords.insert("local");
+    keywords.insert("nil");
+    keywords.insert("not");
+    keywords.insert("or");
+    keywords.insert("repeat");
+    keywords.insert("return");
+    keywords.insert("then");
+    keywords.insert("true");
+    keywords.insert("until");
+    keywords.insert("while");
+    keywords.insert("continue");
+    keywords.insert("export");
+    keywords.insert("type");
+    keywords.insert("typeof");
+    
+    // Control flow keywords (subset of keywords with special coloring)
+    control_flow_keywords.clear();
+    control_flow_keywords.insert("break");
+    control_flow_keywords.insert("continue");
+    control_flow_keywords.insert("do");
+    control_flow_keywords.insert("else");
+    control_flow_keywords.insert("elseif");
+    control_flow_keywords.insert("end");
+    control_flow_keywords.insert("for");
+    control_flow_keywords.insert("if");
+    control_flow_keywords.insert("repeat");
+    control_flow_keywords.insert("return");
+    control_flow_keywords.insert("then");
+    control_flow_keywords.insert("until");
+    control_flow_keywords.insert("while");
+    
+    // Luau built-in types
+    built_in_types.clear();
+    built_in_types.insert("any");
+    built_in_types.insert("boolean");
+    built_in_types.insert("number");
+    built_in_types.insert("string");
+    built_in_types.insert("thread");
+    built_in_types.insert("table");
+    built_in_types.insert("userdata");
+    built_in_types.insert("vector");
+    built_in_types.insert("buffer");
+    
+    // Common Luau built-in functions
+    built_in_functions.clear();
+    built_in_functions.insert("assert");
+    built_in_functions.insert("collectgarbage");
+    built_in_functions.insert("error");
+    built_in_functions.insert("getfenv");
+    built_in_functions.insert("getmetatable");
+    built_in_functions.insert("ipairs");
+    built_in_functions.insert("load");
+    built_in_functions.insert("loadstring");
+    built_in_functions.insert("next");
+    built_in_functions.insert("pairs");
+    built_in_functions.insert("pcall");
+    built_in_functions.insert("print");
+    built_in_functions.insert("rawequal");
+    built_in_functions.insert("rawget");
+    built_in_functions.insert("rawset");
+    built_in_functions.insert("require");
+    built_in_functions.insert("select");
+    built_in_functions.insert("setfenv");
+    built_in_functions.insert("setmetatable");
+    built_in_functions.insert("tonumber");
+    built_in_functions.insert("tostring");
+    built_in_functions.insert("type");
+    built_in_functions.insert("unpack");
+    built_in_functions.insert("xpcall");
+    built_in_functions.insert("warn");
+    
+    // Godot-specific functions that might be exposed
+    built_in_functions.insert("gdclass");
+    built_in_functions.insert("registerMethod");
+    built_in_functions.insert("registerSignal");
+    built_in_functions.insert("registerProperty");
 }
 
 String LuauSyntaxHighlighter::_get_name() const { 
@@ -38,4 +443,33 @@ Ref<EditorSyntaxHighlighter> LuauSyntaxHighlighter::_create() const {
     Ref<LuauSyntaxHighlighter> highlighter;
     highlighter.instantiate();
     return highlighter;
+}
+
+// Helper method implementations
+bool LuauSyntaxHighlighter::is_symbol(char32_t c) const {
+    return (c >= '!' && c <= '/') || 
+           (c >= ':' && c <= '@') || 
+           (c >= '[' && c <= '`') || 
+           (c >= '{' && c <= '~');
+}
+
+bool LuauSyntaxHighlighter::is_ascii_identifier_char(char32_t c) const {
+    return (c >= 'a' && c <= 'z') || 
+           (c >= 'A' && c <= 'Z') || 
+           (c >= '0' && c <= '9') || 
+           c == '_';
+}
+
+bool LuauSyntaxHighlighter::is_hex_digit(char32_t c) const {
+    return (c >= '0' && c <= '9') || 
+           (c >= 'a' && c <= 'f') || 
+           (c >= 'A' && c <= 'F');
+}
+
+bool LuauSyntaxHighlighter::is_digit(char32_t c) const {
+    return c >= '0' && c <= '9';
+}
+
+bool LuauSyntaxHighlighter::is_binary_digit(char32_t c) const {
+    return c == '0' || c == '1';
 }
