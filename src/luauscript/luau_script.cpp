@@ -17,6 +17,11 @@
 #include "luau_constants.h"
 #include "luauscript_resource_format.h"
 
+#include <Luau/Compiler.h>
+#include <Luau/Parser.h>
+#include <Luau/ParseResult.h>
+#include <Luau/Ast.h>
+
 using namespace godot;
 
 //MARK: GDProperty
@@ -551,11 +556,8 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
 }
 
 GDExtensionPropertyInfo *LuauScriptInstance::get_property_list(uint32_t *r_count) {
-    
-	GDExtensionPropertyInfo *list = (GDExtensionPropertyInfo *)memalloc(sizeof(GDExtensionPropertyInfo) * 0);
-	memcpy(list, 0, sizeof(GDExtensionPropertyInfo) * 0);
-	
-	return list;
+    *r_count = 0;
+    return nullptr;
 }
 
 Variant::Type godot::LuauScriptInstance::get_property_type(const StringName &p_name, bool *r_is_valid) const {
@@ -992,7 +994,241 @@ Error LuauScript::load_source_code(const String &p_path) {
 }
 
 Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
+    if (!p_force && load_stage >= p_load_stage) {
+        return OK;
+    }
+    
+    // Check if source is empty
+    if (source.is_empty()) {
+        ERR_FAIL_V_MSG(ERR_INVALID_DATA, "Script source is empty");
+    }
+    
     Error err = OK;
+    
+    // Stage 1: Compile the script
+    if (p_load_stage >= LOAD_COMPILE) {
+        // Convert Godot String to std::string for Luau
+        CharString utf8 = source.utf8();
+        std::string source_str(utf8.get_data(), utf8.length());
+        
+        // Set up compile options
+        Luau::CompileOptions compile_opts;
+        compile_opts.optimizationLevel = 2; // Full optimization
+        compile_opts.debugLevel = 2; // Full debug info
+        compile_opts.typeInfoLevel = 1; // Generate type info for all modules
+        compile_opts.coverageLevel = 0; // No coverage by default
+        
+        try {
+            // Compile the source code to bytecode
+            std::string compiled = Luau::compile(source_str, compile_opts);
+            
+            // Store the compiled bytecode
+            bytecode.resize(compiled.size());
+            memcpy(bytecode.ptrw(), compiled.data(), compiled.size());
+            
+            load_stage = LOAD_COMPILE;
+        } catch (const Luau::CompileError &e) {
+            ERR_FAIL_V_MSG(ERR_COMPILATION_FAILED, 
+                vformat("Luau compilation failed at line %d: %s", 
+                    e.getLocation().begin.line + 1, e.what()));
+        } catch (...) {
+            ERR_FAIL_V_MSG(ERR_COMPILATION_FAILED, "Unknown compilation error");
+        }
+    }
+    
+    // Stage 2: Parse and analyze the script for metadata
+    if (p_load_stage >= LOAD_ANALYSIS) {
+        // Parse the source to extract metadata
+        CharString utf8 = source.utf8();
+        std::string source_str(utf8.get_data(), utf8.length());
+        
+        // Create allocator and name table for AST
+        Luau::Allocator allocator;
+        Luau::AstNameTable names(allocator);
+        
+        // Parse the source
+        Luau::ParseOptions parse_opts;
+        Luau::ParseResult parse_result = Luau::Parser::parse(
+            source_str.c_str(), source_str.size(), names, allocator, parse_opts);
+        
+        if (!parse_result.errors.empty()) {
+            // Report first parse error
+            const auto &error = parse_result.errors[0];
+            ERR_FAIL_V_MSG(ERR_PARSE_ERROR,
+                vformat("Parse error at line %d: %s",
+                    error.getLocation().begin.line + 1, error.getMessage().c_str()));
+        }
+        
+        // Extract metadata from AST
+        if (parse_result.root) {
+            // Clear existing metadata
+            definition.methods.clear();
+            definition.properties.clear();
+            definition.property_indices.clear();
+            definition.signals.clear();
+            definition.constants.clear();
+            constants.clear();
+            
+            // Parse comment annotations first
+            // Look for annotations like @extends, @class, @tool, etc.
+            // These are typically in comments at the top of the file
+            {
+                // Parse source line by line to find comment annotations
+                PackedStringArray lines_packed = source.split("\n");
+                for (int i = 0; i < lines_packed.size(); i++) {
+                    String line = lines_packed[i];
+                    String trimmed = line.strip_edges();
+                    
+                    // Look for comment lines starting with --- or --
+                    if (trimmed.begins_with("---") || trimmed.begins_with("--")) {
+                        // Remove comment prefix
+                        String comment = trimmed.substr(trimmed.begins_with("---") ? 3 : 2).strip_edges();
+                        
+                        // Check for @extends annotation
+                        if (comment.begins_with("@extends ")) {
+                            String base_class = comment.substr(9).strip_edges();
+                            if (!base_class.is_empty()) {
+                                definition.extends = base_class;
+                            }
+                        }
+                        // Check for @class annotation
+                        else if (comment.begins_with("@class ")) {
+                            String class_name = comment.substr(7).strip_edges();
+                            if (!class_name.is_empty()) {
+                                definition.name = class_name;
+                            }
+                        }
+                        // Check for @tool annotation
+                        else if (comment == "@tool") {
+                            definition.is_tool = true;
+                        }
+                    }
+                    // Stop parsing after we hit non-comment content (optimization)
+                    else if (!trimmed.is_empty() && !trimmed.begins_with("--")) {
+                        // We've hit actual code, annotations should be at the top
+                        break;
+                    }
+                }
+            }
+            
+            // Walk through the AST to extract additional metadata
+            // This handles actual code structure (functions, constants, etc.)
+            
+            // For now, just extract basic information from the AST
+            for (Luau::AstStat* stat : parse_result.root->body) {
+                // Check for local variable assignments that might be constants
+                if (auto* local = stat->as<Luau::AstStatLocal>()) {
+                    // Process local variables
+                    for (size_t i = 0; i < local->vars.size; i++) {
+                        if (i < local->values.size && local->values.data[i]) {
+                            // Check if this is a constant value
+                            Luau::AstLocal* var = local->vars.data[i];
+                            Luau::AstExpr* value = local->values.data[i];
+                            
+                            // Extract constant values (numbers, strings, booleans)
+                            if (auto* num = value->as<Luau::AstExprConstantNumber>()) {
+                                constants[StringName(var->name.value)] = num->value;
+                            } else if (auto* str = value->as<Luau::AstExprConstantString>()) {
+                                constants[StringName(var->name.value)] = String::utf8(str->value.data, str->value.size);
+                            } else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
+                                constants[StringName(var->name.value)] = bool_val->value;
+                            } else if (value->as<Luau::AstExprConstantNil>()) {
+                                constants[StringName(var->name.value)] = Variant();
+                            }
+                        }
+                    }
+                }
+                
+                // Check for function definitions
+                if (auto* func = stat->as<Luau::AstStatFunction>()) {
+                    // Extract function name
+                    if (func->name) {
+                        String func_name;
+                        
+                        // Build the function name from the expression
+                        if (auto* index = func->name->as<Luau::AstExprIndexName>()) {
+                            // Table.method format
+                            if (auto* local = index->expr->as<Luau::AstExprLocal>()) {
+                                func_name = String(local->local->name.value) + "." + String(index->index.value);
+                            } else if (auto* global = index->expr->as<Luau::AstExprGlobal>()) {
+                                func_name = String(global->name.value) + "." + String(index->index.value);
+                            }
+                        } else if (auto* local = func->name->as<Luau::AstExprLocal>()) {
+                            func_name = String(local->local->name.value);
+                        } else if (auto* global = func->name->as<Luau::AstExprGlobal>()) {
+                            func_name = String(global->name.value);
+                        }
+                        
+                        // Check if this is a special method (starts with underscore)
+                        if (!func_name.is_empty() && func_name.contains(".")) {
+                            String method_name = func_name.split(".")[1];
+                            if (method_name.begins_with("_")) {
+                                // Register as a method
+                                GDMethod method;
+                                method.name = method_name;
+                                method.flags = METHOD_FLAGS_DEFAULT;
+                                
+                                // Extract parameters
+                                if (func->func) {
+                                    for (size_t i = 0; i < func->func->args.size; i++) {
+                                        // Skip 'self' parameter
+                                        if (i == 0 && func->func->self) {
+                                            continue;
+                                        }
+                                        
+                                        GDProperty arg;
+                                        arg.name = String(func->func->args.data[i]->name.value);
+                                        arg.type = GDEXTENSION_VARIANT_TYPE_NIL; // Default to Variant
+                                        arg.usage = PROPERTY_USAGE_NIL_IS_VARIANT;
+                                        method.arguments.push_back(arg);
+                                    }
+                                    
+                                    // Check for vararg
+                                    if (func->func->vararg) {
+                                        method.flags.set_flag(METHOD_FLAG_VARARG);
+                                    }
+                                }
+                                
+                                definition.methods[StringName(method_name)] = method;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Look for special comments/annotations at the top of the file
+            // In a full implementation, we would parse comments for:
+            // --- @class ClassName
+            // --- @extends BaseClass
+            // --- @tool
+            // etc.
+            
+            // For now, set some defaults
+            if (definition.name.is_empty()) {
+                // Try to extract name from path
+                String path = get_path();
+                if (!path.is_empty()) {
+                    definition.name = path.get_file().get_basename();
+                }
+            }
+            
+            if (definition.extends.is_empty()) {
+                definition.extends = "RefCounted"; // Default base class
+            }
+        }
+        
+        load_stage = LOAD_ANALYSIS;
+    }
+    
+    // Stage 3: Full loading (link base scripts, validate, etc.)
+    if (p_load_stage >= LOAD_FULL) {
+        // TODO: Resolve base script references
+        // TODO: Validate method signatures
+        // TODO: Type checking
+        
+        load_stage = LOAD_FULL;
+    }
+    
     return err;
 }
 
@@ -1009,11 +1245,89 @@ StringName LuauScript::_get_instance_base_type() const {
 }
 
 void *LuauScript::_instance_create(Object *p_for_object) const {
-	LuauEngine::VMType type = LuauEngine::VM_USER;
+	// Validate that the script can be instantiated
+	if (!_can_instantiate()) {
+		ERR_FAIL_V_MSG(nullptr, "Script cannot be instantiated");
+	}
 	
-	LuauScriptInstance *internal = memnew( LuauScriptInstance(Ref<Script>(this), p_for_object, type) );
-
-    return nullptr;
+	// Check if script is properly loaded
+	if (load_stage != LOAD_FULL) {
+		// Try to load the script if not already loaded
+		const_cast<LuauScript*>(this)->load(LOAD_FULL, false);
+		if (load_stage != LOAD_FULL) {
+			ERR_FAIL_V_MSG(nullptr, "Script is not fully loaded and cannot be instantiated");
+		}
+	}
+	
+	// Verify the object matches the expected base type
+	StringName base_type = _get_instance_base_type();
+	if (base_type != StringName()) {
+		if (!nobind::ClassDB::get_singleton()->is_parent_class(p_for_object->get_class(), base_type)) {
+			ERR_FAIL_V_MSG(nullptr, 
+				vformat("Script inherits from '%s', so it can't be assigned to an object of type '%s'", 
+					base_type, p_for_object->get_class()));
+		}
+	}
+	
+	// Always use VM_USER for script instances
+	LuauEngine::VMType vm_type = LuauEngine::VM_USER;
+	
+	// Create the instance
+	LuauScriptInstance *instance = memnew(LuauScriptInstance(Ref<LuauScript>(this), p_for_object, vm_type));
+	
+	// Register the instance with the script
+	{
+		MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
+		const_cast<LuauScript*>(this)->instances[p_for_object->get_instance_id()] = instance;
+	}
+	
+	// TODO: Initialize Lua state for the instance
+	// This would involve:
+	// 1. Creating a Lua thread/state for this instance
+	// 2. Loading the compiled bytecode
+	// 3. Setting up the self reference
+	// 4. Calling implicit constructors for base classes
+	// 5. Calling the script's _init method if it exists
+	
+	// For now, we'll leave the Lua initialization commented out
+	// as it requires the LuauEngine to be properly set up
+	/*
+	if (LuauLanguage::singleton->luau) {
+		// Get or create VM for this instance
+		lua_State* L = LuauLanguage::singleton->luau->get_vm(vm_type);
+		if (L) {
+			// Create a new thread for this instance
+			lua_State* thread = lua_newthread(L);
+			
+			// Store thread reference
+			instance->thread_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+			
+			// Load bytecode if available
+			if (bytecode.size() > 0) {
+				// Load the compiled bytecode
+				luau_load(thread, "@" + get_path(), bytecode.ptr(), bytecode.size(), 0);
+				
+				// Set up instance environment
+				// Push self reference, etc.
+				
+				// Call constructors
+				LuauScript* base_script = base.ptr();
+				while (base_script) {
+					// Call base constructor if it exists
+					base_script = base_script->base.ptr();
+				}
+				
+				// Call _init if it exists
+				if (definition.methods.has("_init")) {
+					// Call _init method
+				}
+			}
+		}
+	}
+	*/
+	
+	// Create and return the GDExtension script instance
+	return internal::gdextension_interface_script_instance_create3(&LuauScriptInstance::INSTANCE_INFO, instance);
 }
 
 void *LuauScript::_placeholder_instance_create(Object *p_for_object) const {
@@ -1371,7 +1685,204 @@ Dictionary LuauLanguage::_complete_code(const String &p_code, const String &p_pa
 }
 
 Dictionary LuauLanguage::_lookup_code(const String &p_code, const String &p_symbol, const String &p_path, Object *p_owner) const {
-	return Dictionary();
+	Dictionary ret;
+	
+	// Default to no result
+	ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION = 0, LOOKUP_RESULT_CLASS = 1, LOOKUP_RESULT_CLASS_CONSTANT = 2, etc.
+	
+	// Try to find information about the symbol
+	String symbol = p_symbol.strip_edges();
+	
+	// Check if it's a known Godot class
+	if (nobind::ClassDB::get_singleton()->class_exists(symbol)) {
+		ret["result"] = 1; // LOOKUP_RESULT_CLASS
+		ret["type"] = 0; // TYPE_CLASS
+		ret["class_name"] = symbol;
+		ret["class_path"] = String(); // Built-in class, no path
+		
+		// Get class documentation if available
+		String class_doc = String("Godot built-in class: ") + symbol;
+		ret["description"] = class_doc;
+		ret["is_deprecated"] = false;
+		
+		return ret;
+	}
+	
+	// Check if it's a method of a known class (format: ClassName.method_name)
+	if (symbol.contains(".")) {
+		PackedStringArray parts = symbol.split(".");
+		if (parts.size() == 2) {
+			String class_name = parts[0];
+			String member_name = parts[1];
+			
+				if (nobind::ClassDB::get_singleton()->class_exists(class_name)) {
+					// Check if it's a method
+					if (nobind::ClassDB::get_singleton()->class_has_method(class_name, member_name, false)) {
+						ret["result"] = 3; // LOOKUP_RESULT_CLASS_METHOD
+						ret["type"] = 2; // TYPE_FUNCTION
+						ret["class_name"] = class_name;
+						ret["class_member"] = member_name;
+						ret["description"] = String("Method of class ") + class_name;
+						ret["is_deprecated"] = false;
+						
+						return ret;
+					}
+					
+					// Check if it's a property
+					TypedArray<Dictionary> property_list = nobind::ClassDB::get_singleton()->class_get_property_list(class_name, false);
+					for (int i = 0; i < property_list.size(); i++) {
+						Dictionary prop = property_list[i];
+						if (prop.has("name") && String(prop["name"]) == member_name) {
+							ret["result"] = 5; // LOOKUP_RESULT_CLASS_PROPERTY
+							ret["type"] = 1; // TYPE_MEMBER
+							ret["class_name"] = class_name;
+							ret["class_member"] = member_name;
+							ret["description"] = String("Property of class ") + class_name;
+							ret["is_deprecated"] = false;
+							
+							return ret;
+						}
+					}
+					
+					// Check if it's a constant
+					if (nobind::ClassDB::get_singleton()->class_has_integer_constant(class_name, member_name)) {
+						ret["result"] = 2; // LOOKUP_RESULT_CLASS_CONSTANT
+						ret["type"] = 3; // TYPE_CONSTANT
+						ret["class_name"] = class_name;
+						ret["class_member"] = member_name;
+						ret["description"] = String("Constant of class ") + class_name;
+						ret["is_deprecated"] = false;
+						
+						return ret;
+					}
+					
+					// Check if it's an enum
+					if (nobind::ClassDB::get_singleton()->class_has_enum(class_name, member_name, false)) {
+						ret["result"] = 4; // LOOKUP_RESULT_CLASS_ENUM
+						ret["type"] = 4; // TYPE_ENUM
+						ret["class_name"] = class_name;
+						ret["class_member"] = member_name;
+						ret["description"] = String("Enum of class ") + class_name;
+						ret["is_deprecated"] = false;
+						
+						return ret;
+					}
+			}
+		}
+	}
+	
+	// Check if it's a Luau script in the project
+	if (p_owner != nullptr) {
+		// Try to get the script from the owner
+		Ref<Script> script = p_owner->get_script();
+		if (script.is_valid()) {
+			Ref<LuauScript> luau_script = script;
+			if (luau_script.is_valid()) {
+				// Check if the symbol is a method in this script
+				if (luau_script->definition.methods.has(symbol)) {
+					const GDMethod &method = luau_script->definition.methods[symbol];
+					
+					ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
+					ret["type"] = 2; // TYPE_FUNCTION
+					ret["class_name"] = luau_script->definition.name;
+					ret["class_member"] = symbol;
+					ret["class_path"] = luau_script->get_path();
+					ret["location"] = 0; // Would need to parse to find actual line number
+					ret["description"] = String("Method in script: ") + symbol;
+					ret["is_deprecated"] = false;
+					
+					return ret;
+				}
+				
+				// Check if the symbol is a constant in this script
+				if (luau_script->constants.has(symbol)) {
+					Variant value = luau_script->constants[symbol];
+					
+					ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
+					ret["type"] = 3; // TYPE_CONSTANT
+					ret["class_name"] = luau_script->definition.name;
+					ret["class_member"] = symbol;
+					ret["class_path"] = luau_script->get_path();
+					ret["location"] = 0; // Would need to parse to find actual line number
+					ret["description"] = String("Constant in script: ") + symbol + " = " + String(value);
+					ret["is_deprecated"] = false;
+					
+					return ret;
+				}
+				
+				// Check base scripts recursively
+				LuauScript *base = luau_script->base.ptr();
+				while (base) {
+					if (base->definition.methods.has(symbol)) {
+						const GDMethod &method = base->definition.methods[symbol];
+						
+						ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
+						ret["type"] = 2; // TYPE_FUNCTION
+						ret["class_name"] = base->definition.name;
+						ret["class_member"] = symbol;
+						ret["class_path"] = base->get_path();
+						ret["location"] = 0;
+						ret["description"] = String("Inherited method from: ") + base->definition.name;
+						ret["is_deprecated"] = false;
+						
+						return ret;
+					}
+					
+					if (base->constants.has(symbol)) {
+						Variant value = base->constants[symbol];
+						
+						ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
+						ret["type"] = 3; // TYPE_CONSTANT
+						ret["class_name"] = base->definition.name;
+						ret["class_member"] = symbol;
+						ret["class_path"] = base->get_path();
+						ret["location"] = 0;
+						ret["description"] = String("Inherited constant from: ") + base->definition.name + " = " + String(value);
+						ret["is_deprecated"] = false;
+						
+						return ret;
+					}
+					
+					base = base->base.ptr();
+				}
+			}
+		}
+	}
+	
+	// Check global constants registered with the language
+	if (global_constants.has(symbol)) {
+		Variant value = global_constants[symbol];
+		
+		ret["result"] = 2; // LOOKUP_RESULT_CLASS_CONSTANT
+		ret["type"] = 3; // TYPE_CONSTANT
+		ret["class_name"] = "@GlobalScope";
+		ret["class_member"] = symbol;
+		ret["description"] = String("Global constant: ") + symbol + " = " + String(value);
+		ret["is_deprecated"] = false;
+		
+		return ret;
+	}
+	
+	// Check if it's a Luau keyword
+	PackedStringArray keywords = _get_reserved_words();
+	if (keywords.has(symbol)) {
+		ret["result"] = 7; // LOOKUP_RESULT_CLASS_ANNOTATION (using for keywords)
+		ret["type"] = 5; // TYPE_SIGNAL (repurposing for keyword)
+		ret["class_name"] = "Luau";
+		ret["class_member"] = symbol;
+		ret["description"] = String("Luau keyword: ") + symbol;
+		ret["is_deprecated"] = false;
+		
+		return ret;
+	}
+	
+	// No information found
+	ret["result"] = 0;
+	ret["type"] = 0;
+	ret["description"] = String("Unknown symbol: ") + symbol;
+	ret["is_deprecated"] = false;
+	
+	return ret;
 }
 
 String LuauLanguage::_auto_indent_code(const String &p_code, int32_t p_from_line, int32_t p_to_line) const {

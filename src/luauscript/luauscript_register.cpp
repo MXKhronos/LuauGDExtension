@@ -31,6 +31,8 @@ void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
         ERR_FAIL_COND_MSG(reg_script_lang != OK,
             "Failed to register Luau language.");
         WARN_PRINT("[LuauGDExtension] Luau Script Language registered successfully");
+    } 
+    else if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 
         GDREGISTER_CLASS(ResourceFormatLoaderLuau);
         resource_loader_luau.instantiate();

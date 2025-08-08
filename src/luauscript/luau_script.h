@@ -290,6 +290,7 @@ namespace godot {
 
         String source;
         bool source_changed_cache;
+        PackedByteArray bytecode;
 
         GDClassDefinition definition;
         HashMap<StringName, Variant> constants;
