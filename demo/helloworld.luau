@@ -7,7 +7,7 @@ acount = 1;
 local bcount: number = 0;
 
 function _init(self: Node)
-	print("[luau] init!", self);
+	print("[luau] init!", self, self.name, typeof(self.name));
 	print("[luau] init ACONST=", ACONST);
 	print("[luau] init BCONST=", BCONST);
 	print("[luau] init acount=", acount);
@@ -16,7 +16,7 @@ function _init(self: Node)
 end
 
 function _ready(self: Node)
-	print("[luau] ready!", self);
+	print("[luau] ready!", self, self.name, typeof(self.name));
 	while true do
 		print("[luau] hello world!");
 		bcount = bcount +1;

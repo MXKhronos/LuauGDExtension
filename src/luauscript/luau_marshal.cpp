@@ -36,6 +36,14 @@ void LuauMarshal::push_variant(lua_State *L, const Variant &p_var) {
             push_string(L, p_var.operator String());
             break;
             
+        case Variant::STRING_NAME:
+            push_string(L, String(p_var.operator StringName()));
+            break;
+            
+        case Variant::NODE_PATH:
+            push_string(L, String(p_var.operator NodePath()));
+            break;
+            
         case Variant::VECTOR2: {
             Vector2 v = p_var.operator Vector2();
             lua_newtable(L);

@@ -2000,75 +2000,14 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 			// Create self table for instance
 			lua_newtable(thread);
 			
-			// Create metatable for the self table
-			lua_newtable(thread);
+			// Store pointer to owner object directly in the self table (not in metatable)
+			// This way it survives metatable changes
+			lua_pushlightuserdata(thread, p_for_object);
+			lua_setfield(thread, -2, "__godot_owner");
 			
 			// Store pointer to C++ instance
 			lua_pushlightuserdata(thread, instance);
-			lua_setfield(thread, -2, "__instance");
-			
-			// Store pointer to owner object
-			lua_pushlightuserdata(thread, p_for_object);
-			lua_setfield(thread, -2, "__owner");
-			
-			// Set up __index to access Godot properties and methods
-			lua_pushcfunction(thread, [](lua_State *L) -> int {
-				lua_getmetatable(L, 1);
-				lua_getfield(L, -1, "__owner");
-				Object *owner = (Object*)lua_touserdata(L, -1);
-				lua_pop(L, 2);
-				
-				if (!owner) {
-					lua_pushnil(L);
-					return 1;
-				}
-				
-				const char *key = lua_tostring(L, 2);
-				if (!key) {
-					lua_pushnil(L);
-					return 1;
-				}
-				
-				StringName prop_name(key);
-				
-				// Try to get property
-				Variant value = owner->get(prop_name);
-				if (value.get_type() != Variant::NIL) {
-					LuauMarshal::push_variant(L, value);
-					return 1;
-				}
-				
-				lua_pushnil(L);
-				return 1;
-			}, "__index");
-			lua_setfield(thread, -2, "__index");
-			
-			// Set up __newindex to set Godot properties
-			lua_pushcfunction(thread, [](lua_State *L) -> int {
-				lua_getmetatable(L, 1);
-				lua_getfield(L, -1, "__owner");
-				Object *owner = (Object*)lua_touserdata(L, -1);
-				lua_pop(L, 2);
-				
-				if (!owner) {
-					return 0;
-				}
-				
-				const char *key = lua_tostring(L, 2);
-				if (!key) {
-					return 0;
-				}
-				
-				StringName prop_name(key);
-				Variant value = LuauMarshal::get_variant(L, 3);
-				owner->set(prop_name, value);
-				
-				return 0;
-			}, "__newindex");
-			lua_setfield(thread, -2, "__newindex");
-			
-			// Set metatable
-			lua_setmetatable(thread, -2);
+			lua_setfield(thread, -2, "__godot_instance");
 			
 			// Store self table reference on main state, not thread
 			// Move self table from thread to main state
@@ -2092,15 +2031,19 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 					lua_getref(L, instance->get_self_ref());
 					lua_xmove(L, thread, 1);
 					
-					// Create a metatable for the environment that redirects global writes to self
+					// Create a combined metatable that handles both property access and environment lookups
 					lua_newtable(thread); // Create metatable
 					
-					// Set __index to look up in self first, then _G
+					// Set __index to handle both Godot property access and environment lookups
 					lua_pushcfunction(thread, [](lua_State *L) -> int {
-						// Stack: env_table, key
+						// Stack: env_table (self), key
 						const char* key = lua_tostring(L, 2);
+						if (!key) {
+							lua_pushnil(L);
+							return 1;
+						}
 						
-						// First check in the table itself
+						// First check in the table itself (raw access, no metamethods)
 						lua_pushvalue(L, 2); // Push key
 						lua_rawget(L, 1); // Get from table
 						if (!lua_isnil(L, -1)) {
@@ -2108,16 +2051,69 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 						}
 						lua_pop(L, 1); // Remove nil
 						
-						// Then check in global environment
+						// Special handling for "self" - return the table itself
+						if (strcmp(key, "self") == 0) {
+							lua_pushvalue(L, 1); // Push the env_table (which is self)
+							return 1;
+						}
+						
+						// Skip certain keys that might cause recursion or are internal
+						if (strcmp(key, "_notification") == 0 || 
+						    strcmp(key, "get_instance_id") == 0 ||
+						    strcmp(key, "get_rid") == 0 ||
+						    strncmp(key, "__", 2) == 0) {
+							// Check global environment for these
+							lua_getglobal(L, key);
+							return 1;
+						}
+						
+						// Try to access Godot owner properties - but be careful
+						// Get the instance pointer from the self table
+						lua_getfield(L, 1, "__godot_instance");
+						LuauScriptInstance *instance = (LuauScriptInstance*)lua_touserdata(L, -1);
+						lua_pop(L, 1);
+						
+						if (instance && instance->get_owner()) {
+							Object *owner = instance->get_owner();
+							StringName prop_name(key);
+							
+							// Only try to get well-known safe properties
+							// This avoids potential recursion issues
+							if (strcmp(key, "name") == 0 || 
+							    strcmp(key, "position") == 0 ||
+							    strcmp(key, "rotation") == 0 ||
+							    strcmp(key, "scale") == 0 ||
+							    strcmp(key, "visible") == 0 ||
+							    strcmp(key, "modulate") == 0) {
+								// These are common, safe properties that won't cause recursion
+								try {
+									Variant value = owner->get(prop_name);
+									if (value.get_type() != Variant::NIL) {
+										LuauMarshal::push_variant(L, value);
+										return 1;
+									}
+								} catch (...) {
+									// If get() fails, fall through to global lookup
+								}
+							}
+						}
+						
+						// Finally, check in global environment
 						lua_getglobal(L, key);
 						return 1;
 					}, "__index");
 					lua_setfield(thread, -2, "__index");
 					
-					// Set __newindex to write to self
+					// Set __newindex to handle both property writes and new variables
 					lua_pushcfunction(thread, [](lua_State *L) -> int {
-						// Stack: env_table, key, value
-						// Write directly to the table
+						// Stack: env_table (self), key, value
+						const char* key = lua_tostring(L, 2);
+						if (!key) {
+							return 0;
+						}
+						
+						// For now, just store everything in the self table
+						// We'll let Godot handle property setting through the script instance
 						lua_pushvalue(L, 2); // Push key
 						lua_pushvalue(L, 3); // Push value
 						lua_rawset(L, 1); // Set in table
@@ -2125,7 +2121,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 					}, "__newindex");
 					lua_setfield(thread, -2, "__newindex");
 					
-					// Set the metatable on self
+					// Set the combined metatable on self
 					lua_setmetatable(thread, -2);
 					
 					// Set self table as the environment for the loaded function
@@ -2241,7 +2237,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
                         int init_type = lua_type(thread, -1);
                         
                         if (lua_isfunction(thread, -1)) {
-                            WARN_PRINT("Found _init function, calling it");
                             // Stack: self_table, self_table_copy, _init_function
                             // Swap the function and the copy of self
                             lua_insert(thread, -2); // Move function below self_copy
@@ -2254,8 +2249,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 								ERR_PRINT(vformat("Failed to call _init for %s: %s", 
 									script_name, error_msg ? error_msg : "unknown error"));
 								lua_pop(thread, 1); // Remove error message
-							} else {
-								WARN_PRINT("_init called successfully");
 							}
 						} else {
 							// _init is not a function or doesn't exist
