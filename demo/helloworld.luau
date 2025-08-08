@@ -12,6 +12,7 @@ function _init(self: Node)
 	print("[luau] init BCONST=", BCONST);
 	print("[luau] init acount=", acount);
 	print("[luau] init bcount=", bcount);
+	hello();
 end
 
 function _ready(self: Node)
@@ -38,5 +39,5 @@ function _process(self: Node, delta: number): nil
 end
 
 function hello()
-	print(`[luau] world! {self.name}`);
+	print(`[luau] world! {BCONST}`);
 end

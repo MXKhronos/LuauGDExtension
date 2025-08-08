@@ -361,6 +361,9 @@ Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) 
                 color = type_color;
             } else if (built_in_functions.has(identifier)) {
                 color = global_function_color;
+            } else if (is_constant_identifier(identifier)) {
+                // Constants (ALL_CAPS identifiers)
+                color = constant_color;
             } else {
                 // Check context for function calls and member access
                 int next_non_space = j;
@@ -440,7 +443,8 @@ void LuauSyntaxHighlighter::_update_cache() {
     global_function_color = settings->get_setting("text_editor/theme/highlighting/engine_type_color");
     built_in_type_color = settings->get_setting("text_editor/theme/highlighting/user_type_color");
     function_definition_color = settings->get_setting("text_editor/theme/highlighting/function_definition_color");
-    
+    constant_color = Color(0.7, 0.5, 0.8, 1.0);
+
     // Initialize Luau keywords
     keywords.clear();
     keywords.insert("and");
@@ -483,6 +487,9 @@ void LuauSyntaxHighlighter::_update_cache() {
     built_in_types.insert("userdata");
     built_in_types.insert("vector");
     built_in_types.insert("buffer");
+
+    // Godot registered types
+    built_in_types.insert("Object");
     
     // Common Luau built-in functions
     built_in_functions.clear();
@@ -513,10 +520,8 @@ void LuauSyntaxHighlighter::_update_cache() {
     built_in_functions.insert("warn");
     
     // Godot-specific functions that might be exposed
-    built_in_functions.insert("gdclass");
-    built_in_functions.insert("registerMethod");
-    built_in_functions.insert("registerSignal");
-    built_in_functions.insert("registerProperty");
+    built_in_functions.insert("load");
+    built_in_functions.insert("preload");
 }
 
 String LuauSyntaxHighlighter::_get_name() const { 
@@ -562,4 +567,28 @@ bool LuauSyntaxHighlighter::is_digit(char32_t c) const {
 
 bool LuauSyntaxHighlighter::is_binary_digit(char32_t c) const {
     return c == '0' || c == '1';
+}
+
+bool LuauSyntaxHighlighter::is_constant_identifier(const String& identifier) const {
+    if (identifier.is_empty()) {
+        return false;
+    }
+    
+    // Check if all characters are uppercase letters, digits, or underscores
+    // and at least one uppercase letter exists
+    bool has_uppercase = false;
+    for (int i = 0; i < identifier.length(); i++) {
+        char32_t c = identifier[i];
+        if (c >= 'A' && c <= 'Z') {
+            has_uppercase = true;
+        } else if (c >= 'a' && c <= 'z') {
+            // Has lowercase letter, not a constant
+            return false;
+        } else if (c != '_' && !(c >= '0' && c <= '9')) {
+            // Has character that's not underscore or digit
+            return false;
+        }
+    }
+    
+    return has_uppercase;
 }

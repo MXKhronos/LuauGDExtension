@@ -2471,16 +2471,9 @@ TypedArray<Dictionary> LuauLanguage::_get_built_in_templates(const StringName &p
 		t["inherit"] = "Object";
 		t["name"] = "Default";
 		t["description"] = "Default template for Objects";
-		t["content"] = R"TEMPLATE(--- @class
---- @extends _BASE_CLASS_
-local _CLASS_NAME_ = {}
-local _CLASS_NAME_C = gdclass(_CLASS_NAME_)
-
-export type _CLASS_NAME_ = _BASE_CLASS_ & typeof(_CLASS_NAME_) & {
-_I_-- Put properties, signals, and non-registered table fields here
-}
-
-return _CLASS_NAME_C
+		t["content"] = R"TEMPLATE(--- @extends _BASE_CLASS_
+function _ready(self: _BASE_CLASS_)
+end
 )TEMPLATE";
 
 		t["id"] = 0;
@@ -2493,27 +2486,13 @@ return _CLASS_NAME_C
 		Dictionary t;
 		t["inherit"] = "Node";
 		t["name"] = "Default";
-		t["description"] = "Default template for Nodes with _Ready and _Process callbacks";
-		t["content"] = R"TEMPLATE(--- @class
---- @extends _BASE_CLASS_
-local _CLASS_NAME_ = {}
-local _CLASS_NAME_C = gdclass(_CLASS_NAME_)
-
-export type _CLASS_NAME_ = _BASE_CLASS_ & typeof(_CLASS_NAME_) & {
-_I_-- Put properties, signals, and non-registered table fields here
-}
-
---- @registerMethod
-function _CLASS_NAME_._Ready(self: _CLASS_NAME_)
-_I_-- Called when the node enters the scene tree
+		t["description"] = "Default template for Nodes with _ready and _process callbacks";
+		t["content"] = R"TEMPLATE(--- @extends _BASE_CLASS_
+function _ready(self: _BASE_CLASS_)
 end
 
---- @registerMethod
-function _CLASS_NAME_._Process(self: _CLASS_NAME_, delta: number)
-_I_-- Called every frame
+function _process(self: _BASE_CLASS_, delta: number)
 end
-
-return _CLASS_NAME_C
 )TEMPLATE";
 
 		t["id"] = 0;

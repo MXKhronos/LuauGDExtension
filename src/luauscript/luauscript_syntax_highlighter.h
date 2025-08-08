@@ -43,6 +43,7 @@ private:
     Color comment_color;
     Color string_color;
     Color type_color;
+    Color constant_color;
     
     // Language features
     HashSet<String> keywords;
@@ -57,6 +58,7 @@ private:
     bool is_hex_digit(char32_t c) const;
     bool is_digit(char32_t c) const;
     bool is_binary_digit(char32_t c) const;
+    bool is_constant_identifier(const String& identifier) const;
 
 public:
     Dictionary _get_line_syntax_highlighting(int32_t p_line) const override;
