@@ -3,6 +3,7 @@
 #include <godot_cpp/classes/text_edit.hpp>
 #include <godot_cpp/classes/editor_settings.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
+#include <godot_cpp/templates/list.hpp>
 #include "luauscript_syntax_highlighter.h"
 #include "luau_constants.h"
 #include "nobind.h"
@@ -487,10 +488,13 @@ void LuauSyntaxHighlighter::_update_cache() {
     built_in_types.insert("userdata");
     built_in_types.insert("vector");
     built_in_types.insert("buffer");
-
-    // Godot registered types
-    built_in_types.insert("Object");
     
+    // Add all Godot registered classes
+    PackedStringArray class_list = nobind::ClassDB::get_singleton()->get_class_list();
+    for (const String &class_name : class_list) {
+        built_in_types.insert(class_name);
+    }
+
     // Common Luau built-in functions
     built_in_functions.clear();
     built_in_functions.insert("assert");
