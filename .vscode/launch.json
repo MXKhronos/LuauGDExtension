@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Debug",
             "preLaunchTask": "build",
-            "program": "Z:/Test/godot/bin/godot.windows.editor.x86_64.exe",
+            "program": "Z:/Test/godot/bin/godot.windows.editor.dev.x86_64.console.exe",
             "args": [
                 "--path", 
                 "Z:/Workspace/Dev/K/LuauDev",

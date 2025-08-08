@@ -22,16 +22,16 @@ Ref<ResourceFormatSaverLuau> resource_saver_luau;
 
 void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_CORE) {
-        print_line("Initializing Luau GDExtension Core.");
+        WARN_PRINT("[LuauGDExtension] Initializing Core - Extension Loading Started");
 
     } else if(p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
-        print_line("Initializing Luau GDExtension Servers.");
+        WARN_PRINT("[LuauGDExtension] Initializing Servers");
 
     } else if(p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-        print_line("Initializing Luau GDExtension Scene.");
+        WARN_PRINT("[LuauGDExtension] Initializing Scene");
 
     } else if(p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
-        print_line("Initializing Luau GDExtension Editor.");
+        WARN_PRINT("[LuauGDExtension] Initializing Editor");
     }
 
     if (p_level == MODULE_INITIALIZATION_LEVEL_CORE) {
@@ -42,18 +42,21 @@ void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
         Error reg_script_lang = nobind::Engine::get_singleton()->register_script_language(script_language_luau);
         ERR_FAIL_COND_MSG(reg_script_lang != OK,
             "Failed to register Luau language.");
+        WARN_PRINT("[LuauGDExtension] Luau Script Language registered successfully");
 
         GDREGISTER_CLASS(ResourceFormatLoaderLuau);
         resource_loader_luau.instantiate();
         ERR_FAIL_COND_MSG(!resource_loader_luau.is_valid(), 
             "Failed to instantiate Luau resource loader.");
         nobind::ResourceLoader::get_singleton()->add_resource_format_loader(resource_loader_luau);
+        WARN_PRINT("[LuauGDExtension] Resource Loader registered successfully");
 
         GDREGISTER_CLASS(ResourceFormatSaverLuau);
         resource_saver_luau.instantiate();
         ERR_FAIL_COND_MSG(!resource_saver_luau.is_valid(), 
             "Failed to instantiate Luau resource saver.");
         nobind::ResourceSaver::get_singleton()->add_resource_format_saver(resource_saver_luau);
+        WARN_PRINT("[LuauGDExtension] Resource Saver registered successfully");
     }
 
 #ifdef TOOLS_ENABLED
@@ -62,6 +65,7 @@ void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
         GDREGISTER_CLASS(LuauSyntaxHighlighter);
 
         EditorPlugins::add_by_type<LuauPlugin>();
+        WARN_PRINT("[LuauGDExtension] Editor Plugin registered successfully");
     }
 #endif
 }

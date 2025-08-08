@@ -50,6 +50,10 @@ godot_cpp_lib += "." + env["target"] + "." + env["arch"] + env["LIBSUFFIX"]
 # Define output directory
 output_dir = "Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/"
 
+# Add linker flag to ignore PDB warning on Windows
+if env["platform"] == "windows":
+    env.Append(LINKFLAGS=["/ignore:4099"])
+
 # Link against Luau libraries
 library = env.SharedLibrary(
     output_dir + "LuauGDExt{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),

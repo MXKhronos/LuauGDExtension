@@ -120,13 +120,6 @@ Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) 
             continue;
         }
         
-        // Skip rest of single-line comment
-        if (in_comment && !in_multiline_comment) {
-            highlighter_info["color"] = comment_color;
-            color_map[j] = highlighter_info;
-            continue;
-        }
-        
         // Check for comment start
         if (!in_string && current_char == '-' && next_char == '-') {
             if (j + 3 < line_length && line_text[j + 2] == '[' && line_text[j + 3] == '[') {
@@ -142,8 +135,115 @@ Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) 
                 j--; // Adjust for loop increment
                 current_color = comment_color;
                 continue;
+
+            } else if (j + 2 < line_length && line_text[j + 2] == '-') {
+                // This is a --- comment, might be an annotation
+                int comment_start = j;
+                
+                // First, color all three dashes
+                Dictionary dash_info;
+                dash_info["color"] = comment_color;
+                color_map[j] = dash_info;
+                color_map[j + 1] = dash_info;
+                color_map[j + 2] = dash_info;
+                
+                j += 3;
+                
+                while (j < line_length && line_text[j] == ' ') {
+                    Dictionary space_info;
+                    space_info["color"] = comment_color;
+                    color_map[j] = space_info;
+                    j++;
+                }
+                
+                if (j < line_length && line_text[j] == '@') {
+                    int annotation_start = j;
+                    j++;
+                    
+                    // Read the annotation name (letters only)
+                    while (j < line_length && is_ascii_identifier_char(line_text[j])) {
+                        j++;
+                    }
+                    
+                    String annotation = line_text.substr(annotation_start, j - annotation_start);
+                    
+                    Color annotation_color = keyword_color;
+                    
+                    if (!type_color.is_equal_approx(Color(0, 0, 0, 0))) {
+                        annotation_color = type_color;
+                    }
+                    else if (!function_definition_color.is_equal_approx(Color(0, 0, 0, 0))) {
+                        annotation_color = function_definition_color;
+                    }
+                    else if (annotation_color.is_equal_approx(comment_color)) {
+                        annotation_color = Color(0.8, 0.4, 0.8, 1.0); // Purple
+                    }
+                    
+                    for (int k = annotation_start; k < j; k++) {
+                        Dictionary annotation_info;
+                        annotation_info["color"] = annotation_color;
+                        color_map[k] = annotation_info;
+                    }
+                    
+                    if (annotation == "@extends") {
+                        // Skip any spaces after @extends
+                        while (j < line_length && line_text[j] == ' ') {
+                            Dictionary space_info;
+                            space_info["color"] = comment_color;
+                            color_map[j] = space_info;
+                            j++;
+                        }
+                        
+                        if (j < line_length && is_ascii_identifier_char(line_text[j])) {
+                            int class_name_start = j;
+                            
+                            // Read the class name
+                            while (j < line_length && is_ascii_identifier_char(line_text[j])) {
+                                j++;
+                            }
+                            
+                            // Apply type color to the class name
+                            Color class_color = built_in_type_color;
+                            if (class_color.is_equal_approx(Color(0, 0, 0, 0))) {
+                                class_color = type_color;
+                            }
+                            if (class_color.is_equal_approx(Color(0, 0, 0, 0))) {
+                                class_color = Color(0.4, 0.8, 0.8, 1.0); // Cyan fallback
+                            }
+                            
+                            for (int k = class_name_start; k < j; k++) {
+                                Dictionary class_info;
+                                class_info["color"] = class_color;
+                                color_map[k] = class_info;
+                            }
+                        }
+                    }
+                    
+                    // Color the rest of the line as a comment
+                    while (j < line_length) {
+                        Dictionary rest_info;
+                        rest_info["color"] = comment_color;
+                        color_map[j] = rest_info;
+                        j++;
+                    }
+                    
+                    in_comment = true;
+                    j--;
+                    continue;
+                } else {
+                    // Not an annotation, just a --- comment
+                    while (j < line_length) {
+                        Dictionary rest_info;
+                        rest_info["color"] = comment_color;
+                        color_map[j] = rest_info;
+                        j++;
+                    }
+                    in_comment = true;
+                    j--;
+                    continue;
+                }
             } else {
-                // Single line comment --
+                // Regular -- comment
                 in_comment = true;
                 color = comment_color;
                 highlighter_info["color"] = color;
@@ -250,7 +350,10 @@ Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) 
             String identifier = line_text.substr(identifier_start, j - identifier_start);
             
             // Determine color based on identifier type
-            if (control_flow_keywords.has(identifier)) {
+            if (identifier == "self") {
+                // 'self' gets special coloring like a member variable
+                color = member_variable_color;
+            } else if (control_flow_keywords.has(identifier)) {
                 color = control_flow_keyword_color;
             } else if (keywords.has(identifier)) {
                 color = keyword_color;
@@ -341,12 +444,10 @@ void LuauSyntaxHighlighter::_update_cache() {
     // Initialize Luau keywords
     keywords.clear();
     keywords.insert("and");
-    keywords.insert("break");
     keywords.insert("do");
     keywords.insert("else");
     keywords.insert("elseif");
     keywords.insert("end");
-    keywords.insert("false");
     keywords.insert("for");
     keywords.insert("function");
     keywords.insert("if");
@@ -356,12 +457,9 @@ void LuauSyntaxHighlighter::_update_cache() {
     keywords.insert("not");
     keywords.insert("or");
     keywords.insert("repeat");
-    keywords.insert("return");
     keywords.insert("then");
-    keywords.insert("true");
     keywords.insert("until");
     keywords.insert("while");
-    keywords.insert("continue");
     keywords.insert("export");
     keywords.insert("type");
     keywords.insert("typeof");
@@ -370,17 +468,9 @@ void LuauSyntaxHighlighter::_update_cache() {
     control_flow_keywords.clear();
     control_flow_keywords.insert("break");
     control_flow_keywords.insert("continue");
-    control_flow_keywords.insert("do");
-    control_flow_keywords.insert("else");
-    control_flow_keywords.insert("elseif");
-    control_flow_keywords.insert("end");
-    control_flow_keywords.insert("for");
-    control_flow_keywords.insert("if");
-    control_flow_keywords.insert("repeat");
     control_flow_keywords.insert("return");
-    control_flow_keywords.insert("then");
-    control_flow_keywords.insert("until");
-    control_flow_keywords.insert("while");
+    control_flow_keywords.insert("false");
+    control_flow_keywords.insert("true");
     
     // Luau built-in types
     built_in_types.clear();
