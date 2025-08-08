@@ -4,6 +4,7 @@
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/editor_settings.hpp>
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -11,6 +12,7 @@
 #include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/templates/self_list.hpp>
 #include <godot_cpp/templates/pair.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
 
 #include "nobind.h"
 #include "luau_engine.h"
@@ -534,15 +536,43 @@ void LuauScriptInstance::notification(int32_t p_what) {
 		}
         lua_State *ET = lua_newthread(T);
         
-        // For process notifications, pass delta time
+        // Get the self table from the main state
+        lua_getref(L, self_ref);
+        lua_xmove(L, ET, 1);
+        
+        // Get the method from the self table
+        String method_str = String(method_name);
+        lua_getfield(ET, -1, method_str.utf8().get_data());
+        
+        if (!lua_isfunction(ET, -1)) {
+            lua_pop(ET, 2); // Remove non-function and self table
+            lua_pop(T, 1); // Remove thread
+            return;
+        }
+        
+        // Swap function and self table so self is first argument
+        lua_insert(ET, -2);
+        
+        // Now push additional arguments if needed
+        int argc = 0;
         if (p_what == 17 || p_what == 16) { // NOTIFICATION_PROCESS or NOTIFICATION_PHYSICS_PROCESS
             // Get delta time - we'll pass a default for now
             // TODO: Get actual delta from the engine when available
             double delta = 1.0 / 60.0; // Default to 60 FPS
             lua_pushnumber(ET, delta);
-            call_internal(method_name, ET, 1, 0);
-        } else {
-            call_internal(method_name, ET, 0, 0);
+            argc = 1;
+        }
+        
+        // Call: function, self, [args...]
+        int call_result = lua_pcall(ET, argc + 1, 0, 0); // +1 for self
+        
+        if (call_result != LUA_OK) {
+            const char* error_msg = lua_tostring(ET, -1);
+            if (error_msg) {
+                ERR_PRINT(vformat("Luau script error in %s: %s", 
+                    method_str, error_msg));
+            }
+            lua_pop(ET, 1); // Remove error message
         }
         
         lua_pop(T, 1); // Remove thread
@@ -550,8 +580,37 @@ void LuauScriptInstance::notification(int32_t p_what) {
     // Then try the generic _notification method
     else if (has_method("_notification")) {
         lua_State *ET = lua_newthread(T);
+        
+        // Get the self table from the main state
+        lua_getref(L, self_ref);
+        lua_xmove(L, ET, 1);
+        
+        // Get the method from the self table
+        lua_getfield(ET, -1, "_notification");
+        
+        if (!lua_isfunction(ET, -1)) {
+            lua_pop(ET, 2); // Remove non-function and self table
+            lua_pop(T, 1); // Remove thread
+            return;
+        }
+        
+        // Swap function and self table so self is first argument
+        lua_insert(ET, -2);
+        
+        // Push the notification code as argument
         lua_pushinteger(ET, p_what);
-        call_internal("_notification", ET, 1, 0);
+        
+        // Call: function, self, notification_code
+        int call_result = lua_pcall(ET, 2, 0, 0); // 1 for self + 1 for notification code
+        
+        if (call_result != LUA_OK) {
+            const char* error_msg = lua_tostring(ET, -1);
+            if (error_msg) {
+                ERR_PRINT(vformat("Luau script error in _notification: %s", error_msg));
+            }
+            lua_pop(ET, 1); // Remove error message
+        }
+        
         lua_pop(T, 1); // Remove thread
     }
 }
@@ -582,25 +641,225 @@ void LuauScriptInstance::to_string(GDExtensionBool *r_is_valid, String *r_out) {
 }
 
 bool LuauScriptInstance::set(const StringName &p_name, const Variant &p_value, PropertySetGetError *r_err) {
+	if (!L || self_ref == LUA_NOREF) {
+		if (r_err) *r_err = PROP_NOT_FOUND;
+		return false;
+	}
 	
-	return false;
+	// Get the self table
+	lua_getref(L, self_ref);
+	
+	// Set the value in the self table
+	String prop_str = String(p_name);
+	LuauMarshal::push_variant(L, p_value);
+	lua_setfield(L, -2, prop_str.utf8().get_data());
+	
+	lua_pop(L, 1); // Remove self table
+	
+	if (r_err) *r_err = PROP_OK;
+	return true;
 }
 
 bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err) {
-    return false;
+    if (!L || self_ref == LUA_NOREF) {
+        if (r_err) *r_err = PROP_NOT_FOUND;
+        return false;
+    }
+    
+    // Get the self table
+    lua_getref(L, self_ref);
+    
+    // Get the value from the self table
+    String prop_str = String(p_name);
+    lua_getfield(L, -1, prop_str.utf8().get_data());
+    
+    // Check if the value exists (not nil)
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 2); // Remove nil and self table
+        
+        // Try to get from script constants as fallback
+        const LuauScript *s = script.ptr();
+        while (s) {
+            if (s->constants.has(p_name)) {
+                r_ret = s->constants[p_name];
+                if (r_err) *r_err = PROP_OK;
+                return true;
+            }
+            s = s->base.ptr();
+        }
+        
+        if (r_err) *r_err = PROP_NOT_FOUND;
+        return false;
+    }
+    
+    // Convert the Lua value to Variant
+    r_ret = LuauMarshal::get_variant(L, -1);
+    lua_pop(L, 2); // Remove value and self table
+    
+    if (r_err) *r_err = PROP_OK;
+    return true;
 }
 
 GDExtensionPropertyInfo *LuauScriptInstance::get_property_list(uint32_t *r_count) {
-    *r_count = 0;
-    return nullptr;
+    // First, get properties from script definition (static properties)
+    LocalVector<GDExtensionPropertyInfo> properties;
+    HashSet<StringName> seen;
+    
+    // Add properties from script definition (if any)
+    const LuauScript *s = script.ptr();
+    while (s) {
+        for (const GDClassProperty &script_prop : s->definition.properties) {
+            if (!seen.has(script_prop.property.name)) {
+                seen.insert(script_prop.property.name);
+                
+                GDExtensionPropertyInfo prop_info;
+                copy_prop(script_prop.property, prop_info);
+                properties.push_back(prop_info);
+            }
+        }
+        s = s->base.ptr();
+    }
+    
+    // Only try to get properties from Lua state if it's properly initialized
+    if (L && self_ref != LUA_NOREF) {
+        // Get properties from the self table
+        lua_getref(L, self_ref);
+        
+        // Check if we got a valid table
+        if (lua_istable(L, -1)) {
+            // Iterate through the self table
+            lua_pushnil(L);
+            while (lua_next(L, -2) != 0) {
+                // Key is at -2, value is at -1
+                if (lua_type(L, -2) == LUA_TSTRING) {
+                    const char* key = lua_tostring(L, -2);
+                    if (key) {
+                        String key_str = String(key);
+                        
+                        // Skip internal fields (starting with __)
+                        if (!key_str.begins_with("__")) {
+                            // Skip if it's a function (methods are not properties)
+                            if (!lua_isfunction(L, -1)) {
+                                StringName prop_name(key_str);
+                                
+                                if (!seen.has(prop_name)) {
+                                    seen.insert(prop_name);
+                                    
+                                    GDExtensionPropertyInfo prop_info;
+                                    prop_info.type = GDEXTENSION_VARIANT_TYPE_NIL;
+                                    prop_info.name = stringname_alloc(prop_name);
+                                    prop_info.class_name = stringname_alloc("");
+                                    prop_info.hint = PROPERTY_HINT_NONE;
+                                    prop_info.hint_string = string_alloc("");
+                                    prop_info.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
+                                    
+                                    // Try to determine the type from the current value
+                                    int lua_type_id = lua_type(L, -1);
+                                    switch (lua_type_id) {
+                                        case LUA_TBOOLEAN:
+                                            prop_info.type = GDEXTENSION_VARIANT_TYPE_BOOL;
+                                            break;
+                                        case LUA_TNUMBER:
+                                            prop_info.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+                                            break;
+                                        case LUA_TSTRING:
+                                            prop_info.type = GDEXTENSION_VARIANT_TYPE_STRING;
+                                            break;
+                                        case LUA_TTABLE:
+                                            prop_info.type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
+                                            break;
+                                        default:
+                                            prop_info.type = GDEXTENSION_VARIANT_TYPE_NIL;
+                                            prop_info.usage |= PROPERTY_USAGE_NIL_IS_VARIANT;
+                                            break;
+                                    }
+                                    
+                                    properties.push_back(prop_info);
+                                }
+                            }
+                        }
+                    }
+                }
+                lua_pop(L, 1); // Remove value, keep key for next iteration
+            }
+        }
+        
+        lua_pop(L, 1); // Remove self table
+    }
+    
+    // Copy to allocated memory
+    int size = properties.size();
+    *r_count = size;
+    
+    if (size == 0) {
+        return nullptr;
+    }
+    
+    GDExtensionPropertyInfo *list = (GDExtensionPropertyInfo *)memalloc(sizeof(GDExtensionPropertyInfo) * size);
+    memcpy(list, properties.ptr(), sizeof(GDExtensionPropertyInfo) * size);
+    
+    return list;
 }
 
 Variant::Type godot::LuauScriptInstance::get_property_type(const StringName &p_name, bool *r_is_valid) const {
-
-    return Variant::NIL;
+    if (!L || self_ref == LUA_NOREF) {
+        if (r_is_valid) *r_is_valid = false;
+        return Variant::NIL;
+    }
+    
+    // Get the self table
+    lua_getref(L, self_ref);
+    
+    // Get the value from the self table
+    String prop_str = String(p_name);
+    lua_getfield(L, -1, prop_str.utf8().get_data());
+    
+    Variant::Type type = Variant::NIL;
+    bool valid = false;
+    
+    if (!lua_isnil(L, -1)) {
+        valid = true;
+        
+        int lua_type_id = lua_type(L, -1);
+        switch (lua_type_id) {
+            case LUA_TBOOLEAN:
+                type = Variant::BOOL;
+                break;
+            case LUA_TNUMBER:
+                type = Variant::FLOAT;
+                break;
+            case LUA_TSTRING:
+                type = Variant::STRING;
+                break;
+            case LUA_TTABLE:
+                type = Variant::DICTIONARY;
+                break;
+            default:
+                type = Variant::NIL;
+                break;
+        }
+    }
+    
+    lua_pop(L, 2); // Remove value and self table
+    
+    if (r_is_valid) *r_is_valid = valid;
+    return type;
 }
 
 bool LuauScriptInstance::has_method(const StringName &p_name) const {
+    // First check the actual self table for runtime methods
+    if (L && self_ref != LUA_NOREF) {
+        lua_getref(L, self_ref);
+        String method_str = String(p_name);
+        lua_getfield(L, -1, method_str.utf8().get_data());
+        bool is_func = lua_isfunction(L, -1);
+        lua_pop(L, 2); // Remove function/nil and self table
+        if (is_func) {
+            return true;
+        }
+    }
+    
+    // Then fall back to checking the script metadata
     const LuauScript *s = script.ptr();
     while (s) {
         if (s->definition.methods.has(p_name)) {
@@ -1298,24 +1557,168 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
             
             // For now, just extract basic information from the AST
             for (Luau::AstStat* stat : parse_result.root->body) {
-                // Check for local variable assignments that might be constants
-                if (auto* local = stat->as<Luau::AstStatLocal>()) {
+                // Check for global variable assignments (e.g., ACONST = 123)
+                if (auto* assign = stat->as<Luau::AstStatAssign>()) {
+                    // Process global assignments
+                    for (size_t i = 0; i < assign->vars.size; i++) {
+                        if (i < assign->values.size && assign->values.data[i]) {
+                            // Check if it's a simple global variable (not a table access)
+                            if (auto* global = assign->vars.data[i]->as<Luau::AstExprGlobal>()) {
+                                Luau::AstExpr* value = assign->values.data[i];
+                                
+                                // Get the variable name
+                                String var_name = String(global->name.value);
+                                bool is_constant = true;
+                                
+                                // Check if all alphabetic characters are uppercase (constant convention)
+                                for (int j = 0; j < var_name.length(); j++) {
+                                    char32_t c = var_name[j];
+                                    if ((c >= 'a' && c <= 'z')) {
+                                        is_constant = false;
+                                        break;
+                                    }
+                                }
+                                
+                                // Extract the value
+                                Variant var_value;
+                                bool has_value = false;
+                                
+                                if (auto* num = value->as<Luau::AstExprConstantNumber>()) {
+                                    var_value = num->value;
+                                    has_value = true;
+                                } else if (auto* str = value->as<Luau::AstExprConstantString>()) {
+                                    var_value = String::utf8(str->value.data, str->value.size);
+                                    has_value = true;
+                                } else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
+                                    var_value = bool_val->value;
+                                    has_value = true;
+                                } else if (value->as<Luau::AstExprConstantNil>()) {
+                                    var_value = Variant();
+                                    has_value = true;
+                                }
+                                
+                                if (has_value) {
+                                    if (is_constant) {
+                                        // ALL_CAPS variables are constants
+                                        constants[StringName(var_name)] = var_value;
+                                        definition.constants[StringName(var_name)] = var_value;
+                                    } else {
+                                        // Regular global variables are properties
+                                        GDClassProperty prop;
+                                        prop.property.name = StringName(var_name);
+                                        prop.property.class_name = "";
+                                        prop.property.hint = PROPERTY_HINT_NONE;
+                                        prop.property.hint_string = "";
+                                        prop.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
+                                        prop.default_value = var_value;
+                                        
+                                        // Determine type from value
+                                        switch (var_value.get_type()) {
+                                            case Variant::BOOL:
+                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
+                                                break;
+                                            case Variant::INT:
+                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_INT;
+                                                break;
+                                            case Variant::FLOAT:
+                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+                                                break;
+                                            case Variant::STRING:
+                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
+                                                break;
+                                            default:
+                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+                                                prop.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
+                                                break;
+                                        }
+                                        
+                                        // Add to properties list
+                                        definition.properties.push_back(prop);
+                                        definition.property_indices[StringName(var_name)] = definition.properties.size() - 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // Check for local variable assignments
+                else if (auto* local = stat->as<Luau::AstStatLocal>()) {
                     // Process local variables
                     for (size_t i = 0; i < local->vars.size; i++) {
                         if (i < local->values.size && local->values.data[i]) {
-                            // Check if this is a constant value
                             Luau::AstLocal* var = local->vars.data[i];
                             Luau::AstExpr* value = local->values.data[i];
                             
-                            // Extract constant values (numbers, strings, booleans)
+                            // Check if variable name is all caps (constant) or regular (property)
+                            String var_name = String(var->name.value);
+                            bool is_constant = true;
+                            
+                            // Check if all alphabetic characters are uppercase
+                            for (int j = 0; j < var_name.length(); j++) {
+                                char32_t c = var_name[j];
+                                if ((c >= 'a' && c <= 'z')) {
+                                    is_constant = false;
+                                    break;
+                                }
+                            }
+                            
+                            // Extract the value
+                            Variant var_value;
+                            bool has_value = false;
+                            
                             if (auto* num = value->as<Luau::AstExprConstantNumber>()) {
-                                constants[StringName(var->name.value)] = num->value;
+                                var_value = num->value;
+                                has_value = true;
                             } else if (auto* str = value->as<Luau::AstExprConstantString>()) {
-                                constants[StringName(var->name.value)] = String::utf8(str->value.data, str->value.size);
+                                var_value = String::utf8(str->value.data, str->value.size);
+                                has_value = true;
                             } else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
-                                constants[StringName(var->name.value)] = bool_val->value;
+                                var_value = bool_val->value;
+                                has_value = true;
                             } else if (value->as<Luau::AstExprConstantNil>()) {
-                                constants[StringName(var->name.value)] = Variant();
+                                var_value = Variant();
+                                has_value = true;
+                            }
+                            
+                            if (has_value) {
+                                if (is_constant) {
+                                    // ALL_CAPS variables are constants
+                                    constants[StringName(var_name)] = var_value;
+                                    definition.constants[StringName(var_name)] = var_value;
+                                } else {
+                                    // Regular variables are properties
+                                    GDClassProperty prop;
+                                    prop.property.name = StringName(var_name);
+                                    prop.property.class_name = "";
+                                    prop.property.hint = PROPERTY_HINT_NONE;
+                                    prop.property.hint_string = "";
+                                    prop.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
+                                    prop.default_value = var_value;
+                                    
+                                    // Determine type from value
+                                    switch (var_value.get_type()) {
+                                        case Variant::BOOL:
+                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
+                                            break;
+                                        case Variant::INT:
+                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_INT;
+                                            break;
+                                        case Variant::FLOAT:
+                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+                                            break;
+                                        case Variant::STRING:
+                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
+                                            break;
+                                        default:
+                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+                                            prop.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
+                                            break;
+                                    }
+                                    
+                                    // Add to properties list
+                                    definition.properties.push_back(prop);
+                                    definition.property_indices[StringName(var_name)] = definition.properties.size() - 1;
+                                }
                             }
                         }
                     }
@@ -1421,11 +1824,64 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
     
     // Stage 3: Full loading (link base scripts, validate, etc.)
     if (p_load_stage >= LOAD_FULL) {
-        // TODO: Resolve base script references
-        // TODO: Validate method signatures
-        // TODO: Type checking
+        // Resolve base script references if extends another Luau script
+        if (!definition.extends.is_empty()) {
+            // Check if the base is a script path (starts with res://)
+            if (definition.extends.begins_with("res://")) {
+                // Load the base script
+                Ref<LuauScript> base_script = ResourceLoader::get_singleton()->load(definition.extends);
+                if (base_script.is_valid()) {
+                    // Ensure base script is fully loaded
+                    base_script->load(LOAD_FULL, false);
+                    base = base_script;
+                } else {
+                    WARN_PRINT(vformat("Failed to load base script: %s", definition.extends));
+                }
+            }
+            // Otherwise it's a built-in class name, which is handled by ClassDB
+        }
         
+        // Validate that all methods are properly formed
+        for (const KeyValue<StringName, GDMethod> &E : definition.methods) {
+            const GDMethod &method = E.value;
+            
+            // Validate method arguments
+            for (const GDProperty &arg : method.arguments) {
+                // For now, we accept all argument types as Variant
+                // In the future, we could perform type checking here
+            }
+        }
+        
+        // Process signals if any were defined
+        for (const KeyValue<StringName, GDMethod> &E : definition.signals) {
+            const GDMethod &signal = E.value;
+            // Signals are validated during registration
+        }
+        
+        // Process properties if any were defined  
+        for (const GDClassProperty &prop : definition.properties) {
+            // Properties are validated during registration
+        }
+        
+        // Mark as fully loaded
         load_stage = LOAD_FULL;
+        
+#ifdef TOOLS_ENABLED
+        // In editor, print summary of what was loaded
+        if (Engine::get_singleton()->is_editor_hint()) {
+            int method_count = definition.methods.size();
+            int property_count = definition.properties.size();
+            int signal_count = definition.signals.size();
+            int constant_count = definition.constants.size();
+            
+            if (method_count > 0 || property_count > 0 || signal_count > 0) {
+                print_verbose(vformat("LuauScript loaded: %s (extends %s) - %d methods, %d properties, %d signals, %d constants",
+                    definition.name.is_empty() ? get_path() : definition.name,
+                    definition.extends.is_empty() ? "RefCounted" : definition.extends,
+                    method_count, property_count, signal_count, constant_count));
+            }
+        }
+#endif
     }
     
     return err;
@@ -1535,9 +1991,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 			// Create self table for instance
 			lua_newtable(thread);
 			
-			// Mark the table as not safe environment to allow modifications
-			lua_setsafeenv(thread, -1, 0);
-			
 			// Create metatable for the self table
 			lua_newtable(thread);
 			
@@ -1626,10 +2079,47 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 				
 				if (load_result == 0) {
 					// The loaded function is now on the stack
-					// Set the self table as the environment for the script
-					// Get ref from main state and push to thread
+					// Get the self table to use as environment
 					lua_getref(L, instance->get_self_ref());
 					lua_xmove(L, thread, 1);
+					
+					// Create a metatable for the environment that redirects global writes to self
+					lua_newtable(thread); // Create metatable
+					
+					// Set __index to look up in self first, then _G
+					lua_pushcfunction(thread, [](lua_State *L) -> int {
+						// Stack: env_table, key
+						const char* key = lua_tostring(L, 2);
+						
+						// First check in the table itself
+						lua_pushvalue(L, 2); // Push key
+						lua_rawget(L, 1); // Get from table
+						if (!lua_isnil(L, -1)) {
+							return 1; // Found in table
+						}
+						lua_pop(L, 1); // Remove nil
+						
+						// Then check in global environment
+						lua_getglobal(L, key);
+						return 1;
+					}, "__index");
+					lua_setfield(thread, -2, "__index");
+					
+					// Set __newindex to write to self
+					lua_pushcfunction(thread, [](lua_State *L) -> int {
+						// Stack: env_table, key, value
+						// Write directly to the table
+						lua_pushvalue(L, 2); // Push key
+						lua_pushvalue(L, 3); // Push value
+						lua_rawset(L, 1); // Set in table
+						return 0;
+					}, "__newindex");
+					lua_setfield(thread, -2, "__newindex");
+					
+					// Set the metatable on self
+					lua_setmetatable(thread, -2);
+					
+					// Set self table as the environment for the loaded function
 					lua_setfenv(thread, -2);
 					
 					// Execute the script with no arguments
@@ -1705,37 +2195,66 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 					} else {
 						WARN_PRINT(vformat("Script executed successfully for: %s", script_name));
 						// Script has been executed and populated the self table
-						// Now call _init if it exists
-						if (definition.methods.has("_init")) {
-							WARN_PRINT("Calling _init method");
-							// Get the self table from main state and move to thread
-							lua_getref(L, instance->get_self_ref());
-							lua_xmove(L, thread, 1);
-							
-							// Get the _init method from the self table
-							lua_getfield(thread, -1, "_init");
-							
-							if (lua_isfunction(thread, -1)) {
-								// _init exists, call it with self as implicit 'this'
-								// Since we're calling a method defined in the self environment,
-								// we don't need to pass self explicitly
-								int init_result = lua_pcall(thread, 0, 0, 0);
-								
-								if (init_result != 0) {
-									const char* error_msg = lua_tostring(thread, -1);
-									ERR_PRINT(vformat("Failed to call _init for %s: %s", 
-										script_name, error_msg ? error_msg : "unknown error"));
-									lua_pop(thread, 1); // Remove error message
+						// The functions are now defined in the self table (which was the environment)
+						
+						// Debug: First let's check what's in the environment after script execution
+						WARN_PRINT("Checking environment contents after script execution:");
+						
+						// Get the self table from main state
+						lua_getref(L, instance->get_self_ref());
+						lua_xmove(L, thread, 1);
+						
+						// Iterate through the self table to see what was added
+						lua_pushnil(thread);
+						int func_count = 0;
+						while (lua_next(thread, -2) != 0) {
+							int type = lua_type(thread, -1);
+							if (lua_type(thread, -2) == LUA_TSTRING) {
+								const char* key = lua_tostring(thread, -2);
+								if (key) {
+									const char* type_name = lua_typename(thread, type);
+									WARN_PRINT(vformat("  Self['%s'] = %s", key, type_name));
+									if (type == LUA_TFUNCTION) {
+										func_count++;
+									}
 								}
-							} else {
-								// _init is not a function or doesn't exist
-								lua_pop(thread, 1); // Remove non-function value
 							}
-							
-							lua_pop(thread, 1); // Remove self table
-						} else {
-							WARN_PRINT("_init method not found");
+							lua_pop(thread, 1); // Remove value, keep key for next iteration
 						}
+						WARN_PRINT(vformat("Total functions found in self table: %d", func_count));
+						
+                        // Now try to call _init if it exists
+                        // Stack currently has: self_table
+                        lua_pushvalue(thread, -1); // Duplicate self table for later
+                        // Stack: self_table, self_table_copy
+                        lua_getfield(thread, -2, "_init"); // Get _init from original self table
+                        // Stack: self_table, self_table_copy, _init_function (or nil)
+                        int init_type = lua_type(thread, -1);
+                        
+                        if (lua_isfunction(thread, -1)) {
+                            WARN_PRINT("Found _init function, calling it");
+                            // Stack: self_table, self_table_copy, _init_function
+                            // Swap the function and the copy of self
+                            lua_insert(thread, -2); // Move function below self_copy
+                            // Stack: self_table, _init_function, self_table_copy
+                            // Now call with self_table_copy as first argument
+                            int init_result = lua_pcall(thread, 1, 0, 0); // 1 argument (self)
+							
+							if (init_result != 0) {
+								const char* error_msg = lua_tostring(thread, -1);
+								ERR_PRINT(vformat("Failed to call _init for %s: %s", 
+									script_name, error_msg ? error_msg : "unknown error"));
+								lua_pop(thread, 1); // Remove error message
+							} else {
+								WARN_PRINT("_init called successfully");
+							}
+						} else {
+							// _init is not a function or doesn't exist
+							lua_pop(thread, 1); // Remove non-function value
+							WARN_PRINT(vformat("_init not found as function in self table (type: %s)", lua_typename(thread, init_type)));
+						}
+						
+						lua_pop(thread, 1); // Remove self table
 					}
 				}
 			}

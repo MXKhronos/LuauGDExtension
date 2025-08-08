@@ -1,13 +1,21 @@
 ---@extends Node
 
 -- hello world
+ACONST = 123;
+local BCONST = 345;
+acount = 1;
 local bcount: number = 0;
 
-function _init()
-	print("[luau] init!");
+function _init(self: Node)
+	print("[luau] init!", self);
+	print("[luau] init ACONST=", ACONST);
+	print("[luau] init BCONST=", BCONST);
+	print("[luau] init acount=", acount);
+	print("[luau] init bcount=", bcount);
 end
 
-function _ready()
+function _ready(self: Node)
+	print("[luau] ready!", self);
 	while true do
 		print("[luau] hello world!");
 		bcount = bcount +1;
@@ -20,11 +28,15 @@ function _ready()
 	end
 end
 
-function _enter_tree(): nil
+function _enter_tree(self: Node): nil
 	print("[luau] enter tree");
 	return;
 end
 
-function _process(delta: number): nil
+function _process(self: Node, delta: number): nil
 	return;
+end
+
+function hello()
+	print(`[luau] world! {self.name}`);
 end
