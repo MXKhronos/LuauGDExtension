@@ -21,20 +21,8 @@ Ref<ResourceFormatLoaderLuau> resource_loader_luau;
 Ref<ResourceFormatSaverLuau> resource_saver_luau;
 
 void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
-    if (p_level == MODULE_INITIALIZATION_LEVEL_CORE) {
-        WARN_PRINT("[LuauGDExtension] Initializing Core - Extension Loading Started");
-
-    } else if(p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
-        WARN_PRINT("[LuauGDExtension] Initializing Servers");
-
-    } else if(p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-        WARN_PRINT("[LuauGDExtension] Initializing Scene");
-
-    } else if(p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
-        WARN_PRINT("[LuauGDExtension] Initializing Editor");
-    }
-
-    if (p_level == MODULE_INITIALIZATION_LEVEL_CORE) {
+    if (p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
+        WARN_PRINT("[LuauGDExtension] Initializing Extension");
         GDREGISTER_CLASS(LuauScript);
 
         GDREGISTER_CLASS(LuauLanguage);

@@ -482,7 +482,7 @@ namespace godot {
         // virtual void *_debug_get_stack_level_instance(int32_t p_level);
         // virtual Dictionary _debug_get_globals(int32_t p_max_subitems, int32_t p_max_depth);
         // virtual String _debug_parse_stack_level_expression(int32_t p_level, const String &p_expression, int32_t p_max_subitems, int32_t p_max_depth);
-        // virtual TypedArray<Dictionary> _debug_get_current_stack_info();
+        TypedArray<Dictionary> _debug_get_current_stack_info() const;
         
         void _reload_all_scripts() override;
 

@@ -1400,6 +1400,57 @@ String LuauLanguage::_debug_get_error() const {
 #endif // TOOLS_ENABLED
 }
 
+TypedArray<Dictionary> LuauLanguage::_debug_get_current_stack_info() const {
+	TypedArray<Dictionary> stack_info;
+
+#ifdef TOOLS_ENABLED
+	if (debug.call_lock.is_valid()) {
+		MutexLock lock(*debug.call_lock.ptr());
+		
+		for (const auto &si : debug.call_stack) {
+			stack_info.append(static_cast<Dictionary>(si));
+		}
+		
+		for (const auto &bsi : debug.break_call_stack) {
+			Dictionary entry;
+			entry["file"] = bsi.source ? String(bsi.source) : String();
+			entry["func"] = bsi.name ? String(bsi.name) : String();
+			entry["line"] = bsi.line;
+			
+			if (!bsi.members.is_empty()) {
+				Dictionary members_dict;
+				for (const auto &pair : bsi.members) {
+					members_dict[pair.key] = pair.value;
+				}
+				entry["members"] = members_dict;
+			}
+			
+			if (!bsi.locals.is_empty()) {
+				Dictionary locals_dict;
+				for (const auto &pair : bsi.locals) {
+					locals_dict[pair.key] = pair.value;
+				}
+				entry["locals"] = locals_dict;
+			}
+			
+			stack_info.append(entry);
+		}
+	}
+#endif // TOOLS_ENABLED
+
+	return stack_info;
+}
+
+#ifdef TOOLS_ENABLED
+LuauLanguage::DebugInfo::StackInfo::operator Dictionary() const {
+	Dictionary dict;
+	dict["file"] = source ? String(source) : String();
+	dict["func"] = name ? String(name) : String();
+	dict["line"] = line;
+	return dict;
+}
+#endif // TOOLS_ENABLED
+
 void LuauLanguage::_frame() {
     uint64_t new_ticks = nobind::Time::get_singleton()->get_ticks_usec();
 	double time_scale = nobind::Engine::get_singleton()->get_time_scale();
@@ -1429,6 +1480,10 @@ Dictionary LuauLanguage::_get_global_class_name(const String &p_path) const {
 LuauLanguage::LuauLanguage() {
 	singleton = this;
 	mutex.instantiate();
+	
+#ifdef TOOLS_ENABLED
+	debug.call_lock.instantiate();
+#endif // TOOLS_ENABLED
 }
 
 LuauLanguage::~LuauLanguage() {
