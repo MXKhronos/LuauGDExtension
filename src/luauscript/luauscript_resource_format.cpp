@@ -73,7 +73,7 @@ Error ResourceFormatSaverLuau::_save(const Ref<Resource> &p_resource, const Stri
 	Ref<LuauScript> script = p_resource;
 	ERR_FAIL_COND_V(script.is_null(), ERR_INVALID_PARAMETER);
 
-	String source = script->get_source_code();
+	String source = script->_get_source_code();
 
 	{
 		Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::ModeFlags::WRITE);

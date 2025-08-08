@@ -97,6 +97,11 @@ void ScriptInstance::init_script_instance_info_common(GDExtensionScriptInstanceI
 
 	p_info.set_fallback_func = nullptr;
 	p_info.get_fallback_func = nullptr;
+	
+	// New fields in GDExtensionScriptInstanceInfo3
+	p_info.get_class_category_func = nullptr;
+	p_info.validate_property_func = nullptr;
+	p_info.get_method_argument_count_func = nullptr;
 
 	p_info.set_func = [](void *p_self, GDExtensionConstStringNamePtr p_name, GDExtensionConstVariantPtr p_value) -> GDExtensionBool {
 		return COMMON_SELF->set(*(const StringName *)p_name, *(const Variant *)p_value);
@@ -1132,6 +1137,10 @@ GDExtensionPropertyInfo *PlaceHolderScriptInstance::get_property_list(uint32_t *
 	}
 
 	*r_count = size;
+
+	if (size == 0) {
+		return nullptr;
+	}
 
 	GDExtensionPropertyInfo *list = (GDExtensionPropertyInfo *)memalloc(sizeof(GDExtensionPropertyInfo) * size);
 	memcpy(list, props.ptr(), sizeof(GDExtensionPropertyInfo) * size);
