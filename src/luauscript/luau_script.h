@@ -201,6 +201,14 @@ namespace godot {
         Ref<LuauScript> script;
         LuauEngine::VMType vm_type;
         
+        // Lua state management
+        lua_State *L = nullptr; // Main VM state
+        lua_State *T = nullptr; // Thread state for this instance
+        int thread_ref = LUA_NOREF; // Reference to keep thread alive
+        int self_ref = LUA_NOREF; // Reference to self table
+        
+        int call_internal(const StringName &p_method, lua_State *ET, int argc, int retc);
+        
     public:
         static const GDExtensionScriptInstanceInfo3 INSTANCE_INFO;
 
@@ -220,8 +228,18 @@ namespace godot {
         virtual Object *get_owner() const override;
         Ref<LuauScript> get_script() const override;
 
-        LuauScriptInstance(const Ref<LuauScript> &p_script, Object *p_owner, LuauEngine::VMType p_vmtype);
-        ~LuauScriptInstance();
+    // Initialize the Lua state for this instance
+    void initialize_lua_state(lua_State *p_L, lua_State *p_thread, int p_thread_ref, int p_self_ref) {
+        L = p_L;
+        T = p_thread;
+        thread_ref = p_thread_ref;
+        self_ref = p_self_ref;
+    }
+    
+    int get_self_ref() const { return self_ref; }
+    
+    LuauScriptInstance(const Ref<LuauScript> &p_script, Object *p_owner, LuauEngine::VMType p_vmtype);
+    ~LuauScriptInstance();
     };
 
 
@@ -238,6 +256,17 @@ namespace godot {
         HashMap<StringName, Variant> constants;
 
     public:
+        // Accessors for script reload functionality
+        void update_properties(const Vector<GDClassProperty> &p_properties) {
+            properties.clear();
+            for (const GDClassProperty &prop : p_properties) {
+                properties.push_back(prop.property);
+            }
+        }
+        
+        void update_constants(const HashMap<StringName, Variant> &p_constants) {
+            constants = p_constants;
+        }
         static const GDExtensionScriptInstanceInfo3 INSTANCE_INFO;
 
         bool property_set_fallback(const StringName &p_name, const Variant &p_value);

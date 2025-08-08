@@ -3,6 +3,7 @@
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/editor_settings.hpp>
+#include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -15,6 +16,7 @@
 #include "luau_engine.h"
 #include "luau_cache.h"
 #include "luau_constants.h"
+#include "luau_marshal.h"
 #include "luauscript_resource_format.h"
 
 #include <Luau/Compiler.h>
@@ -419,106 +421,139 @@ void LuauScriptInstance::call(
     const StringName &p_method,
     const Variant *const *p_args, const GDExtensionInt p_argument_count,
     Variant *r_return, GDExtensionCallError *r_error) {
-    // const LuauScript *s = script.ptr();
-
-    // while (s) {
-    //     StringName actual_name = p_method;
-
-    //     // check name given and name converted to pascal
-    //     // (e.g. if Node::_ready is called -> _Ready)
-    //     if (s->has_method(p_method, &actual_name)) {
-    //         const GDMethod &method = s->get_definition().methods[actual_name];
-
-    //         // Check argument count
-    //         int args_allowed = method.arguments.size();
-    //         int args_default = method.default_arguments.size();
-    //         int args_required = args_allowed - args_default;
-
-    //         if (p_argument_count < args_required) {
-    //             r_error->error = GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS;
-    //             r_error->argument = args_required;
-
-    //             return;
-    //         }
-
-    //         if (p_argument_count > args_allowed) {
-    //             r_error->error = GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS;
-    //             r_error->argument = args_allowed;
-
-    //             return;
-    //         }
-
-    //         // Prepare for call
-    //         lua_State *ET = lua_newthread(T); // execution thread
-
-    //         for (int i = 0; i < p_argument_count; i++) {
-    //             const Variant &arg = *p_args[i];
-
-    //             if (!(method.arguments[i].usage & PROPERTY_USAGE_NIL_IS_VARIANT) &&
-    //                     !Utils::variant_types_compatible(arg.get_type(), Variant::Type(method.arguments[i].type))) {
-    //                 r_error->error = GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT;
-    //                 r_error->argument = i;
-    //                 r_error->expected = method.arguments[i].type;
-
-    //                 lua_pop(T, 1); // thread
-    //                 return;
-    //             }
-
-    //             LuaStackOp<Variant>::push(ET, arg);
-    //         }
-
-    //         for (int i = p_argument_count - args_required; i < args_default; i++)
-    //             LuaStackOp<Variant>::push(ET, method.default_arguments[i]);
-
-    //         // Call
-    //         r_error->error = GDEXTENSION_CALL_OK;
-
-    //         int status = call_internal(actual_name, ET, args_allowed, 1);
-
-    //         if (status == LUA_OK) {
-    //             *r_return = LuaStackOp<Variant>::get(ET, -1);
-    //         } else if (status == LUA_YIELD) {
-    //             if (method.return_val.type != GDEXTENSION_VARIANT_TYPE_NIL) {
-    //                 lua_pop(T, 1); // thread
-    //                 ERR_FAIL_MSG("Non-void method yielded unexpectedly");
-    //             }
-
-    //             *r_return = Variant();
-    //         }
-
-    //         lua_pop(T, 1); // thread
-    //         return;
-    //     }
-
-    //     s = s->base.ptr();
-    // }
-
-    // r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
+    
+    if (!L || !T || self_ref == LUA_NOREF) {
+        r_error->error = GDEXTENSION_CALL_ERROR_INSTANCE_IS_NULL;
+        return;
+    }
+    
+    const LuauScript *s = script.ptr();
+    
+    // Look for the method in the script hierarchy
+    while (s) {
+        if (s->definition.methods.has(p_method)) {
+            const GDMethod &method = s->definition.methods[p_method];
+            
+            // Check argument count
+            int args_allowed = method.arguments.size();
+            int args_default = method.default_arguments.size();
+            int args_required = args_allowed - args_default;
+            
+            if (p_argument_count < args_required) {
+                r_error->error = GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS;
+                r_error->argument = args_required;
+                return;
+            }
+            
+            if (p_argument_count > args_allowed && !method.flags.has_flag(METHOD_FLAG_VARARG)) {
+                r_error->error = GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS;
+                r_error->argument = args_allowed;
+                return;
+            }
+            
+            // Create execution thread
+            lua_State *ET = lua_newthread(T);
+            
+            // Push arguments onto the stack
+            for (int i = 0; i < p_argument_count; i++) {
+                const Variant &arg = *p_args[i];
+                LuauMarshal::push_variant(ET, arg);
+            }
+            
+            // Add default arguments if needed
+            for (int i = p_argument_count; i < args_allowed; i++) {
+                int default_idx = i - (args_allowed - args_default);
+                if (default_idx >= 0 && default_idx < args_default) {
+                    LuauMarshal::push_variant(ET, method.default_arguments[default_idx]);
+                }
+            }
+            
+            // Call the method
+            r_error->error = GDEXTENSION_CALL_OK;
+            int status = call_internal(p_method, ET, args_allowed, 1);
+            
+            if (status == LUA_OK) {
+                // Get return value
+                *r_return = LuauMarshal::get_variant(ET, -1);
+            } else {
+                *r_return = Variant();
+                r_error->error = GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST;
+            }
+            
+            lua_pop(T, 1); // Remove thread
+            return;
+        }
+        
+        s = s->base.ptr();
+    }
+    
+    r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
 }
 
 void LuauScriptInstance::notification(int32_t p_what) {
-#define NOTIF_NAME "_Notification"
-
-    // These notifications will fire at program exit; see ~LuauScriptInstance
-    // 3: NOTIFICATION_PREDELETE_CLEANUP (not bound)
-    // if ((p_what == Object::NOTIFICATION_PREDELETE || p_what == 3) && !LuauEngine::get_singleton()) {
-    //     return;
-    // }
-
-    // const LuauScript *s = script.ptr();
-
-    // while (s) {
-    //     if (s->methods.has(NOTIF_NAME)) {
-    //         lua_State *ET = lua_newthread(T);
-
-    //         LuaStackOp<int32_t>::push(ET, p_what);
-    //         call_internal(NOTIF_NAME, ET, 1, 0);
-
-    //         lua_pop(T, 1); // thread
-    //     }
-
-    //     s = s->base.ptr();
-    // }
+    if (!L || !T || self_ref == LUA_NOREF) {
+        WARN_PRINT(vformat("Notification %d skipped - invalid Lua state", p_what));
+        return;
+    }
+    
+    // Map common notifications to Luau method names
+    StringName method_name;
+    switch (p_what) {
+        case 13: // NOTIFICATION_READY
+            method_name = "_ready";
+            WARN_PRINT("NOTIFICATION_READY received");
+            break;
+        case 17: // NOTIFICATION_PROCESS
+            method_name = "_process";
+            break;
+        case 16: // NOTIFICATION_PHYSICS_PROCESS
+            method_name = "_physics_process";
+            break;
+        case 10: // NOTIFICATION_ENTER_TREE
+            method_name = "_enter_tree";
+            break;
+        case 11: // NOTIFICATION_EXIT_TREE
+            method_name = "_exit_tree";
+            break;
+        case 25: // NOTIFICATION_UNPAUSED
+            method_name = "_unpaused";
+            break;
+        case 14: // NOTIFICATION_PAUSED  
+            method_name = "_paused";
+            break;
+        default:
+            // For other notifications, try the generic _notification method
+            method_name = "_notification";
+            break;
+    }
+    
+    // First try the specific method
+    if (method_name != StringName("_notification") && has_method(method_name)) {
+		if (method_name != StringName("_process")) {
+        	WARN_PRINT(vformat("Calling method: %s", String(method_name)));
+		}
+        lua_State *ET = lua_newthread(T);
+        
+        // For process notifications, pass delta time
+        if (p_what == 17 || p_what == 16) { // NOTIFICATION_PROCESS or NOTIFICATION_PHYSICS_PROCESS
+            // Get delta time - we'll pass a default for now
+            // TODO: Get actual delta from the engine when available
+            double delta = 1.0 / 60.0; // Default to 60 FPS
+            lua_pushnumber(ET, delta);
+            call_internal(method_name, ET, 1, 0);
+        } else {
+            call_internal(method_name, ET, 0, 0);
+        }
+        
+        lua_pop(T, 1); // Remove thread
+    }
+    // Then try the generic _notification method
+    else if (has_method("_notification")) {
+        lua_State *ET = lua_newthread(T);
+        lua_pushinteger(ET, p_what);
+        call_internal("_notification", ET, 1, 0);
+        lua_pop(T, 1); // Remove thread
+    }
 }
 
 void LuauScriptInstance::to_string(GDExtensionBool *r_is_valid, String *r_out) {
@@ -565,7 +600,14 @@ Variant::Type godot::LuauScriptInstance::get_property_type(const StringName &p_n
     return Variant::NIL;
 }
 
-bool godot::LuauScriptInstance::has_method(const StringName &p_name) const {
+bool LuauScriptInstance::has_method(const StringName &p_name) const {
+    const LuauScript *s = script.ptr();
+    while (s) {
+        if (s->definition.methods.has(p_name)) {
+            return true;
+        }
+        s = s->base.ptr();
+    }
     return false;
 }
 
@@ -577,6 +619,43 @@ Object *LuauScriptInstance::get_owner() const
 Ref<LuauScript> LuauScriptInstance::get_script() const
 {
     return script;
+}
+
+int LuauScriptInstance::call_internal(const StringName &p_method, lua_State *ET, int argc, int retc) {
+    if (!L || !T || self_ref == LUA_NOREF) {
+        return LUA_ERRRUN;
+    }
+    
+    // Get the self table from the main state
+    lua_getref(L, self_ref);
+    lua_xmove(L, ET, 1);
+    
+    // Get the method from the self table
+    String method_str = String(p_method);
+    lua_getfield(ET, -1, method_str.utf8().get_data());
+    
+    if (!lua_isfunction(ET, -1)) {
+        lua_pop(ET, 2); // Remove non-function and self table
+        return LUA_ERRRUN;
+    }
+    
+    // Swap function and self table so self is first argument
+    lua_insert(ET, -2);
+    
+    // The arguments are already on the stack, placed by the caller
+    // So we have: function, self, [args...]
+    int call_result = lua_pcall(ET, argc + 1, retc, 0); // +1 for self
+    
+    if (call_result != LUA_OK) {
+        const char* error_msg = lua_tostring(ET, -1);
+        if (error_msg) {
+            ERR_PRINT(vformat("Luau script error in %s: %s", 
+                p_method, error_msg));
+        }
+        lua_pop(ET, 1); // Remove error message
+    }
+    
+    return call_result;
 }
 
 LuauScriptInstance::LuauScriptInstance(
@@ -591,6 +670,19 @@ LuauScriptInstance::LuauScriptInstance(
 }
 
 LuauScriptInstance::~LuauScriptInstance() {
+	// Clean up Lua state
+	if (L && thread_ref != LUA_NOREF) {
+		lua_unref(L, thread_ref);
+		thread_ref = LUA_NOREF;
+	}
+	
+	if (L && self_ref != LUA_NOREF) {
+		lua_unref(L, self_ref);
+		self_ref = LUA_NOREF;
+	}
+	
+	L = nullptr;
+	T = nullptr;
 }
 
 //MARK: PlaceholderScriptInstance
@@ -848,18 +940,100 @@ String LuauScript::_get_source_code() const {
 void LuauScript::_set_source_code(const String &p_code) {
     source = p_code;
     source_changed_cache = true;
+    
+    // Clear compilation state when source changes
+    load_stage = LOAD_NONE;
+    bytecode.clear();
 }
 
 Error LuauScript::_reload(bool p_keep_state) {
 	// if (_is_module)
 	// 	return OK;
 
+	Error reload_err = OK;
+	
+#ifdef TOOLS_ENABLED
+	// In the editor, handle existing instances appropriately
+	if (!p_keep_state && instances.size() > 0) {
+		MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
+		
+		// In editor mode, we allow reload with existing instances
+		// The instances will be updated after the script is reloaded
+		placeholder_fallback_enabled = true;
+		
+		// Store instance IDs for later update
+		LocalVector<uint64_t> instance_ids;
+		for (const KeyValue<uint64_t, LuauScriptInstance *> &E : instances) {
+			instance_ids.push_back(E.key);
+		}
+		
+		// Note: We keep the instances alive during reload
+		// They will be updated after the script is successfully reloaded
+	}
+#else
 	{
 		MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
 		ERR_FAIL_COND_V(!p_keep_state && instances.size() > 0, ERR_ALREADY_IN_USE);
 	}
+#endif // TOOLS_ENABLED
 
-	return load(LOAD_FULL, true);
+	// Reload source code from file if path is set
+	String path = get_path();
+	if (!path.is_empty()) {
+		Error err = load_source_code(path);
+		if (err != OK) {
+			ERR_PRINT(vformat("Failed to reload source code from %s", path));
+			return err;
+		}
+	}
+
+	// Clear cached data to force recompilation
+	load_stage = LOAD_NONE;
+	bytecode.clear();
+	
+	// Reload and recompile the script
+	reload_err = load(LOAD_FULL, true);
+	
+#ifdef TOOLS_ENABLED
+	// After successful reload, update instances if needed
+	if (reload_err == OK) {
+		if (placeholder_fallback_enabled) {
+			// Update placeholder instances with new script information
+			MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
+			
+			// Update all placeholder instances
+			for (const KeyValue<uint64_t, PlaceHolderScriptInstance *> &E : placeholders) {
+				PlaceHolderScriptInstance *placeholder = E.value;
+				if (placeholder) {
+					// Update the property list and constants using the accessor methods
+					placeholder->update_properties(definition.properties);
+					placeholder->update_constants(constants);
+				}
+			}
+		}
+		
+		// Update regular instances if keeping state
+		if (p_keep_state) {
+			MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
+			
+			// Notify all instances that the script has been reloaded
+			for (const KeyValue<uint64_t, LuauScriptInstance *> &E : instances) {
+				LuauScriptInstance *instance = E.value;
+				if (instance) {
+					// Re-initialize the instance with the new bytecode
+					// This would involve re-running the script in the instance's Lua state
+					// For now, we just mark that a reload happened
+					// Full implementation would reload the bytecode into the instance
+				}
+			}
+		}
+		
+		// Emit changed signal to notify the editor
+		emit_changed();
+	}
+#endif // TOOLS_ENABLED
+	
+	return reload_err;
 }
 
 TypedArray<Dictionary> LuauScript::_get_documentation() const {
@@ -875,7 +1049,15 @@ bool LuauScript::_is_tool() const {
 }
 
 bool LuauScript::_is_valid() const {
-	return true; //MARK: TODO
+	if (source.is_empty()) {
+		return false;
+	}
+	
+	if (load_stage < LOAD_COMPILE) {
+		const_cast<LuauScript*>(this)->load(LOAD_COMPILE, false);
+	}
+	
+	return load_stage >= LOAD_COMPILE && bytecode.size() > 0;
 }
 
 ScriptLanguage *LuauScript::_get_language() const {
@@ -1144,25 +1326,42 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                     // Extract function name
                     if (func->name) {
                         String func_name;
+                        String method_name;
                         
                         // Build the function name from the expression
                         if (auto* index = func->name->as<Luau::AstExprIndexName>()) {
-                            // Table.method format
+                            // Table.method format (e.g., MyClass._init)
                             if (auto* local = index->expr->as<Luau::AstExprLocal>()) {
                                 func_name = String(local->local->name.value) + "." + String(index->index.value);
+                                method_name = String(index->index.value);
                             } else if (auto* global = index->expr->as<Luau::AstExprGlobal>()) {
                                 func_name = String(global->name.value) + "." + String(index->index.value);
+                                method_name = String(index->index.value);
                             }
                         } else if (auto* local = func->name->as<Luau::AstExprLocal>()) {
                             func_name = String(local->local->name.value);
+                            method_name = func_name;
                         } else if (auto* global = func->name->as<Luau::AstExprGlobal>()) {
                             func_name = String(global->name.value);
+                            method_name = func_name;
                         }
                         
-                        // Check if this is a special method (starts with underscore)
-                        if (!func_name.is_empty() && func_name.contains(".")) {
-                            String method_name = func_name.split(".")[1];
+                        // Check if this is a special method (starts with underscore) or common Godot method
+                        if (!method_name.is_empty()) {
+                            bool should_register = false;
+                            
+                            // Check for underscore methods or common Godot methods
                             if (method_name.begins_with("_")) {
+                                should_register = true;
+                            } else if (method_name == "ready" || method_name == "process" || 
+                                     method_name == "physics_process" || method_name == "input" ||
+                                     method_name == "unhandled_input" || method_name == "draw") {
+                                // Also register common Godot methods without underscore
+                                should_register = true;
+                                method_name = "_" + method_name; // Add underscore prefix
+                            }
+                            
+                            if (should_register) {
                                 // Register as a method
                                 GDMethod method;
                                 method.name = method_name;
@@ -1171,7 +1370,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                 // Extract parameters
                                 if (func->func) {
                                     for (size_t i = 0; i < func->func->args.size; i++) {
-                                        // Skip 'self' parameter
+                                        // Skip 'self' parameter if it's explicitly marked
                                         if (i == 0 && func->func->self) {
                                             continue;
                                         }
@@ -1245,7 +1444,47 @@ StringName LuauScript::_get_instance_base_type() const {
 }
 
 void *LuauScript::_instance_create(Object *p_for_object) const {
-	// Validate that the script can be instantiated
+#ifdef TOOLS_ENABLED
+	WARN_PRINT(vformat("Creating LuauScript instance for object: %s", p_for_object->get_class()));
+	// In the editor, check if we should create a placeholder instance instead
+	bool should_create_placeholder = false;
+	
+	// Check if script can be instantiated
+	if (!_can_instantiate()) {
+		should_create_placeholder = true;
+	}
+	
+	// Check if script is properly loaded
+	if (!should_create_placeholder && load_stage != LOAD_FULL) {
+		// Try to load the script if not already loaded
+		const_cast<LuauScript*>(this)->load(LOAD_FULL, false);
+		if (load_stage != LOAD_FULL) {
+			// Script failed to load fully, use placeholder
+			should_create_placeholder = true;
+		}
+	}
+	
+	// Check base type compatibility
+	if (!should_create_placeholder) {
+		StringName base_type = _get_instance_base_type();
+		if (base_type != StringName()) {
+			if (!nobind::ClassDB::get_singleton()->is_parent_class(p_for_object->get_class(), base_type)) {
+				// Type mismatch, use placeholder
+				should_create_placeholder = true;
+			}
+		}
+	}
+	
+	// If we should create a placeholder, do so
+	if (should_create_placeholder) {
+		// Enable placeholder fallback mode
+		const_cast<LuauScript*>(this)->placeholder_fallback_enabled = true;
+		
+		// Create and return a placeholder instance
+		return _placeholder_instance_create(p_for_object);
+	}
+#else
+	// In non-editor builds, fail if script cannot be instantiated
 	if (!_can_instantiate()) {
 		ERR_FAIL_V_MSG(nullptr, "Script cannot be instantiated");
 	}
@@ -1259,7 +1498,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 		}
 	}
 	
-	// Verify the object matches the expected base type
 	StringName base_type = _get_instance_base_type();
 	if (base_type != StringName()) {
 		if (!nobind::ClassDB::get_singleton()->is_parent_class(p_for_object->get_class(), base_type)) {
@@ -1268,11 +1506,10 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 					base_type, p_for_object->get_class()));
 		}
 	}
+#endif // TOOLS_ENABLED
 	
-	// Always use VM_USER for script instances
 	LuauEngine::VMType vm_type = LuauEngine::VM_USER;
 	
-	// Create the instance
 	LuauScriptInstance *instance = memnew(LuauScriptInstance(Ref<LuauScript>(this), p_for_object, vm_type));
 	
 	// Register the instance with the script
@@ -1280,51 +1517,230 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 		MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
 		const_cast<LuauScript*>(this)->instances[p_for_object->get_instance_id()] = instance;
 	}
-	
-	// TODO: Initialize Lua state for the instance
-	// This would involve:
-	// 1. Creating a Lua thread/state for this instance
-	// 2. Loading the compiled bytecode
-	// 3. Setting up the self reference
-	// 4. Calling implicit constructors for base classes
-	// 5. Calling the script's _init method if it exists
-	
-	// For now, we'll leave the Lua initialization commented out
-	// as it requires the LuauEngine to be properly set up
-	/*
+
+	String script_name = get_path();
+	if (script_name.is_empty()) {
+		script_name = definition.name;
+	}
+
 	if (LuauLanguage::singleton->luau) {
-		// Get or create VM for this instance
+		// Get VM for this instance
 		lua_State* L = LuauLanguage::singleton->luau->get_vm(vm_type);
 		if (L) {
-			// Create a new thread for this instance
 			lua_State* thread = lua_newthread(L);
 			
-			// Store thread reference
-			instance->thread_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+			// Store thread reference to prevent GC
+			int thread_ref = lua_ref(L, -1);
+			
+			// Create self table for instance
+			lua_newtable(thread);
+			
+			// Mark the table as not safe environment to allow modifications
+			lua_setsafeenv(thread, -1, 0);
+			
+			// Create metatable for the self table
+			lua_newtable(thread);
+			
+			// Store pointer to C++ instance
+			lua_pushlightuserdata(thread, instance);
+			lua_setfield(thread, -2, "__instance");
+			
+			// Store pointer to owner object
+			lua_pushlightuserdata(thread, p_for_object);
+			lua_setfield(thread, -2, "__owner");
+			
+			// Set up __index to access Godot properties and methods
+			lua_pushcfunction(thread, [](lua_State *L) -> int {
+				lua_getmetatable(L, 1);
+				lua_getfield(L, -1, "__owner");
+				Object *owner = (Object*)lua_touserdata(L, -1);
+				lua_pop(L, 2);
+				
+				if (!owner) {
+					lua_pushnil(L);
+					return 1;
+				}
+				
+				const char *key = lua_tostring(L, 2);
+				if (!key) {
+					lua_pushnil(L);
+					return 1;
+				}
+				
+				StringName prop_name(key);
+				
+				// Try to get property
+				Variant value = owner->get(prop_name);
+				if (value.get_type() != Variant::NIL) {
+					LuauMarshal::push_variant(L, value);
+					return 1;
+				}
+				
+				lua_pushnil(L);
+				return 1;
+			}, "__index");
+			lua_setfield(thread, -2, "__index");
+			
+			// Set up __newindex to set Godot properties
+			lua_pushcfunction(thread, [](lua_State *L) -> int {
+				lua_getmetatable(L, 1);
+				lua_getfield(L, -1, "__owner");
+				Object *owner = (Object*)lua_touserdata(L, -1);
+				lua_pop(L, 2);
+				
+				if (!owner) {
+					return 0;
+				}
+				
+				const char *key = lua_tostring(L, 2);
+				if (!key) {
+					return 0;
+				}
+				
+				StringName prop_name(key);
+				Variant value = LuauMarshal::get_variant(L, 3);
+				owner->set(prop_name, value);
+				
+				return 0;
+			}, "__newindex");
+			lua_setfield(thread, -2, "__newindex");
+			
+			// Set metatable
+			lua_setmetatable(thread, -2);
+			
+			// Store self table reference on main state, not thread
+			// Move self table from thread to main state
+			lua_xmove(thread, L, 1);
+			int self_ref = lua_ref(L, -1);
+			
+			// Initialize the instance's Lua state
+			instance->initialize_lua_state(L, thread, thread_ref, self_ref);
 			
 			// Load bytecode if available
 			if (bytecode.size() > 0) {
-				// Load the compiled bytecode
-				luau_load(thread, "@" + get_path(), bytecode.ptr(), bytecode.size(), 0);
+				WARN_PRINT(vformat("Loading bytecode for script: %s (size: %d)", script_name, bytecode.size()));
+				// Load the bytecode into the thread
+			
+				int load_result = luau_load(thread, script_name.utf8().get_data(), 
+					(const char*)bytecode.ptr(), bytecode.size(), 0);
 				
-				// Set up instance environment
-				// Push self reference, etc.
-				
-				// Call constructors
-				LuauScript* base_script = base.ptr();
-				while (base_script) {
-					// Call base constructor if it exists
-					base_script = base_script->base.ptr();
-				}
-				
-				// Call _init if it exists
-				if (definition.methods.has("_init")) {
-					// Call _init method
+				if (load_result == 0) {
+					// The loaded function is now on the stack
+					// Set the self table as the environment for the script
+					// Get ref from main state and push to thread
+					lua_getref(L, instance->get_self_ref());
+					lua_xmove(L, thread, 1);
+					lua_setfenv(thread, -2);
+					
+					// Execute the script with no arguments
+					int call_result = lua_pcall(thread, 0, 0, 0);
+					
+					if (call_result != 0) {
+						WARN_PRINT(vformat("Script execution failed for: %s", script_name));
+						// Get error message
+						const char* error_msg = lua_tostring(thread, -1);
+						if (error_msg) {
+							String error_str = String(error_msg);
+							// Check for common error patterns and provide more helpful messages
+							if (error_str.contains("attempt to call a nil value")) {
+								// Extract the line number
+								PackedStringArray parts = error_str.split(":");
+								if (parts.size() >= 3) {
+									String line_num = parts[2];
+									ERR_PRINT(vformat(
+										"Script error in %s at line %s: Function calls are not allowed in the class body. "
+										"Only function definitions and property assignments are allowed at the class level. "
+										"Move function calls like 'print()' inside a method like _ready() or _init().",
+										script_name, line_num));
+								} else {
+									ERR_PRINT(vformat(
+										"Script error in %s: Function calls are not allowed in the class body. "
+										"Move function calls like 'print()' inside a method.",
+										script_name));
+								}
+							} else if (error_str.contains("attempt to index a nil value")) {
+								PackedStringArray parts = error_str.split(":");
+								if (parts.size() >= 3) {
+									String line_num = parts[2];
+									ERR_PRINT(vformat(
+										"Script error in %s at line %s: Attempting to access a property or method on a nil value. "
+										"Global objects are not available in the class body context.",
+										script_name, line_num));
+								} else {
+									ERR_PRINT(error_msg);
+								}
+							} else {
+								// For other errors, just pass through the original message
+								ERR_PRINT(error_msg);
+							}
+						} else {
+							ERR_PRINT(vformat("Failed to execute Luau script %s: unknown error", script_name));
+						}
+					lua_pop(thread, 1); // Remove error message
+#ifdef TOOLS_ENABLED
+						// In the editor, clean up and create a placeholder instance instead
+						// Clean up the failed instance
+						if (L && thread_ref != LUA_NOREF) {
+							lua_unref(L, thread_ref);
+						}
+						if (L && self_ref != LUA_NOREF) {
+							lua_unref(L, self_ref);
+						}
+						
+						// Remove the failed instance from the instances map
+						{
+							MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
+							const_cast<LuauScript*>(this)->instances.erase(p_for_object->get_instance_id());
+						}
+						
+						// Delete the failed instance
+						memdelete(instance);
+						
+						// Enable placeholder fallback mode
+						const_cast<LuauScript*>(this)->placeholder_fallback_enabled = true;
+						
+						// Create and return a placeholder instance
+						return _placeholder_instance_create(p_for_object);
+#endif // TOOLS_ENABLED
+					} else {
+						WARN_PRINT(vformat("Script executed successfully for: %s", script_name));
+						// Script has been executed and populated the self table
+						// Now call _init if it exists
+						if (definition.methods.has("_init")) {
+							WARN_PRINT("Calling _init method");
+							// Get the self table from main state and move to thread
+							lua_getref(L, instance->get_self_ref());
+							lua_xmove(L, thread, 1);
+							
+							// Get the _init method from the self table
+							lua_getfield(thread, -1, "_init");
+							
+							if (lua_isfunction(thread, -1)) {
+								// _init exists, call it with self as implicit 'this'
+								// Since we're calling a method defined in the self environment,
+								// we don't need to pass self explicitly
+								int init_result = lua_pcall(thread, 0, 0, 0);
+								
+								if (init_result != 0) {
+									const char* error_msg = lua_tostring(thread, -1);
+									ERR_PRINT(vformat("Failed to call _init for %s: %s", 
+										script_name, error_msg ? error_msg : "unknown error"));
+									lua_pop(thread, 1); // Remove error message
+								}
+							} else {
+								// _init is not a function or doesn't exist
+								lua_pop(thread, 1); // Remove non-function value
+							}
+							
+							lua_pop(thread, 1); // Remove self table
+						} else {
+							WARN_PRINT("_init method not found");
+						}
+					}
 				}
 			}
 		}
 	}
-	*/
 	
 	// Create and return the GDExtension script instance
 	return internal::gdextension_interface_script_instance_create3(&LuauScriptInstance::INSTANCE_INFO, instance);
@@ -1597,12 +2013,18 @@ void LuauLanguage::_reload_all_scripts() {
 #ifdef TOOLS_ENABLED
 	List<Ref<LuauScript>> scripts = get_scripts();
 	
+	// First, clear all cached bytecode to force recompilation
 	for (Ref<LuauScript> &script : scripts) {
-		//script->unload_module();
+		script->load_stage = LuauScript::LOAD_NONE;
+		script->bytecode.clear();
 	}
 
+	// Then reload all scripts
 	for (Ref<LuauScript> &script : scripts) {
-		script->load_source_code(script->get_path());
+		String path = script->get_path();
+		if (!path.is_empty()) {
+			script->load_source_code(path);
+		}
 		script->_reload(true);
 	}
 #endif // TOOLS_ENABLED
@@ -1610,7 +2032,23 @@ void LuauLanguage::_reload_all_scripts() {
 
 void LuauLanguage::_reload_tool_script(const Ref<Script> &p_script, bool p_soft_reload) {
 #ifdef TOOLS_ENABLED
-
+	Ref<LuauScript> script = p_script;
+	if (script.is_null()) {
+		return;
+	}
+	
+	// Clear cached bytecode to force recompilation
+	script->load_stage = LuauScript::LOAD_NONE;
+	script->bytecode.clear();
+	
+	// Reload source from file
+	String path = script->get_path();
+	if (!path.is_empty()) {
+		script->load_source_code(path);
+	}
+	
+	// Reload the script
+	script->_reload(p_soft_reload);
 #endif
 }
 

@@ -24,6 +24,13 @@ namespace godot {
     public:
         static LuauEngine *get_singleton() { return singleton; };
 
+        lua_State *get_vm(VMType p_type) { 
+            if (p_type >= 0 && p_type < VM_MAX) {
+                return vms[p_type];
+            }
+            return nullptr;
+        }
+
         void new_vm();
 
         LuauEngine();
