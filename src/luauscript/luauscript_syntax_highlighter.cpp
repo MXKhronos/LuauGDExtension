@@ -102,23 +102,158 @@ Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) 
         
         // Handle regular string end
         if (in_string && !in_multiline_string && !in_comment) {
-            color = string_color;
-            // Check for escape sequence
-            if (prev_char == '\\' && j > 1 && line_text[j - 2] != '\\') {
-                highlighter_info["color"] = string_color;
+            // Special handling for backtick strings with interpolation
+            if (string_delimiter == '`') {
+                // Check for interpolation start
+                if (current_char == '{') {
+                    // We're entering an interpolation, temporarily exit string mode
+                    highlighter_info["color"] = symbol_color;  // Color the { as a symbol
+                    color_map[j] = highlighter_info;
+                    
+                    // Find the matching closing brace
+                    int brace_depth = 1;
+                    int interpolation_end = j + 1;
+                    while (interpolation_end < line_length && brace_depth > 0) {
+                        char32_t ch = line_text[interpolation_end];
+                        if (ch == '{') brace_depth++;
+                        else if (ch == '}') brace_depth--;
+                        interpolation_end++;
+                    }
+                    
+                    // Process the interpolation content as code
+                    j++;
+                    while (j < interpolation_end - 1 && j < line_length) {
+                        // Recursively highlight the interpolation content
+                        // This is simplified - we'll color identifiers, numbers, etc.
+                        char32_t interp_char = line_text[j];
+                        Color interp_color = text_color;
+                        
+                        // Skip whitespace
+                        if (interp_char == ' ' || interp_char == '\t') {
+                            Dictionary ws_info;
+                            ws_info["color"] = text_color;
+                            color_map[j] = ws_info;
+                            j++;
+                            continue;
+                        }
+                        
+                        // Check for numbers
+                        if (is_digit(interp_char)) {
+                            int num_start = j;
+                            while (j < interpolation_end - 1 && is_digit(line_text[j])) {
+                                Dictionary num_info;
+                                num_info["color"] = number_color;
+                                color_map[j] = num_info;
+                                j++;
+                            }
+                            j--;
+                        }
+                        // Check for identifiers
+                        else if (is_ascii_identifier_char(interp_char) && !is_digit(interp_char)) {
+                            int id_start = j;
+                            while (j < interpolation_end - 1 && is_ascii_identifier_char(line_text[j])) {
+                                j++;
+                            }
+                            String id = line_text.substr(id_start, j - id_start);
+                            
+                            // Determine color based on identifier type
+                            if (id == "self") {
+                                interp_color = self_keyword_color;
+                            } else if (control_flow_keywords.has(id)) {
+                                interp_color = control_flow_keyword_color;
+                            } else if (keywords.has(id)) {
+                                interp_color = keyword_color;
+                            } else if (built_in_types.has(id)) {
+                                interp_color = type_color;
+                            } else if (built_in_functions.has(id)) {
+                                interp_color = global_function_color;
+                            } else if (is_constant_identifier(id)) {
+                                interp_color = constant_color;
+                            } else {
+                                // Check if it's followed by parentheses (function call)
+                                int next_non_space = j;
+                                while (next_non_space < interpolation_end - 1 && line_text[next_non_space] == ' ') {
+                                    next_non_space++;
+                                }
+                                if (next_non_space < interpolation_end - 1 && line_text[next_non_space] == '(') {
+                                    interp_color = function_color;
+                                } else if (id_start > 0 && (line_text[id_start - 1] == '.' || line_text[id_start - 1] == ':')) {
+                                    interp_color = member_variable_color;
+                                } else {
+                                    interp_color = text_color;
+                                }
+                            }
+                            
+                            for (int k = id_start; k < j; k++) {
+                                Dictionary id_info;
+                                id_info["color"] = interp_color;
+                                color_map[k] = id_info;
+                            }
+                            j--;
+                        }
+                        // Check for operators and symbols
+                        else if (is_symbol(interp_char)) {
+                            Dictionary sym_info;
+                            sym_info["color"] = symbol_color;
+                            color_map[j] = sym_info;
+                        }
+                        else {
+                            Dictionary other_info;
+                            other_info["color"] = text_color;
+                            color_map[j] = other_info;
+                        }
+                        j++;
+                    }
+                    
+                    // Color the closing brace
+                    if (j < line_length && line_text[j] == '}') {
+                        Dictionary close_info;
+                        close_info["color"] = symbol_color;
+                        color_map[j] = close_info;
+                    }
+                    continue;
+                }
+                // Check for escape sequence
+                else if (prev_char == '\\' && j > 1 && line_text[j - 2] != '\\') {
+                    highlighter_info["color"] = string_color;
+                    color_map[j] = highlighter_info;
+                    continue;
+                }
+                // Check for string end
+                else if (current_char == string_delimiter) {
+                    highlighter_info["color"] = string_color;
+                    color_map[j] = highlighter_info;
+                    in_string = false;
+                    current_color = text_color;
+                    continue;
+                }
+                // Regular string character
+                else {
+                    highlighter_info["color"] = string_color;
+                    color_map[j] = highlighter_info;
+                    continue;
+                }
+            }
+            // Regular string handling (non-backtick)
+            else {
+                color = string_color;
+                // Check for escape sequence
+                if (prev_char == '\\' && j > 1 && line_text[j - 2] != '\\') {
+                    highlighter_info["color"] = string_color;
+                    color_map[j] = highlighter_info;
+                    continue;
+                }
+                if (current_char == string_delimiter) {
+                    highlighter_info["color"] = string_color;
+                    color_map[j] = highlighter_info;
+                    in_string = false;
+                    current_color = text_color;
+                    continue;
+                }
+                highlighter_info["color"] = color;
                 color_map[j] = highlighter_info;
                 continue;
             }
-            if (current_char == string_delimiter) {
-                highlighter_info["color"] = string_color;
-                color_map[j] = highlighter_info;
-                in_string = false;
-                current_color = text_color;
-                continue;
-            }
-            highlighter_info["color"] = color;
-            color_map[j] = highlighter_info;
-            continue;
         }
         
         // Check for comment start

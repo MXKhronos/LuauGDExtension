@@ -1,4 +1,4 @@
----@extends Node
+---@extends Node2D
 
 -- hello world
 ACONST = 123;
@@ -6,7 +6,7 @@ local BCONST = 345;
 acount = 1;
 local bcount: number = 0;
 
-function _init(self: Node)
+function _init(self: Node2D)
 	print("[luau] init!", self, self.name, typeof(self.name));
 	print("[luau] init ACONST=", ACONST);
 	print("[luau] init BCONST=", BCONST);
@@ -15,7 +15,7 @@ function _init(self: Node)
 	hello();
 end
 
-function _ready(self: Node)
+function _ready(self: Node2D)
 	print("[luau] ready!", self, self.name, typeof(self.name));
 	while true do
 		print("[luau] hello world!");
@@ -29,12 +29,12 @@ function _ready(self: Node)
 	end
 end
 
-function _enter_tree(self: Node): nil
+function _enter_tree(self: Node2D): nil
 	print("[luau] enter tree");
 	return;
 end
 
-function _process(self: Node, delta: number): nil
+function _process(self: Node2D, delta: number): nil
 	return;
 end
 
