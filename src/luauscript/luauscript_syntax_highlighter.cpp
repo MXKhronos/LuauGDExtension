@@ -420,8 +420,9 @@ void LuauSyntaxHighlighter::_clear_highlighting_cache() {
 void LuauSyntaxHighlighter::_update_cache() {
     Ref<EditorSettings> settings = nobind::EditorInterface::get_singleton()->get_editor_settings();
     
+    settings->set("text_editor/theme/highlighting/background_color", Color("#1f1f1f"));
     
-    text_color = Color("#C8C8C8");
+    text_color = Color("#9cdcfe");
     if (!settings->has_setting("text_editor/theme/highlighting/luauscript/text_color")) {
         settings->set("text_editor/theme/highlighting/luauscript/text_color", text_color);
     }
@@ -463,7 +464,7 @@ void LuauSyntaxHighlighter::_update_cache() {
     }
     keyword_color = settings->get_setting("text_editor/theme/highlighting/luauscript/keyword_color");
 
-    control_flow_keyword_color = Color("#ed92e6");
+    control_flow_keyword_color = Color("#b999ef");
     if (!settings->has_setting("text_editor/theme/highlighting/luauscript/control_flow_keyword_color")) {
         settings->set("text_editor/theme/highlighting/luauscript/control_flow_keyword_color", control_flow_keyword_color);
     }
@@ -499,7 +500,7 @@ void LuauSyntaxHighlighter::_update_cache() {
     }
     comment_color = settings->get_setting("text_editor/theme/highlighting/luauscript/comment_color");
 
-    member_variable_color = Color("#C8C8C8");
+    member_variable_color = Color("#9cdcfe");
     if (!settings->has_setting("text_editor/theme/highlighting/luauscript/member_variable_color")) {
         settings->set("text_editor/theme/highlighting/luauscript/member_variable_color", member_variable_color);
     }
