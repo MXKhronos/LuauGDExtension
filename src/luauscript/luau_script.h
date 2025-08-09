@@ -147,7 +147,9 @@ namespace godot {
     
         HashMap<StringName, GDMethod> methods;
         HashMap<StringName, uint64_t> property_indices;
-        Vector<GDClassProperty> properties;
+        Vector<GDClassProperty> properties;  // Global variables (properties)
+        Vector<GDClassProperty> members;      // Local variables (members)
+        HashMap<StringName, uint64_t> member_indices;
         HashMap<StringName, GDMethod> signals;
         HashMap<StringName, GDRpc> rpcs;
         HashMap<StringName, int> constants;
@@ -375,7 +377,7 @@ namespace godot {
         TypedArray<Dictionary> _get_script_property_list() const override;
         // virtual int32_t _get_member_line(const StringName &p_member) const;
         Dictionary _get_constants() const override;
-        // virtual TypedArray<StringName> _get_members() const;
+        TypedArray<StringName> _get_members() const override;
         bool _is_placeholder_fallback_enabled() const override;
         // virtual Variant _get_rpc_config() const;
     };

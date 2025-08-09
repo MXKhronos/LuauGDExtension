@@ -1394,15 +1394,16 @@ TypedArray<Dictionary> LuauScript::_get_script_property_list() const {
 
 	const LuauScript *s = this;
 
-	// while (s) {
-	// 	// Reverse to add properties from base scripts first.
-	// 	for (int i = definition.properties.size() - 1; i >= 0; i--) {
-	// 		const GDClassProperty &prop = definition.properties[i];
-	// 		properties.push_front(prop.property.operator Dictionary());
-	// 	}
+	// Return global variables (properties)
+	while (s) {
+		// Reverse to add properties from base scripts first.
+		for (int i = s->definition.properties.size() - 1; i >= 0; i--) {
+			const GDClassProperty &prop = s->definition.properties[i];
+			properties.push_front(prop.property.operator Dictionary());
+		}
 
-	// 	s = s->base.ptr();
-	// }
+		s = s->base.ptr();
+	}
 
 	return properties;
 }
@@ -1414,6 +1415,16 @@ Dictionary LuauScript::_get_constants() const {
 		constants_dict[pair.key] = pair.value;
 
 	return constants_dict;
+}
+
+TypedArray<StringName> LuauScript::_get_members() const {
+	TypedArray<StringName> members;
+
+	// Return local variables (members)
+	for (const GDClassProperty &member : definition.members)
+		members.push_back(member.property.name);
+
+	return members;
 }
 
 bool LuauScript::_is_placeholder_fallback_enabled() const {
@@ -1515,6 +1526,8 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
             definition.methods.clear();
             definition.properties.clear();
             definition.property_indices.clear();
+            definition.members.clear();
+            definition.member_indices.clear();
             definition.signals.clear();
             definition.constants.clear();
             constants.clear();
@@ -1612,37 +1625,42 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                         constants[StringName(var_name)] = var_value;
                                         definition.constants[StringName(var_name)] = var_value;
                                     } else {
-                                        // Regular global variables are properties
-                                        GDClassProperty prop;
-                                        prop.property.name = StringName(var_name);
-                                        prop.property.class_name = "";
-                                        prop.property.hint = PROPERTY_HINT_NONE;
-                                        prop.property.hint_string = "";
-                                        prop.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
-                                        prop.default_value = var_value;
+                                        // Create the variable definition
+                                        GDClassProperty var_def;
+                                        var_def.property.name = StringName(var_name);
+                                        var_def.property.class_name = "";
+                                        var_def.property.hint = PROPERTY_HINT_NONE;
+                                        var_def.property.hint_string = "";
+                                        var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
+                                        var_def.default_value = var_value;
                                         
                                         // Determine type from value
                                         switch (var_value.get_type()) {
                                             case Variant::BOOL:
-                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
                                                 break;
                                             case Variant::INT:
-                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_INT;
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_INT;
                                                 break;
                                             case Variant::FLOAT:
-                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
                                                 break;
                                             case Variant::STRING:
-                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
                                                 break;
                                             default:
-                                                prop.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
-                                                prop.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+                                                var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
                                                 break;
                                         }
                                         
-                                        // Add to properties list
-                                        definition.properties.push_back(prop);
+                                        // Global variables go to BOTH members and properties
+                                        // Add to members (all variables)
+                                        definition.members.push_back(var_def);
+                                        definition.member_indices[StringName(var_name)] = definition.members.size() - 1;
+                                        
+                                        // Also add to properties (global variables are accessible from outside)
+                                        definition.properties.push_back(var_def);
                                         definition.property_indices[StringName(var_name)] = definition.properties.size() - 1;
                                     }
                                 }
@@ -1691,43 +1709,43 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                             
                             if (has_value) {
                                 if (is_constant) {
-                                    // ALL_CAPS variables are constants
-                                    constants[StringName(var_name)] = var_value;
-                                    definition.constants[StringName(var_name)] = var_value;
-                                } else {
-                                    // Regular variables are properties
-                                    GDClassProperty prop;
-                                    prop.property.name = StringName(var_name);
-                                    prop.property.class_name = "";
-                                    prop.property.hint = PROPERTY_HINT_NONE;
-                                    prop.property.hint_string = "";
-                                    prop.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
-                                    prop.default_value = var_value;
-                                    
-                                    // Determine type from value
-                                    switch (var_value.get_type()) {
-                                        case Variant::BOOL:
-                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
-                                            break;
-                                        case Variant::INT:
-                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_INT;
-                                            break;
-                                        case Variant::FLOAT:
-                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
-                                            break;
-                                        case Variant::STRING:
-                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
-                                            break;
-                                        default:
-                                            prop.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
-                                            prop.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
-                                            break;
+                                        // ALL_CAPS variables are constants
+                                        constants[StringName(var_name)] = var_value;
+                                        definition.constants[StringName(var_name)] = var_value;
+                                    } else {
+                                        // Create the variable definition
+                                        GDClassProperty var_def;
+                                        var_def.property.name = StringName(var_name);
+                                        var_def.property.class_name = "";
+                                        var_def.property.hint = PROPERTY_HINT_NONE;
+                                        var_def.property.hint_string = "";
+                                        var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
+                                        var_def.default_value = var_value;
+                                        
+                                        // Determine type from value
+                                        switch (var_value.get_type()) {
+                                            case Variant::BOOL:
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
+                                                break;
+                                            case Variant::INT:
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_INT;
+                                                break;
+                                            case Variant::FLOAT:
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+                                                break;
+                                            case Variant::STRING:
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
+                                                break;
+                                            default:
+                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+                                                var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
+                                                break;
+                                        }
+                                        
+                                        // Local variables go to members only (not accessible from outside)
+                                        definition.members.push_back(var_def);
+                                        definition.member_indices[StringName(var_name)] = definition.members.size() - 1;
                                     }
-                                    
-                                    // Add to properties list
-                                    definition.properties.push_back(prop);
-                                    definition.property_indices[StringName(var_name)] = definition.properties.size() - 1;
-                                }
                             }
                         }
                     }
@@ -1882,12 +1900,13 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
             int property_count = definition.properties.size();
             int signal_count = definition.signals.size();
             int constant_count = definition.constants.size();
+			int member_count = definition.members.size();
             
             if (method_count > 0 || property_count > 0 || signal_count > 0) {
-                print_verbose(vformat("LuauScript loaded: %s (extends %s) - %d methods, %d properties, %d signals, %d constants",
+                print_verbose(vformat("LuauScript loaded: %s (extends %s) - %d methods, %d properties, %d signals, %d constants, %d members",
                     definition.name.is_empty() ? get_path() : definition.name,
                     definition.extends.is_empty() ? "RefCounted" : definition.extends,
-                    method_count, property_count, signal_count, constant_count));
+                    method_count, property_count, signal_count, constant_count, member_count));
             }
         }
 #endif
