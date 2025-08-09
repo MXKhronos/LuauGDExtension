@@ -357,7 +357,7 @@ namespace godot {
         String _get_source_code() const override;
         void _set_source_code(const String &p_code) override;
         Error _reload(bool p_keep_state) override;
-        // virtual StringName _get_doc_class_name() const;
+        StringName _get_doc_class_name() const override;
         TypedArray<Dictionary> _get_documentation() const override;
         // virtual String _get_class_icon_path() const;
         // virtual bool _has_method(const StringName &p_method) const;
@@ -368,12 +368,12 @@ namespace godot {
         bool _is_valid() const override;
         // virtual bool _is_abstract() const;
         ScriptLanguage *_get_language() const override;
-        // virtual bool _has_script_signal(const StringName &p_signal) const;
+        bool _has_script_signal(const StringName &p_signal) const override;
         TypedArray<Dictionary> _get_script_signal_list() const override;
         bool _has_property_default_value(const StringName &p_property) const override;
         Variant _get_property_default_value(const StringName &p_property) const override;
         void _update_exports() override;
-        // virtual TypedArray<Dictionary> _get_script_method_list() const;
+        TypedArray<Dictionary> _get_script_method_list() const override;
         TypedArray<Dictionary> _get_script_property_list() const override;
         // virtual int32_t _get_member_line(const StringName &p_member) const;
         Dictionary _get_constants() const override;

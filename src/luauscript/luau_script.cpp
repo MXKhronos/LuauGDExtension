@@ -1389,6 +1389,57 @@ void LuauScript::_update_exports() {
 #endif // TOOLS_ENABLED
 }
 
+StringName LuauScript::_get_doc_class_name() const {
+	// Return the script's class name for documentation purposes
+	// First try the script's defined name, then extends, then empty
+	if (!definition.name.is_empty()) {
+		return definition.name;
+	}
+	if (!definition.extends.is_empty()) {
+		return definition.extends;
+	}
+	return StringName();
+}
+
+bool LuauScript::_has_script_signal(const StringName &p_signal) const {
+	// Check if this script or any of its base scripts has the given signal
+	const LuauScript *s = this;
+	
+	while (s) {
+		if (s->definition.signals.has(p_signal)) {
+			return true;
+		}
+		s = s->base.ptr();
+	}
+	
+	return false;
+}
+
+TypedArray<Dictionary> LuauScript::_get_script_method_list() const {
+	TypedArray<Dictionary> methods;
+	HashSet<StringName> seen;
+
+	const LuauScript *s = this;
+
+	// Return methods from this script and all base scripts
+	while (s) {
+		for (const KeyValue<StringName, GDMethod> &pair : s->definition.methods) {
+			// Skip if we've already seen this method (overridden in derived class)
+			if (seen.has(pair.key)) {
+				continue;
+			}
+			seen.insert(pair.key);
+			
+			// Convert GDMethod to Dictionary format expected by Godot
+			methods.push_back(pair.value.operator Dictionary());
+		}
+
+		s = s->base.ptr();
+	}
+
+	return methods;
+}
+
 TypedArray<Dictionary> LuauScript::_get_script_property_list() const {
 	TypedArray<Dictionary> properties;
 
