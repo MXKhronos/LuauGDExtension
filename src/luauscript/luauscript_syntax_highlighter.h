@@ -30,13 +30,13 @@ private:
     ScriptLanguage *script_language = nullptr;
 
     // Colors from theme
-	Color font_color;
+	Color text_color;
 	Color symbol_color;
+	Color number_color;
 	Color function_color;
 	Color global_function_color;
 	Color function_definition_color;
 	Color built_in_type_color;
-	Color number_color;
     Color member_variable_color;
     Color keyword_color;
     Color control_flow_keyword_color;
@@ -44,6 +44,8 @@ private:
     Color string_color;
     Color type_color;
     Color constant_color;
+    Color self_keyword_color;
+    Color annotation_color;
     
     // Language features
     HashSet<String> keywords;
