@@ -212,6 +212,10 @@ namespace godot {
         int call_internal(const StringName &p_method, lua_State *ET, int argc, int retc);
         
     public:
+        // Recursion guard for property access (needs to be public for lambda access)
+        mutable bool getting_property = false;
+        
+    public:
         static const GDExtensionScriptInstanceInfo3 INSTANCE_INFO;
 
         bool property_can_revert(const StringName &p_name);

@@ -671,6 +671,9 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
         return false;
     }
     
+    // Set recursion guard
+    getting_property = true;
+    
     // Get the self table
     lua_getref(L, self_ref);
     
@@ -688,12 +691,14 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
             if (s->constants.has(p_name)) {
                 r_ret = s->constants[p_name];
                 if (r_err) *r_err = PROP_OK;
+                getting_property = false;
                 return true;
             }
             s = s->base.ptr();
         }
         
         if (r_err) *r_err = PROP_NOT_FOUND;
+        getting_property = false;
         return false;
     }
     
@@ -702,6 +707,7 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
     lua_pop(L, 2); // Remove value and self table
     
     if (r_err) *r_err = PROP_OK;
+    getting_property = false;
     return true;
 }
 
@@ -2127,44 +2133,29 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 							return 1;
 						}
 						
-						// Skip certain keys that might cause recursion or are internal
-						if (strcmp(key, "_notification") == 0 || 
-						    strcmp(key, "get_instance_id") == 0 ||
-						    strcmp(key, "get_rid") == 0 ||
-						    strncmp(key, "__", 2) == 0) {
-							// Check global environment for these
-							lua_getglobal(L, key);
-							return 1;
-						}
-						
-						// Try to access Godot owner properties - but be careful
 						// Get the instance pointer from the self table
 						lua_getfield(L, 1, "__godot_instance");
 						LuauScriptInstance *instance = (LuauScriptInstance*)lua_touserdata(L, -1);
 						lua_pop(L, 1);
 						
+						// Check if we're already getting a property to avoid recursion
+						if (instance && instance->getting_property) {
+							// We're already in a get() call from the editor/engine
+							// Don't try to access owner properties to avoid infinite recursion
+							lua_getglobal(L, key);
+							return 1;
+						}
+						
+						// Try to access Godot owner properties for inheritance
 						if (instance && instance->get_owner()) {
 							Object *owner = instance->get_owner();
 							StringName prop_name(key);
 							
-							// Only try to get well-known safe properties
-							// This avoids potential recursion issues
-							if (strcmp(key, "name") == 0 || 
-							    strcmp(key, "position") == 0 ||
-							    strcmp(key, "rotation") == 0 ||
-							    strcmp(key, "scale") == 0 ||
-							    strcmp(key, "visible") == 0 ||
-							    strcmp(key, "modulate") == 0) {
-								// These are common, safe properties that won't cause recursion
-								try {
-									Variant value = owner->get(prop_name);
-									if (value.get_type() != Variant::NIL) {
-										LuauMarshal::push_variant(L, value);
-										return 1;
-									}
-								} catch (...) {
-									// If get() fails, fall through to global lookup
-								}
+							// Try to get the property value
+							Variant value = owner->get(prop_name);
+							if (value.get_type() != Variant::NIL) {
+								LuauMarshal::push_variant(L, value);
+								return 1;
 							}
 						}
 						
