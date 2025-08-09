@@ -20,6 +20,15 @@ namespace godot {
         static LuauEngine *singleton;
         lua_State *vms[VM_MAX];
         void init_vm(VMType p_type);
+        
+        // Godot type registration functions
+        static void register_godot_globals(lua_State *L);
+        static void register_godot_functions(lua_State *L);
+        static void register_color_class(lua_State *L);
+        static void register_vector2_class(lua_State *L);
+        static void register_vector3_class(lua_State *L);
+        static void register_rect2_class(lua_State *L);
+        static void register_math_constants(lua_State *L);
 
     public:
         static LuauEngine *get_singleton() { return singleton; };

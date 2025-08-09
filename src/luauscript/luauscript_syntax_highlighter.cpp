@@ -729,6 +729,8 @@ void LuauSyntaxHighlighter::_update_cache() {
     built_in_functions.insert("unpack");
     built_in_functions.insert("xpcall");
     built_in_functions.insert("warn");
+    built_in_functions.insert("print_error");
+    built_in_functions.insert("print_warning");
     
     // Godot-specific functions that might be exposed
     built_in_functions.insert("load");

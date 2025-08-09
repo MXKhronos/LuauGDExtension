@@ -508,7 +508,6 @@ void LuauScriptInstance::notification(int32_t p_what) {
     switch (p_what) {
         case 13: // NOTIFICATION_READY
             method_name = "_ready";
-            WARN_PRINT("NOTIFICATION_READY received");
             break;
         case 17: // NOTIFICATION_PROCESS
             method_name = "_process";
@@ -2095,9 +2094,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 			
 			// Load bytecode if available
 			if (bytecode.size() > 0) {
-				WARN_PRINT(vformat("Loading bytecode for script: %s (size: %d)", script_name, bytecode.size()));
-				// Load the bytecode into the thread
-			
 				int load_result = luau_load(thread, script_name.utf8().get_data(), 
 					(const char*)bytecode.ptr(), bytecode.size(), 0);
 				
@@ -2156,22 +2152,38 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 							StringName prop_name(key);
 							
 							// Check if it's a method first
-							if (nobind::ClassDB::get_singleton()->class_has_method(owner->get_class(), prop_name, false)) {
-								// Push the owner as an upvalue
+							bool is_method = nobind::ClassDB::get_singleton()->class_has_method(owner->get_class(), prop_name, false);
+							if (is_method) {
+								// Push the owner and instance as upvalues
 								lua_pushlightuserdata(L, owner);
 								lua_pushstring(L, key);
+								lua_pushlightuserdata(L, instance);
 								
 								// Return a function that will call the method
 								lua_pushcclosure(L, [](lua_State *L) -> int {
 									// Get the owner from the upvalue
 									Object *obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
 									const char *method_name = lua_tostring(L, lua_upvalueindex(2));
+									LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(3));
 									
 									if (obj && method_name) {
-										// First argument is self (the table), skip it
-										int arg_count = lua_gettop(L) - 1;
+										int arg_count = lua_gettop(L);
 										Array args;
-										for (int i = 2; i <= lua_gettop(L); i++) {
+										
+										// Check if first argument is the self table (for both : and . syntax)
+										bool skip_first = false;
+										if (arg_count > 0 && lua_istable(L, 1)) {
+											// Check if this table has the same owner
+											lua_getfield(L, 1, "__godot_owner");
+											if (lua_touserdata(L, -1) == obj) {
+												skip_first = true;
+											}
+											lua_pop(L, 1);
+										}
+										
+										// Build argument array, skipping first if it's self
+										int start_idx = skip_first ? 2 : 1;
+										for (int i = start_idx; i <= arg_count; i++) {
 											args.append(LuauMarshal::get_variant(L, i));
 										}
 										
@@ -2184,7 +2196,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 									}
 									
 									return 0;
-								}, "method_call", 2);
+								}, "method_call", 3);
 								
 								return 1;
 							}
@@ -2297,13 +2309,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 						return _placeholder_instance_create(p_for_object);
 #endif // TOOLS_ENABLED
 					} else {
-						WARN_PRINT(vformat("Script executed successfully for: %s", script_name));
-						// Script has been executed and populated the self table
-						// The functions are now defined in the self table (which was the environment)
-						
-						// Debug: First let's check what's in the environment after script execution
-						WARN_PRINT("Checking environment contents after script execution:");
-						
 						// Get the self table from main state
 						lua_getref(L, instance->get_self_ref());
 						lua_xmove(L, thread, 1);
@@ -2317,7 +2322,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 								const char* key = lua_tostring(thread, -2);
 								if (key) {
 									const char* type_name = lua_typename(thread, type);
-									WARN_PRINT(vformat("  Self['%s'] = %s", key, type_name));
 									if (type == LUA_TFUNCTION) {
 										func_count++;
 									}
@@ -2325,7 +2329,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 							}
 							lua_pop(thread, 1); // Remove value, keep key for next iteration
 						}
-						WARN_PRINT(vformat("Total functions found in self table: %d", func_count));
 						
                         // Now try to call _init if it exists
                         // Stack currently has: self_table
@@ -2352,7 +2355,6 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 						} else {
 							// _init is not a function or doesn't exist
 							lua_pop(thread, 1); // Remove non-function value
-							WARN_PRINT(vformat("_init not found as function in self table (type: %s)", lua_typename(thread, init_type)));
 						}
 						
 						lua_pop(thread, 1); // Remove self table
