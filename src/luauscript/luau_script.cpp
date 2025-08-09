@@ -2133,6 +2133,11 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 							return 1;
 						}
 						
+						// Get the owner pointer from the self table
+						lua_getfield(L, 1, "__godot_owner");
+						Object *owner = (Object*)lua_touserdata(L, -1);
+						lua_pop(L, 1);
+						
 						// Get the instance pointer from the self table
 						lua_getfield(L, 1, "__godot_instance");
 						LuauScriptInstance *instance = (LuauScriptInstance*)lua_touserdata(L, -1);
@@ -2146,10 +2151,43 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 							return 1;
 						}
 						
-						// Try to access Godot owner properties for inheritance
-						if (instance && instance->get_owner()) {
-							Object *owner = instance->get_owner();
+						// Try to access Godot owner properties and methods
+						if (owner) {
 							StringName prop_name(key);
+							
+							// Check if it's a method first
+							if (nobind::ClassDB::get_singleton()->class_has_method(owner->get_class(), prop_name, false)) {
+								// Push the owner as an upvalue
+								lua_pushlightuserdata(L, owner);
+								lua_pushstring(L, key);
+								
+								// Return a function that will call the method
+								lua_pushcclosure(L, [](lua_State *L) -> int {
+									// Get the owner from the upvalue
+									Object *obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
+									const char *method_name = lua_tostring(L, lua_upvalueindex(2));
+									
+									if (obj && method_name) {
+										// First argument is self (the table), skip it
+										int arg_count = lua_gettop(L) - 1;
+										Array args;
+										for (int i = 2; i <= lua_gettop(L); i++) {
+											args.append(LuauMarshal::get_variant(L, i));
+										}
+										
+										// Call the method on the owner object
+										Variant result = obj->callv(StringName(method_name), args);
+										
+										// Push result
+										LuauMarshal::push_variant(L, result);
+										return 1;
+									}
+									
+									return 0;
+								}, "method_call", 2);
+								
+								return 1;
+							}
 							
 							// Try to get the property value
 							Variant value = owner->get(prop_name);
