@@ -408,12 +408,7 @@ void create_color_variant(lua_State *L, const ::godot::Color &c) {
     
     // Set metatable for the instance table
     luaL_getmetatable(L, COLOR_INSTANCE_METATABLE);
-    if (lua_isnil(L, -1)) {
-        printf("ERROR: COLOR_INSTANCE_METATABLE not found!\n");
-        lua_pop(L, 1);
-    } else {
-        lua_setmetatable(L, -2);
-    }
+    lua_setmetatable(L, -2);
 }
 
 } // namespace luau

@@ -522,7 +522,7 @@ namespace godot {
         
         void _reload_all_scripts() override;
 
-        // virtual void _reload_scripts(const Array &p_scripts, bool p_soft_reload);
+        void _reload_scripts(const Array &p_scripts, bool p_soft_reload) override;
         void _reload_tool_script(const Ref<Script> &p_script, bool p_soft_reload) override;
         
         PackedStringArray _get_recognized_extensions() const override;

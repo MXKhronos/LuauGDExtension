@@ -2631,6 +2631,43 @@ void LuauLanguage::_reload_all_scripts() {
 #endif // TOOLS_ENABLED
 }
 
+void LuauLanguage::_reload_scripts(const Array &p_scripts, bool p_soft_reload) {
+#ifdef TOOLS_ENABLED
+	// Get all scripts that might need reloading
+	List<Ref<LuauScript>> all_scripts = get_scripts();
+	
+	// Filter to only reload the requested scripts
+	List<Ref<LuauScript>> scripts_to_reload;
+	for (Ref<LuauScript> &script : all_scripts) {
+		// Check if this script is in the list of scripts to reload
+		for (int i = 0; i < p_scripts.size(); i++) {
+			Ref<Script> s = p_scripts[i];
+			if (s == script) {
+				scripts_to_reload.push_back(script);
+				break;
+			}
+		}
+	}
+	
+	// Clear cached bytecode for scripts to reload (unless soft reload)
+	if (!p_soft_reload) {
+		for (Ref<LuauScript> &script : scripts_to_reload) {
+			script->load_stage = LuauScript::LOAD_NONE;
+			script->bytecode.clear();
+		}
+	}
+	
+	// Reload the selected scripts
+	for (Ref<LuauScript> &script : scripts_to_reload) {
+		String path = script->get_path();
+		if (!path.is_empty()) {
+			script->load_source_code(path);
+		}
+		script->_reload(p_soft_reload);
+	}
+#endif // TOOLS_ENABLED
+}
+
 void LuauLanguage::_reload_tool_script(const Ref<Script> &p_script, bool p_soft_reload) {
 #ifdef TOOLS_ENABLED
 	Ref<LuauScript> script = p_script;
