@@ -14,6 +14,7 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 #include "nobind.h"
 #include "luau_marshal.h"
+#include "variant/color.h"
 
 using namespace godot;
 
@@ -34,171 +35,6 @@ void luaGD_close(lua_State *L) {
 	L = lua_mainthread(L);
 
 	lua_close(L);
-}
-
-
-void LuauEngine::register_color_class(lua_State *L) {
-    // Create Color proxy table
-    lua_newtable(L);
-    
-    // Create metatable for Color proxy
-    lua_newtable(L);
-    
-    // __index metamethod to handle property/method access
-    lua_pushcfunction(L, [](lua_State *L) -> int {
-        const char *key = luaL_checkstring(L, 2);
-        
-        // Check if it's a named color constant
-        for (int i = 0; named_colors[i].name != nullptr; i++) {
-            if (strcmp(named_colors[i].name, key) == 0) {
-                const Color &c = named_colors[i].color;
-                // Push color as table with r,g,b,a fields
-                lua_newtable(L);
-                lua_pushnumber(L, c.r); lua_setfield(L, -2, "r");
-                lua_pushnumber(L, c.g); lua_setfield(L, -2, "g");
-                lua_pushnumber(L, c.b); lua_setfield(L, -2, "b");
-                lua_pushnumber(L, c.a); lua_setfield(L, -2, "a");
-                return 1;
-            }
-        }
-        
-        // Check for constructor/static methods
-        if (strcmp(key, "new") == 0) {
-            // Return constructor function
-            lua_pushcfunction(L, [](lua_State *L) -> int {
-                int nargs = lua_gettop(L);
-                Color c;
-                
-                if (nargs == 0) {
-                    // Default black color
-                    c = Color(0, 0, 0, 1);
-                } else if (nargs == 1 && lua_isstring(L, 1)) {
-                    // Color from hex string
-                    const char* hex = lua_tostring(L, 1);
-                    c = Color::html(hex);
-                } else if (nargs >= 3) {
-                    // Color(r, g, b, a = 1.0)
-                    float r = luaL_checknumber(L, 1);
-                    float g = luaL_checknumber(L, 2);
-                    float b = luaL_checknumber(L, 3);
-                    float a = luaL_optnumber(L, 4, 1.0);
-                    c = Color(r, g, b, a);
-                }
-                
-                // Return color as Variant that will be marshaled properly
-                LuauMarshal::push_variant(L, Variant(c));
-                return 1;
-            }, "Color.new");
-            return 1;
-        }
-        
-        if (strcmp(key, "from_html") == 0) {
-            lua_pushcfunction(L, [](lua_State *L) -> int {
-                const char* hex = luaL_checkstring(L, 1);
-                Color c = Color::html(hex);
-                LuauMarshal::push_variant(L, Variant(c));
-                return 1;
-            }, "Color.from_html");
-            return 1;
-        }
-        
-        if (strcmp(key, "from_hsv") == 0) {
-            lua_pushcfunction(L, [](lua_State *L) -> int {
-                float h = luaL_checknumber(L, 1);
-                float s = luaL_checknumber(L, 2);
-                float v = luaL_checknumber(L, 3);
-                float a = luaL_optnumber(L, 4, 1.0);
-                Color c = Color::from_hsv(h, s, v, a);
-                LuauMarshal::push_variant(L, Variant(c));
-                return 1;
-            }, "Color.from_hsv");
-            return 1;
-        }
-        
-        if (strcmp(key, "html") == 0) {
-            // Alias for from_html
-            lua_pushcfunction(L, [](lua_State *L) -> int {
-                const char* hex = luaL_checkstring(L, 1);
-                Color c = Color::html(hex);
-                LuauMarshal::push_variant(L, Variant(c));
-                return 1;
-            }, "Color.html");
-            return 1;
-        }
-        
-        if (strcmp(key, "hex") == 0) {
-            lua_pushcfunction(L, [](lua_State *L) -> int {
-                uint32_t hex_val = (uint32_t)luaL_checknumber(L, 1);
-                Color c = Color::hex(hex_val);
-                LuauMarshal::push_variant(L, Variant(c));
-                return 1;
-            }, "Color.hex");
-            return 1;
-        }
-        
-        if (strcmp(key, "hex64") == 0) {
-            lua_pushcfunction(L, [](lua_State *L) -> int {
-                uint64_t hex_val = (uint64_t)luaL_checknumber(L, 1);
-                Color c = Color::hex64(hex_val);
-                LuauMarshal::push_variant(L, Variant(c));
-                return 1;
-            }, "Color.hex64");
-            return 1;
-        }
-        
-        if (strcmp(key, "from_string") == 0) {
-            lua_pushcfunction(L, [](lua_State *L) -> int {
-                const char* str = luaL_checkstring(L, 1);
-                Color default_color(0, 0, 0, 1);
-                if (lua_gettop(L) >= 2 && lua_istable(L, 2)) {
-                    // Get default color from table
-                    Variant v = LuauMarshal::get_variant(L, 2);
-                    if (v.get_type() == Variant::COLOR) {
-                        default_color = v.operator Color();
-                    }
-                }
-                Color c = Color::from_string(String(str), default_color);
-                LuauMarshal::push_variant(L, Variant(c));
-                return 1;
-            }, "Color.from_string");
-            return 1;
-        }
-        
-        // Not found
-        lua_pushnil(L);
-        return 1;
-    }, "Color.__index");
-    lua_setfield(L, -2, "__index");
-    
-    // __call metamethod to make Color() work as constructor
-    lua_pushcfunction(L, [](lua_State *L) -> int {
-        // Skip the table itself (first argument)
-        int nargs = lua_gettop(L) - 1;
-        Color c;
-        
-        if (nargs == 0) {
-            c = Color(0, 0, 0, 1);
-        } else if (nargs == 1 && lua_isstring(L, 2)) {
-            const char* hex = lua_tostring(L, 2);
-            c = Color::html(hex);
-        } else if (nargs >= 3) {
-            float r = luaL_checknumber(L, 2);
-            float g = luaL_checknumber(L, 3);
-            float b = luaL_checknumber(L, 4);
-            float a = luaL_optnumber(L, 5, 1.0);
-            c = Color(r, g, b, a);
-        }
-        
-        LuauMarshal::push_variant(L, Variant(c));
-        return 1;
-    }, "Color.__call");
-    lua_setfield(L, -2, "__call");
-    
-    // Set metatable
-    lua_setmetatable(L, -2);
-    
-    // Set as global
-    lua_setglobal(L, "Color");
 }
 
 void LuauEngine::register_vector2_class(lua_State *L) {
@@ -499,11 +335,395 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         return 0;
     }, "print_warning");
     lua_setglobal(L, "print_warning");
+    
+    // ===== MATH FUNCTIONS =====
+    
+    // Trigonometric functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double angle = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::sin(angle));
+        return 1;
+    }, "sin");
+    lua_setglobal(L, "sin");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double angle = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::cos(angle));
+        return 1;
+    }, "cos");
+    lua_setglobal(L, "cos");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double angle = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::tan(angle));
+        return 1;
+    }, "tan");
+    lua_setglobal(L, "tan");
+    
+    // Hyperbolic functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::sinh(x));
+        return 1;
+    }, "sinh");
+    lua_setglobal(L, "sinh");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::cosh(x));
+        return 1;
+    }, "cosh");
+    lua_setglobal(L, "cosh");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::tanh(x));
+        return 1;
+    }, "tanh");
+    lua_setglobal(L, "tanh");
+    
+    // Inverse trig functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::asin(x));
+        return 1;
+    }, "asin");
+    lua_setglobal(L, "asin");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::acos(x));
+        return 1;
+    }, "acos");
+    lua_setglobal(L, "acos");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::atan(x));
+        return 1;
+    }, "atan");
+    lua_setglobal(L, "atan");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double y = luaL_checknumber(L, 1);
+        double x = luaL_checknumber(L, 2);
+        lua_pushnumber(L, UtilityFunctions::atan2(y, x));
+        return 1;
+    }, "atan2");
+    lua_setglobal(L, "atan2");
+    
+    // Square root and power
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::sqrt(x));
+        return 1;
+    }, "sqrt");
+    lua_setglobal(L, "sqrt");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double base = luaL_checknumber(L, 1);
+        double exp = luaL_checknumber(L, 2);
+        lua_pushnumber(L, UtilityFunctions::pow(base, exp));
+        return 1;
+    }, "pow");
+    lua_setglobal(L, "pow");
+    
+    // Logarithms
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::log(x));
+        return 1;
+    }, "log");
+    lua_setglobal(L, "log");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::exp(x));
+        return 1;
+    }, "exp");
+    lua_setglobal(L, "exp");
+    
+    // Rounding functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_isnumber(L, 1)) {
+            double x = lua_tonumber(L, 1);
+            lua_pushnumber(L, UtilityFunctions::floorf(x));
+        } else {
+            Variant v = LuauMarshal::get_variant(L, 1);
+            LuauMarshal::push_variant(L, UtilityFunctions::floor(v));
+        }
+        return 1;
+    }, "floor");
+    lua_setglobal(L, "floor");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_isnumber(L, 1)) {
+            double x = lua_tonumber(L, 1);
+            lua_pushnumber(L, UtilityFunctions::ceilf(x));
+        } else {
+            Variant v = LuauMarshal::get_variant(L, 1);
+            LuauMarshal::push_variant(L, UtilityFunctions::ceil(v));
+        }
+        return 1;
+    }, "ceil");
+    lua_setglobal(L, "ceil");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_isnumber(L, 1)) {
+            double x = lua_tonumber(L, 1);
+            lua_pushnumber(L, UtilityFunctions::roundf(x));
+        } else {
+            Variant v = LuauMarshal::get_variant(L, 1);
+            LuauMarshal::push_variant(L, UtilityFunctions::round(v));
+        }
+        return 1;
+    }, "round");
+    lua_setglobal(L, "round");
+    
+    // Absolute value
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_isnumber(L, 1)) {
+            double x = lua_tonumber(L, 1);
+            lua_pushnumber(L, UtilityFunctions::absf(x));
+        } else {
+            Variant v = LuauMarshal::get_variant(L, 1);
+            LuauMarshal::push_variant(L, UtilityFunctions::abs(v));
+        }
+        return 1;
+    }, "abs");
+    lua_setglobal(L, "abs");
+    
+    // Sign function
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_isnumber(L, 1)) {
+            double x = lua_tonumber(L, 1);
+            lua_pushnumber(L, UtilityFunctions::signf(x));
+        } else {
+            Variant v = LuauMarshal::get_variant(L, 1);
+            LuauMarshal::push_variant(L, UtilityFunctions::sign(v));
+        }
+        return 1;
+    }, "sign");
+    lua_setglobal(L, "sign");
+    
+    // Min/Max functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        int nargs = lua_gettop(L);
+        if (nargs < 2) {
+            luaL_error(L, "min requires at least 2 arguments");
+        }
+        
+        if (lua_isnumber(L, 1) && lua_isnumber(L, 2)) {
+            double result = UtilityFunctions::minf(lua_tonumber(L, 1), lua_tonumber(L, 2));
+            for (int i = 3; i <= nargs; i++) {
+                if (lua_isnumber(L, i)) {
+                    result = UtilityFunctions::minf(result, lua_tonumber(L, i));
+                }
+            }
+            lua_pushnumber(L, result);
+        } else {
+            // Use variant min for mixed types
+            Variant result = LuauMarshal::get_variant(L, 1);
+            for (int i = 2; i <= nargs; i++) {
+                Variant v = LuauMarshal::get_variant(L, i);
+                result = UtilityFunctions::min(result, v);
+            }
+            LuauMarshal::push_variant(L, result);
+        }
+        return 1;
+    }, "min");
+    lua_setglobal(L, "min");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        int nargs = lua_gettop(L);
+        if (nargs < 2) {
+            luaL_error(L, "max requires at least 2 arguments");
+        }
+        
+        if (lua_isnumber(L, 1) && lua_isnumber(L, 2)) {
+            double result = UtilityFunctions::maxf(lua_tonumber(L, 1), lua_tonumber(L, 2));
+            for (int i = 3; i <= nargs; i++) {
+                if (lua_isnumber(L, i)) {
+                    result = UtilityFunctions::maxf(result, lua_tonumber(L, i));
+                }
+            }
+            lua_pushnumber(L, result);
+        } else {
+            // Use variant max for mixed types
+            Variant result = LuauMarshal::get_variant(L, 1);
+            for (int i = 2; i <= nargs; i++) {
+                Variant v = LuauMarshal::get_variant(L, i);
+                result = UtilityFunctions::max(result, v);
+            }
+            LuauMarshal::push_variant(L, result);
+        }
+        return 1;
+    }, "max");
+    lua_setglobal(L, "max");
+    
+    // Clamp function
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_isnumber(L, 1) && lua_isnumber(L, 2) && lua_isnumber(L, 3)) {
+            double value = lua_tonumber(L, 1);
+            double min_val = lua_tonumber(L, 2);
+            double max_val = lua_tonumber(L, 3);
+            lua_pushnumber(L, UtilityFunctions::clampf(value, min_val, max_val));
+        } else {
+            Variant value = LuauMarshal::get_variant(L, 1);
+            Variant min_val = LuauMarshal::get_variant(L, 2);
+            Variant max_val = LuauMarshal::get_variant(L, 3);
+            LuauMarshal::push_variant(L, UtilityFunctions::clamp(value, min_val, max_val));
+        }
+        return 1;
+    }, "clamp");
+    lua_setglobal(L, "clamp");
+    
+    // Interpolation functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_isnumber(L, 1) && lua_isnumber(L, 2) && lua_isnumber(L, 3)) {
+            double from = lua_tonumber(L, 1);
+            double to = lua_tonumber(L, 2);
+            double weight = lua_tonumber(L, 3);
+            lua_pushnumber(L, UtilityFunctions::lerpf(from, to, weight));
+        } else {
+            Variant from = LuauMarshal::get_variant(L, 1);
+            Variant to = LuauMarshal::get_variant(L, 2);
+            Variant weight = LuauMarshal::get_variant(L, 3);
+            LuauMarshal::push_variant(L, UtilityFunctions::lerp(from, to, weight));
+        }
+        return 1;
+    }, "lerp");
+    lua_setglobal(L, "lerp");
+    
+    // Angle conversions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double deg = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::deg_to_rad(deg));
+        return 1;
+    }, "deg_to_rad");
+    lua_setglobal(L, "deg_to_rad");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double rad = luaL_checknumber(L, 1);
+        lua_pushnumber(L, UtilityFunctions::rad_to_deg(rad));
+        return 1;
+    }, "rad_to_deg");
+    lua_setglobal(L, "rad_to_deg");
+    
+    // Random functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        UtilityFunctions::randomize();
+        return 0;
+    }, "randomize");
+    lua_setglobal(L, "randomize");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        lua_pushinteger(L, UtilityFunctions::randi());
+        return 1;
+    }, "randi");
+    lua_setglobal(L, "randi");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        lua_pushnumber(L, UtilityFunctions::randf());
+        return 1;
+    }, "randf");
+    lua_setglobal(L, "randf");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        int64_t from = luaL_checkinteger(L, 1);
+        int64_t to = luaL_checkinteger(L, 2);
+        lua_pushinteger(L, UtilityFunctions::randi_range(from, to));
+        return 1;
+    }, "randi_range");
+    lua_setglobal(L, "randi_range");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double from = luaL_checknumber(L, 1);
+        double to = luaL_checknumber(L, 2);
+        lua_pushnumber(L, UtilityFunctions::randf_range(from, to));
+        return 1;
+    }, "randf_range");
+    lua_setglobal(L, "randf_range");
+    
+    // Type checking functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushboolean(L, UtilityFunctions::is_nan(x));
+        return 1;
+    }, "is_nan");
+    lua_setglobal(L, "is_nan");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double x = luaL_checknumber(L, 1);
+        lua_pushboolean(L, UtilityFunctions::is_inf(x));
+        return 1;
+    }, "is_inf");
+    lua_setglobal(L, "is_inf");
+    
+    // Type conversion
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        Variant v = LuauMarshal::get_variant(L, 1);
+        lua_pushinteger(L, UtilityFunctions::type_of(v));
+        return 1;
+    }, "typeof");
+    lua_setglobal(L, "typeof");
+    
+    // String conversion
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        int nargs = lua_gettop(L);
+        String result;
+        for (int i = 1; i <= nargs; i++) {
+            Variant v = LuauMarshal::get_variant(L, i);
+            result += UtilityFunctions::str(v);
+        }
+        LuauMarshal::push_variant(L, result);
+        return 1;
+    }, "str");
+    lua_setglobal(L, "str");
+    
+    // Instance handling
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        int64_t id = luaL_checkinteger(L, 1);
+        Object *obj = UtilityFunctions::instance_from_id(id);
+        if (obj) {
+            LuauMarshal::push_variant(L, Variant(obj));
+        } else {
+            lua_pushnil(L);
+        }
+        return 1;
+    }, "instance_from_id");
+    lua_setglobal(L, "instance_from_id");
+    
+    // Hash function
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        Variant v = LuauMarshal::get_variant(L, 1);
+        lua_pushinteger(L, UtilityFunctions::hash(v));
+        return 1;
+    }, "hash");
+    lua_setglobal(L, "hash");
+    
+    // Variant conversion
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        String str = luaL_checkstring(L, 1);
+        Variant v = UtilityFunctions::str_to_var(str);
+        LuauMarshal::push_variant(L, v);
+        return 1;
+    }, "str_to_var");
+    lua_setglobal(L, "str_to_var");
+    
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        Variant v = LuauMarshal::get_variant(L, 1);
+        String str = UtilityFunctions::var_to_str(v);
+        LuauMarshal::push_variant(L, str);
+        return 1;
+    }, "var_to_str");
+    lua_setglobal(L, "var_to_str");
 }
 
 void LuauEngine::register_godot_globals(lua_State *L) {
+    luau::register_color_class(L);
+
     // Register each Godot type
-    register_color_class(L);
     register_vector2_class(L);
     register_vector3_class(L);
     register_rect2_class(L);

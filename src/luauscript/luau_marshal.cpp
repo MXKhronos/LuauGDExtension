@@ -7,6 +7,7 @@
 #include <godot_cpp/variant/color.hpp>
 #include <godot_cpp/variant/transform2d.hpp>
 #include <godot_cpp/variant/transform3d.hpp>
+#include "variant/color.h"
 
 using namespace godot;
 
@@ -68,15 +69,7 @@ void LuauMarshal::push_variant(lua_State *L, const Variant &p_var) {
         
         case Variant::COLOR: {
             Color c = p_var.operator Color();
-            lua_newtable(L);
-            lua_pushnumber(L, c.r);
-            lua_setfield(L, -2, "r");
-            lua_pushnumber(L, c.g);
-            lua_setfield(L, -2, "g");
-            lua_pushnumber(L, c.b);
-            lua_setfield(L, -2, "b");
-            lua_pushnumber(L, c.a);
-            lua_setfield(L, -2, "a");
+            luau::Color(L, c);
             break;
         }
         
@@ -151,74 +144,31 @@ Variant LuauMarshal::get_variant(lua_State *L, int p_index) {
             return Variant(get_string(L, p_index));
             
         case LUA_TTABLE: {
-            // Check if it's a Vector2, Vector3, Color, Dictionary, or Array
-            lua_getfield(L, p_index, "x");
-            bool has_x = !lua_isnil(L, -1);
-            lua_pop(L, 1);
-            
-            if (has_x) {
-                lua_getfield(L, p_index, "y");
-                bool has_y = !lua_isnil(L, -1);
-                lua_pop(L, 1);
+            // First check if it has a __godot_variant field (wrapped Godot object)
+            lua_getfield(L, p_index, "__godot_variant");
+            if (lua_isuserdata(L, -1)) {
+                // This is a wrapped Godot object, extract the actual object
+                void *udata = lua_touserdata(L, -1);
+                lua_pop(L, 1); // Pop the userdata
                 
-                if (has_y) {
-                    lua_getfield(L, p_index, "z");
-                    bool has_z = !lua_isnil(L, -1);
-                    lua_pop(L, 1);
-                    
-                    if (has_z) {
-                        // Vector3
-                        lua_getfield(L, p_index, "x");
-                        float x = lua_tonumber(L, -1);
+                // Try to determine what kind of object it is by checking for known properties
+                // Check for Color (has r, g, b, a)
+                lua_getfield(L, p_index, "__godot_variant");
+                if (lua_isuserdata(L, -1)) {
+                    // For now, we'll check if it's a Color by trying to access color properties
+                    // through the userdata (this assumes it's a Color)
+                    ::godot::Color *color = (::godot::Color*)udata;
+                    if (color) {
                         lua_pop(L, 1);
-                        
-                        lua_getfield(L, p_index, "y");
-                        float y = lua_tonumber(L, -1);
-                        lua_pop(L, 1);
-                        
-                        lua_getfield(L, p_index, "z");
-                        float z = lua_tonumber(L, -1);
-                        lua_pop(L, 1);
-                        
-                        return Variant(Vector3(x, y, z));
-                    } else {
-                        // Vector2
-                        lua_getfield(L, p_index, "x");
-                        float x = lua_tonumber(L, -1);
-                        lua_pop(L, 1);
-                        
-                        lua_getfield(L, p_index, "y");
-                        float y = lua_tonumber(L, -1);
-                        lua_pop(L, 1);
-                        
-                        return Variant(Vector2(x, y));
+                        return Variant(Color(color->r, color->g, color->b, color->a));
                     }
                 }
-            }
-            
-            // Check for Color
-            lua_getfield(L, p_index, "r");
-            bool has_r = !lua_isnil(L, -1);
-            lua_pop(L, 1);
-            
-            if (has_r) {
-                lua_getfield(L, p_index, "r");
-                float r = lua_tonumber(L, -1);
                 lua_pop(L, 1);
                 
-                lua_getfield(L, p_index, "g");
-                float g = lua_tonumber(L, -1);
-                lua_pop(L, 1);
-                
-                lua_getfield(L, p_index, "b");
-                float b = lua_tonumber(L, -1);
-                lua_pop(L, 1);
-                
-                lua_getfield(L, p_index, "a");
-                float a = lua_isnil(L, -1) ? 1.0f : lua_tonumber(L, -1);
-                lua_pop(L, 1);
-                
-                return Variant(Color(r, g, b, a));
+                // TODO: Add checks for other wrapped types (Vector2, Vector3, etc.)
+                // For now, fall through to regular table handling
+            } else {
+                lua_pop(L, 1); // Pop nil
             }
             
             // Check if it's an array (has integer indices)

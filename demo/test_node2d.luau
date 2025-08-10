@@ -5,11 +5,16 @@ local red: Color = Color.RED;
 local blue: Color = Color.BLUE;
 
 function _ready(self)
-	print("testNode2D Ready", self, self.name, self.global_position.x, self.global_position.y);
+	print("testNode2D Ready", self, self.name, self.global_position);
+	print("testNode2D Red", red);
+	print_warn("testNode2D Blue", blue);
 end
 
 function _process(self, delta)
+	rotate(0.02);
+	
 	totalDelta = totalDelta + delta;
-	self:rotate(0.02);
-	self.modulate = red.lerp(blue, 0.5 + 0.5 * math.sin(totalDelta))
+
+    local s = (sin(totalDelta)+1)/2;
+    modulate = red:lerp(blue, s);
 end
