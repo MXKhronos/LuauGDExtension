@@ -301,26 +301,13 @@ Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) 
                         j++;
                     }
                     
-                    String annotation = line_text.substr(annotation_start, j - annotation_start);
-                    
-                    Color new_annotation_color = keyword_color;
-                    
-                    if (!type_color.is_equal_approx(Color(0, 0, 0, 0))) {
-                        new_annotation_color = type_color;
-                    }
-                    else if (!function_definition_color.is_equal_approx(Color(0, 0, 0, 0))) {
-                        new_annotation_color = function_definition_color;
-                    }
-                    else if (new_annotation_color.is_equal_approx(comment_color)) {
-                        new_annotation_color = annotation_color;
-                    }
-                    
                     for (int k = annotation_start; k < j; k++) {
                         Dictionary annotation_info;
-                        annotation_info["color"] = new_annotation_color;
+                        annotation_info["color"] = annotation_color;
                         color_map[k] = annotation_info;
                     }
                     
+                    String annotation = line_text.substr(annotation_start, j - annotation_start);
                     if (annotation == "@extends") {
                         // Skip any spaces after @extends
                         while (j < line_length && line_text[j] == ' ') {
@@ -553,104 +540,24 @@ void LuauSyntaxHighlighter::_clear_highlighting_cache() {
 }
 
 void LuauSyntaxHighlighter::_update_cache() {
+
     Ref<EditorSettings> settings = nobind::EditorInterface::get_singleton()->get_editor_settings();
     
-    settings->set("text_editor/theme/highlighting/background_color", Color("#1f1f1f"));
-    
-    text_color = Color("#9cdcfe");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/text_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/text_color", text_color);
-    }
     text_color = settings->get_setting("text_editor/theme/highlighting/luauscript/text_color");
-
-    symbol_color = Color("#C8C8C8");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/symbol_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/symbol_color", symbol_color);
-    }
     symbol_color = settings->get_setting("text_editor/theme/highlighting/luauscript/symbol_color");
-
-    number_color = Color("#b5cea8");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/number_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/number_color", number_color);
-    }
     number_color = settings->get_setting("text_editor/theme/highlighting/luauscript/number_color");
-
-    function_color = Color("#DCDCAA");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/function_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/function_color", function_color);
-    }
     function_color = settings->get_setting("text_editor/theme/highlighting/luauscript/function_color");
-
-    global_function_color = Color("#DCDCAA");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/global_function_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/global_function_color", global_function_color);
-    }
     global_function_color = settings->get_setting("text_editor/theme/highlighting/luauscript/global_function_color");
-
-    built_in_type_color = Color("#4EC9B0");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/built_in_type_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/built_in_type_color", built_in_type_color);
-    }
     built_in_type_color = settings->get_setting("text_editor/theme/highlighting/luauscript/built_in_type_color");
-
-    keyword_color = Color("#C586C0");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/keyword_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/keyword_color", keyword_color);
-    }
     keyword_color = settings->get_setting("text_editor/theme/highlighting/luauscript/keyword_color");
-
-    control_flow_keyword_color = Color("#b999ef");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/control_flow_keyword_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/control_flow_keyword_color", control_flow_keyword_color);
-    }
     control_flow_keyword_color = settings->get_setting("text_editor/theme/highlighting/luauscript/control_flow_keyword_color");
-
-    type_color = Color("#4EC9B0");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/type_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/type_color", type_color);
-    }
     type_color = settings->get_setting("text_editor/theme/highlighting/luauscript/type_color");
-
-    string_color = Color("#ce9178");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/string_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/string_color", string_color);
-    }
     string_color = settings->get_setting("text_editor/theme/highlighting/luauscript/string_color");
-
-    constant_color = Color("#569cd6");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/constant_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/constant_color", constant_color);
-    }
     constant_color = settings->get_setting("text_editor/theme/highlighting/luauscript/constant_color");
-
-    self_keyword_color = Color("#7c9ed1");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/self_keyword_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/self_keyword_color", self_keyword_color);
-    }
     self_keyword_color = settings->get_setting("text_editor/theme/highlighting/luauscript/self_keyword_color");
-
-    comment_color = Color("#6A9955");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/comment_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/comment_color", comment_color);
-    }
     comment_color = settings->get_setting("text_editor/theme/highlighting/luauscript/comment_color");
-
-    member_variable_color = Color("#9cdcfe");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/member_variable_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/member_variable_color", member_variable_color);
-    }
     member_variable_color = settings->get_setting("text_editor/theme/highlighting/luauscript/member_variable_color");
-
-    function_definition_color = Color("#DCDCAA");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/function_definition_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/function_definition_color", function_definition_color);
-    }
     function_definition_color = settings->get_setting("text_editor/theme/highlighting/luauscript/function_definition_color");
-
-    annotation_color = Color("#7eb366ff");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/annotation_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/annotation_color", annotation_color);
-    }
     annotation_color = settings->get_setting("text_editor/theme/highlighting/luauscript/annotation_color");
 
     // Initialize Luau keywords
@@ -750,6 +657,89 @@ PackedStringArray LuauSyntaxHighlighter::_get_supported_languages() const {
 Ref<EditorSyntaxHighlighter> LuauSyntaxHighlighter::_create() const {
     Ref<LuauSyntaxHighlighter> highlighter;
     highlighter.instantiate();
+
+    Ref<EditorSettings> settings = nobind::EditorInterface::get_singleton()->get_editor_settings();
+    
+    highlighter->text_color = Color("#9cdcfe");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/text_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/text_color", text_color);
+    }
+
+    highlighter->symbol_color = Color("#C8C8C8");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/symbol_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/symbol_color", symbol_color);
+    }
+
+    highlighter->number_color = Color("#b5cea8");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/number_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/number_color", number_color);
+    }
+
+    highlighter->function_color = Color("#DCDCAA");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/function_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/function_color", function_color);
+    }
+
+    highlighter->global_function_color = Color("#DCDCAA");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/global_function_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/global_function_color", global_function_color);
+    }
+
+    highlighter->built_in_type_color = Color("#4EC9B0");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/built_in_type_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/built_in_type_color", built_in_type_color);
+    }
+
+    highlighter->keyword_color = Color("#C586C0");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/keyword_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/keyword_color", keyword_color);
+    }
+
+    highlighter->control_flow_keyword_color = Color("#b999ef");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/control_flow_keyword_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/control_flow_keyword_color", control_flow_keyword_color);
+    }
+
+    highlighter->type_color = Color("#4EC9B0");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/type_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/type_color", type_color);
+    }
+
+    highlighter->string_color = Color("#ce9178");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/string_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/string_color", string_color);
+    }
+
+    highlighter->constant_color = Color("#569cd6");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/constant_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/constant_color", constant_color);
+    }
+
+    highlighter->self_keyword_color = Color("#7c9ed1");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/self_keyword_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/self_keyword_color", self_keyword_color);
+    }
+
+    highlighter->comment_color = Color("#6A9955");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/comment_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/comment_color", comment_color);
+    }
+
+    highlighter->member_variable_color = Color("#9cdcfe");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/member_variable_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/member_variable_color", member_variable_color);
+    }
+
+    highlighter->function_definition_color = Color("#DCDCAA");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/function_definition_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/function_definition_color", function_definition_color);
+    }
+
+    highlighter->annotation_color = Color("#C586C0");
+    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/annotation_color")) {
+        settings->set("text_editor/theme/highlighting/luauscript/annotation_color", annotation_color);
+    }
+
     return highlighter;
 }
 

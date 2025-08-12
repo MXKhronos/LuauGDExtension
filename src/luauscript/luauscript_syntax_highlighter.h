@@ -29,6 +29,22 @@ private:
     Ref<CodeHighlighter> highlighter;
     ScriptLanguage *script_language = nullptr;
 
+    // Language features
+    HashSet<String> keywords;
+    HashSet<String> control_flow_keywords;
+    HashSet<String> built_in_types;
+    HashSet<String> built_in_functions;
+    Vector<ColorRegion> color_regions;
+    
+    // Helper methods
+    bool is_symbol(char32_t c) const;
+    bool is_ascii_identifier_char(char32_t c) const;
+    bool is_hex_digit(char32_t c) const;
+    bool is_digit(char32_t c) const;
+    bool is_binary_digit(char32_t c) const;
+    bool is_constant_identifier(const String& identifier) const;
+
+public:
     // Colors from theme
 	Color text_color;
 	Color symbol_color;
@@ -47,22 +63,6 @@ private:
     Color self_keyword_color;
     Color annotation_color;
     
-    // Language features
-    HashSet<String> keywords;
-    HashSet<String> control_flow_keywords;
-    HashSet<String> built_in_types;
-    HashSet<String> built_in_functions;
-    Vector<ColorRegion> color_regions;
-    
-    // Helper methods
-    bool is_symbol(char32_t c) const;
-    bool is_ascii_identifier_char(char32_t c) const;
-    bool is_hex_digit(char32_t c) const;
-    bool is_digit(char32_t c) const;
-    bool is_binary_digit(char32_t c) const;
-    bool is_constant_identifier(const String& identifier) const;
-
-public:
     Dictionary _get_line_syntax_highlighting(int32_t p_line) const override;
     void _clear_highlighting_cache() override;
     void _update_cache() override;
