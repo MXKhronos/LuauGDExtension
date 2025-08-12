@@ -327,11 +327,10 @@ Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) 
                             
                             // Apply type color to the class name
                             Color class_color = built_in_type_color;
-                            if (class_color.is_equal_approx(Color(0, 0, 0, 0))) {
-                                class_color = type_color;
-                            }
-                            if (class_color.is_equal_approx(Color(0, 0, 0, 0))) {
-                                class_color = Color(0.4, 0.8, 0.8, 1.0); // Cyan fallback
+                            
+                            String extends = line_text.substr(class_name_start, j - class_name_start);
+                            if (!nobind::ClassDB::get_singleton()->class_exists(extends)) {
+                                class_color = comment_color;
                             }
                             
                             for (int k = class_name_start; k < j; k++) {
