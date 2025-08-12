@@ -26,8 +26,6 @@ void register_color_class(lua_State *L) {
     for (int i = 0; named_colors[i].name != nullptr; i++) {
         const ::godot::Color &c = named_colors[i].color;
         create_color_variant(L, c);
-        // Debug: Check the created color
-        printf("Creating color constant %s\n", named_colors[i].name);
         lua_setfield(L, -2, named_colors[i].name);
     }
     

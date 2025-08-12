@@ -343,6 +343,7 @@ namespace godot {
 
         const GDClassDefinition &get_definition() const { return definition; }
         Ref<LuauScript> get_base() const { return base; }
+        bool is_root_script() const { return _owner == nullptr; }
 
         bool _editor_can_reload_from_file() override;
         void _placeholder_erased(void *p_placeholder) override;
@@ -463,7 +464,7 @@ namespace godot {
         static LuauLanguage *get_singleton() { return singleton; };
         
 #ifdef TOOLS_ENABLED
-        List<Ref<LuauScript>> get_scripts() const;
+        Array get_scripts() const;
 
 #endif
 

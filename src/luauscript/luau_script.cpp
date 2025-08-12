@@ -1220,9 +1220,6 @@ void LuauScript::_set_source_code(const String &p_code) {
 }
 
 Error LuauScript::_reload(bool p_keep_state) {
-	// if (_is_module)
-	// 	return OK;
-
 	Error reload_err = OK;
 	
 #ifdef TOOLS_ENABLED
@@ -1265,6 +1262,7 @@ Error LuauScript::_reload(bool p_keep_state) {
 	bytecode.clear();
 	
 	// Reload and recompile the script
+	WARN_PRINT(vformat("Re-load script: %s", get_path()));
 	reload_err = load(LOAD_FULL, true);
 	
 #ifdef TOOLS_ENABLED
@@ -1384,7 +1382,7 @@ void LuauScript::_update_exports() {
 	// update_exports_internal(nullptr);
 
 	// Update old dependent scripts.
-	List<Ref<LuauScript>> scripts = LuauLanguage::get_singleton()->get_scripts();
+	Array scripts = LuauLanguage::get_singleton()->get_scripts();
 
 	// for (Ref<LuauScript> &scr : scripts) {
 	// 	// Check dependent to avoid endless loop.
@@ -1527,7 +1525,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
         // Convert Godot String to std::string for Luau
         CharString utf8 = source.utf8();
         std::string source_str(utf8.get_data(), utf8.length());
-        
+		
         // Set up compile options
         Luau::CompileOptions compile_opts;
         compile_opts.optimizationLevel = 2; // Full optimization
@@ -1536,10 +1534,8 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
         compile_opts.coverageLevel = 0; // No coverage by default
         
         try {
-            // Compile the source code to bytecode
             std::string compiled = Luau::compile(source_str, compile_opts);
             
-            // Store the compiled bytecode
             bytecode.resize(compiled.size());
             memcpy(bytecode.ptrw(), compiled.data(), compiled.size());
             
@@ -1614,7 +1610,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                         else if (comment.begins_with("@class ")) {
                             String class_name = comment.substr(7).strip_edges();
                             if (!class_name.is_empty()) {
-                                definition.name = class_name;
+                                definition.name = class_name; //MARK: custom class
                             }
                         }
                         // Check for @tool annotation
@@ -1670,6 +1666,9 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                 } else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
                                     var_value = bool_val->value;
                                     has_value = true;
+								} else if (value->as<Luau::AstExprTable>()) {
+									var_value = Dictionary();
+									has_value = true;
                                 } else if (value->as<Luau::AstExprConstantNil>()) {
                                     var_value = Variant();
                                     has_value = true;
@@ -1704,6 +1703,9 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                             case Variant::STRING:
                                                 var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
                                                 break;
+											case Variant::DICTIONARY:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
+												break;
                                             default:
                                                 var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
                                                 var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
@@ -1758,6 +1760,9 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                             } else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
                                 var_value = bool_val->value;
                                 has_value = true;
+							} else if (value->as<Luau::AstExprTable>()) {
+                                var_value = Dictionary();
+                                has_value = true;
                             } else if (value->as<Luau::AstExprConstantNil>()) {
                                 var_value = Variant();
                                 has_value = true;
@@ -1765,43 +1770,46 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                             
                             if (has_value) {
                                 if (is_constant) {
-                                        // ALL_CAPS variables are constants
-                                        constants[StringName(var_name)] = var_value;
-                                        definition.constants[StringName(var_name)] = var_value;
-                                    } else {
-                                        // Create the variable definition
-                                        GDClassProperty var_def;
-                                        var_def.property.name = StringName(var_name);
-                                        var_def.property.class_name = "";
-                                        var_def.property.hint = PROPERTY_HINT_NONE;
-                                        var_def.property.hint_string = "";
-                                        var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
-                                        var_def.default_value = var_value;
-                                        
-                                        // Determine type from value
-                                        switch (var_value.get_type()) {
-                                            case Variant::BOOL:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
-                                                break;
-                                            case Variant::INT:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_INT;
-                                                break;
-                                            case Variant::FLOAT:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
-                                                break;
-                                            case Variant::STRING:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
-                                                break;
-                                            default:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
-                                                var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
-                                                break;
-                                        }
-                                        
-                                        // Local variables go to members only (not accessible from outside)
-                                        definition.members.push_back(var_def);
-                                        definition.member_indices[StringName(var_name)] = definition.members.size() - 1;
-                                    }
+									// ALL_CAPS variables are constants
+									constants[StringName(var_name)] = var_value;
+									definition.constants[StringName(var_name)] = var_value;
+								} else {
+									// Create the variable definition
+									GDClassProperty var_def;
+									var_def.property.name = StringName(var_name);
+									var_def.property.class_name = "";
+									var_def.property.hint = PROPERTY_HINT_NONE;
+									var_def.property.hint_string = "";
+									var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
+									var_def.default_value = var_value;
+									
+									// Determine type from value
+									switch (var_value.get_type()) {
+										case Variant::BOOL:
+											var_def.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
+											break;
+										case Variant::INT:
+											var_def.property.type = GDEXTENSION_VARIANT_TYPE_INT;
+											break;
+										case Variant::FLOAT:
+											var_def.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+											break;
+										case Variant::STRING:
+											var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
+											break;
+										case Variant::DICTIONARY:
+											var_def.property.type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
+											break;
+										default:
+											var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+											var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
+											break;
+									}
+									
+									// Local variables go to members only (not accessible from outside)
+									definition.members.push_back(var_def);
+									definition.member_indices[StringName(var_name)] = definition.members.size() - 1;
+								}
                             }
                         }
                     }
@@ -1839,12 +1847,6 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                             // Check for underscore methods or common Godot methods
                             if (method_name.begins_with("_")) {
                                 should_register = true;
-                            } else if (method_name == "ready" || method_name == "process" || 
-                                     method_name == "physics_process" || method_name == "input" ||
-                                     method_name == "unhandled_input" || method_name == "draw") {
-                                // Also register common Godot methods without underscore
-                                should_register = true;
-                                method_name = "_" + method_name; // Add underscore prefix
                             }
                             
                             if (should_register) {
@@ -2432,8 +2434,8 @@ bool LuauScript::_inherits_script(const Ref<Script> &p_script) const {
 LuauLanguage *LuauLanguage::singleton = nullptr;
 
 #ifdef TOOLS_ENABLED
-List<Ref<LuauScript>> LuauLanguage::get_scripts() const {
-    List<Ref<LuauScript>> scripts;
+Array LuauLanguage::get_scripts() const {
+    Array scripts;
     
 	{
 		MutexLock lock(*this->mutex.ptr());
@@ -2569,32 +2571,16 @@ TypedArray<Dictionary> LuauLanguage::_get_built_in_templates(const StringName &p
 
 	TypedArray<Dictionary> templates;
 
-	if (p_object == StringName("Object")) {
-		Dictionary t;
-		t["inherit"] = "Object";
-		t["name"] = "Default";
-		t["description"] = "Default template for Objects";
-		t["content"] = R"TEMPLATE(--- @extends _BASE_CLASS_
-function _ready(self: _BASE_CLASS_)
-end
-)TEMPLATE";
-
-		t["id"] = 0;
-		t["origin"] = 0; // TEMPLATE_BUILT_IN
-
-		templates.push_back(t);
-	}
-
 	if (p_object == StringName("Node")) {
 		Dictionary t;
 		t["inherit"] = "Node";
 		t["name"] = "Default";
 		t["description"] = "Default template for Nodes with _ready and _process callbacks";
 		t["content"] = R"TEMPLATE(--- @extends _BASE_CLASS_
-function _ready(self: _BASE_CLASS_)
+function _ready()
 end
 
-function _process(self: _BASE_CLASS_, delta: number)
+function _process(delta: number)
 end
 )TEMPLATE";
 
@@ -2609,62 +2595,85 @@ end
 	return TypedArray<Dictionary>();
 #endif
 }
-		
+
+struct LuauScriptDepSort {
+	bool operator()(const Ref<LuauScript> &a, const Ref<LuauScript> &b) const {
+		if (a == b) return false;
+
+		const LuauScript *i = b->get_base().ptr();
+		while (i) {
+			if (i == a.ptr()) return true;
+			
+			i = i->get_base().ptr();
+		}
+
+		return false;
+	}
+};
+
 void LuauLanguage::_reload_all_scripts() {
 #ifdef TOOLS_ENABLED
-	List<Ref<LuauScript>> scripts = get_scripts();
-	
-	// First, clear all cached bytecode to force recompilation
-	for (Ref<LuauScript> &script : scripts) {
-		script->load_stage = LuauScript::LOAD_NONE;
-		script->bytecode.clear();
-	}
-
-	// Then reload all scripts
-	for (Ref<LuauScript> &script : scripts) {
-		String path = script->get_path();
-		if (!path.is_empty()) {
-			script->load_source_code(path);
-		}
-		script->_reload(true);
-	}
+	_reload_scripts(get_scripts(), true);
 #endif // TOOLS_ENABLED
 }
 
 void LuauLanguage::_reload_scripts(const Array &p_scripts, bool p_soft_reload) {
 #ifdef TOOLS_ENABLED
-	// Get all scripts that might need reloading
-	List<Ref<LuauScript>> all_scripts = get_scripts();
-	
-	// Filter to only reload the requested scripts
-	List<Ref<LuauScript>> scripts_to_reload;
-	for (Ref<LuauScript> &script : all_scripts) {
-		// Check if this script is in the list of scripts to reload
-		for (int i = 0; i < p_scripts.size(); i++) {
-			Ref<Script> s = p_scripts[i];
-			if (s == script) {
-				scripts_to_reload.push_back(script);
-				break;
+	List<Ref<LuauScript>> scripts;
+
+	{
+		MutexLock lock(*this->mutex.ptr());
+
+		const SelfList<LuauScript> *item = script_list.first();
+
+		while (item) {
+			Ref<LuauScript> src = Ref<LuauScript>(item->self());
+			WARN_PRINT(vformat("Reload check: %s", src->get_path()));
+			if (src->is_root_script() && !src->get_path().is_empty()) {
+				scripts.push_back(src);
 			}
+			item = item->next();
+		}
+	}
+
+	scripts.sort_custom<LuauScriptDepSort>();
+
+	for (int i = 0; i < p_scripts.size(); i++) {
+		Ref<LuauScript> script = p_scripts[i];
+		scripts.push_back(script);
+	}
+	
+	HashMap<Ref<LuauScript>, HashMap<ObjectID, List<Pair<StringName, Variant>>>> to_reload;
+
+	for (Ref<LuauScript> &script : scripts) {
+		bool skip = p_scripts.has(script) || to_reload.has(script->get_base());
+		if (!skip) continue;
+
+		to_reload.insert(script, HashMap<ObjectID, List<Pair<StringName, Variant>>>());
+
+		if (!p_soft_reload) {
+			HashMap<ObjectID, List<Pair<StringName, Variant>>> &map = to_reload[script];
 		}
 	}
 	
-	// Clear cached bytecode for scripts to reload (unless soft reload)
-	if (!p_soft_reload) {
-		for (Ref<LuauScript> &script : scripts_to_reload) {
-			script->load_stage = LuauScript::LOAD_NONE;
-			script->bytecode.clear();
-		}
-	}
-	
-	// Reload the selected scripts
-	for (Ref<LuauScript> &script : scripts_to_reload) {
+	for (KeyValue<Ref<LuauScript>, HashMap<ObjectID, List<Pair<StringName, Variant>>>> &E : to_reload) {
+		Ref<LuauScript> script = E.key;
+		
+		WARN_PRINT(vformat("Reload: %s", script->get_path()));
+
+		// Clear cached bytecode to force recompilation
+		script->load_stage = LuauScript::LOAD_NONE;
+		script->bytecode.clear();
+
+		// Reload source from file
 		String path = script->get_path();
 		if (!path.is_empty()) {
 			script->load_source_code(path);
 		}
-		script->_reload(p_soft_reload);
+
+		script->reload();
 	}
+
 #endif // TOOLS_ENABLED
 }
 
@@ -2675,17 +2684,14 @@ void LuauLanguage::_reload_tool_script(const Ref<Script> &p_script, bool p_soft_
 		return;
 	}
 	
-	// Clear cached bytecode to force recompilation
 	script->load_stage = LuauScript::LOAD_NONE;
 	script->bytecode.clear();
 	
-	// Reload source from file
 	String path = script->get_path();
 	if (!path.is_empty()) {
 		script->load_source_code(path);
 	}
 	
-	// Reload the script
 	script->_reload(p_soft_reload);
 #endif
 }
@@ -2709,6 +2715,7 @@ TypedArray<Dictionary> LuauLanguage::_get_public_annotations() const {
     return TypedArray<Dictionary>();
 }
 
+//MARK: _validate
 Dictionary LuauLanguage::_validate(
 	const String &p_script, 
 	const String &p_path, 
@@ -2718,8 +2725,36 @@ Dictionary LuauLanguage::_validate(
 	bool p_validate_safe_lines
 ) const {
 	Dictionary ret;
-
 	ret["valid"] = true;
+
+	CharString utf8 = p_script.utf8();
+	std::string source_str(utf8.get_data(), utf8.length());
+	
+	// Create allocator and name table for AST
+	Luau::Allocator allocator;
+	Luau::AstNameTable names(allocator);
+	
+	// Parse the source
+	Luau::ParseOptions parse_opts;
+	Luau::ParseResult parse_result = Luau::Parser::parse(
+		source_str.c_str(), source_str.size(), names, allocator, parse_opts);
+	
+	if (p_validate_errors && !parse_result.errors.empty()) {
+		Array errorArray;
+
+		Luau::ParseError error = parse_result.errors[0];
+		Luau::Position errorPos = error.getLocation().begin;
+
+		Dictionary errorEntry;
+		errorEntry["path"] = p_path;
+		errorEntry["line"] = errorPos.line + 1;
+		errorEntry["column"] = errorPos.column + 1;
+		errorEntry["message"] = String(error.getMessage().c_str());
+		errorArray.push_back(errorEntry);
+
+		ret["errors"] = errorArray;
+		ret["valid"] = false;
+	}
 
 	return ret;
 }

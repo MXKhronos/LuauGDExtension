@@ -602,6 +602,9 @@ void LuauSyntaxHighlighter::_update_cache() {
     built_in_types.insert("vector");
     built_in_types.insert("buffer");
     
+    // Luau supported Variants
+    built_in_types.insert("Color");
+
     // Add all Godot registered classes
     PackedStringArray class_list = nobind::ClassDB::get_singleton()->get_class_list();
     for (const String &class_name : class_list) {
