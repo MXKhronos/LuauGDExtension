@@ -663,7 +663,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     // Type conversion
     lua_pushcfunction(L, [](lua_State *L) -> int {
         Variant v = LuauMarshal::get_variant(L, 1);
-        lua_pushinteger(L, UtilityFunctions::type_of(v));
+        LuauMarshal::push_variant(L, Variant::get_type_name(v.get_type()));
         return 1;
     }, "typeof");
     lua_setglobal(L, "typeof");

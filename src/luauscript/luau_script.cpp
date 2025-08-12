@@ -1750,22 +1750,123 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                             // Extract the value
                             Variant var_value;
                             bool has_value = false;
+                            GDExtensionVariantType var_type = GDEXTENSION_VARIANT_TYPE_NIL;
+                            bool has_type_annotation = false;
+                            
+                            // Function to map identifier to variant type
+                            auto map_identifier_to_type = [](const String& identifier) -> GDExtensionVariantType {
+                                if (identifier == "Color") return GDEXTENSION_VARIANT_TYPE_COLOR;
+                                if (identifier == "Vector2") return GDEXTENSION_VARIANT_TYPE_VECTOR2;
+                                if (identifier == "Vector3") return GDEXTENSION_VARIANT_TYPE_VECTOR3;
+                                if (identifier == "Transform2D") return GDEXTENSION_VARIANT_TYPE_TRANSFORM2D;
+                                if (identifier == "Transform3D") return GDEXTENSION_VARIANT_TYPE_TRANSFORM3D;
+                                if (identifier == "Rect2") return GDEXTENSION_VARIANT_TYPE_RECT2;
+                                return GDEXTENSION_VARIANT_TYPE_NIL;
+                            };
+
+                            // Check if the variable has a type annotation
+                            if (var->annotation) {
+                                // Extract type from annotation
+                                if (auto* ref = var->annotation->as<Luau::AstTypeReference>()) {
+                                    String type_name = String(ref->name.value);
+                                    
+                                    // Map common Godot types
+                                    if (type_name == "Color") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_COLOR;
+                                        has_type_annotation = true;
+                                    } else if (type_name == "Vector2") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_VECTOR2;
+                                        has_type_annotation = true;
+                                    } else if (type_name == "Vector3") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_VECTOR3;
+                                        has_type_annotation = true;
+                                    } else if (type_name == "Transform2D") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_TRANSFORM2D;
+                                        has_type_annotation = true;
+                                    } else if (type_name == "Transform3D") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_TRANSFORM3D;
+                                        has_type_annotation = true;
+                                    } else if (type_name == "Rect2") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_RECT2;
+                                        has_type_annotation = true;
+                                    } else if (type_name == "string") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_STRING;
+                                        has_type_annotation = true;
+                                    } else if (type_name == "number") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+                                        has_type_annotation = true;
+                                    } else if (type_name == "boolean") {
+                                        var_type = GDEXTENSION_VARIANT_TYPE_BOOL;
+                                        has_type_annotation = true;
+                                    }
+                                }
+                            } else if (auto* index_name = value->as<Luau::AstExprIndexName>()) {
+                                // No type annotation, but we have a field access like Color.RED
+                                if (auto* global = index_name->expr->as<Luau::AstExprGlobal>()) {
+                                    String base_type = String(global->name.value);
+                                    var_type = map_identifier_to_type(base_type);
+                                    if (var_type != GDEXTENSION_VARIANT_TYPE_NIL) {
+                                        has_type_annotation = true;
+                                    }
+                                }
+                            }
+                            
                             
                             if (auto* num = value->as<Luau::AstExprConstantNumber>()) {
                                 var_value = num->value;
                                 has_value = true;
+                                if (!has_type_annotation) {
+                                    var_type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+                                }
                             } else if (auto* str = value->as<Luau::AstExprConstantString>()) {
                                 var_value = String::utf8(str->value.data, str->value.size);
                                 has_value = true;
+                                if (!has_type_annotation) {
+                                    var_type = GDEXTENSION_VARIANT_TYPE_STRING;
+                                }
                             } else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
                                 var_value = bool_val->value;
                                 has_value = true;
+                                if (!has_type_annotation) {
+                                    var_type = GDEXTENSION_VARIANT_TYPE_BOOL;
+                                }
 							} else if (value->as<Luau::AstExprTable>()) {
                                 var_value = Dictionary();
                                 has_value = true;
+                                if (!has_type_annotation) {
+                                    var_type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
+                                }
                             } else if (value->as<Luau::AstExprConstantNil>()) {
                                 var_value = Variant();
                                 has_value = true;
+                            } else if (has_type_annotation) {
+                                // For typed variables with complex expressions (like Color.RED),
+                                // we can't extract the value at compile time, but we know the type
+                                has_value = true;
+                                // Set a default value based on type
+                                switch (var_type) {
+                                    case GDEXTENSION_VARIANT_TYPE_COLOR:
+                                        var_value = Color();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_VECTOR2:
+                                        var_value = Vector2();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_VECTOR3:
+                                        var_value = Vector3();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_TRANSFORM2D:
+                                        var_value = Transform2D();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_TRANSFORM3D:
+                                        var_value = Transform3D();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_RECT2:
+                                        var_value = Rect2();
+                                        break;
+                                    default:
+                                        var_value = Variant();
+                                        break;
+                                }
                             }
                             
                             if (has_value) {
@@ -1782,28 +1883,54 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 									var_def.property.hint_string = "";
 									var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
 									var_def.default_value = var_value;
-									
-									// Determine type from value
-									switch (var_value.get_type()) {
-										case Variant::BOOL:
-											var_def.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
-											break;
-										case Variant::INT:
-											var_def.property.type = GDEXTENSION_VARIANT_TYPE_INT;
-											break;
-										case Variant::FLOAT:
-											var_def.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
-											break;
-										case Variant::STRING:
-											var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
-											break;
-										case Variant::DICTIONARY:
-											var_def.property.type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
-											break;
-										default:
-											var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
-											var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
-											break;
+
+									// Use type from annotation if available, otherwise determine from value
+									if (has_type_annotation) {
+										var_def.property.type = var_type;
+										if (var_type == GDEXTENSION_VARIANT_TYPE_NIL) {
+											var_def.property.usage = var_def.property.usage | PROPERTY_USAGE_NIL_IS_VARIANT;
+										}
+									} else {
+										// Determine type from value
+										switch (var_value.get_type()) {
+											case Variant::BOOL:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
+												break;
+											case Variant::INT:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_INT;
+												break;
+											case Variant::FLOAT:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+												break;
+											case Variant::STRING:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
+												break;
+											case Variant::COLOR:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_COLOR;
+												break;
+											case Variant::VECTOR2:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_VECTOR2;
+												break;
+											case Variant::VECTOR3:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_VECTOR3;
+												break;
+											case Variant::TRANSFORM2D:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_TRANSFORM2D;
+												break;
+											case Variant::TRANSFORM3D:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_TRANSFORM3D;
+												break;
+											case Variant::RECT2:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_RECT2;
+												break;
+											case Variant::DICTIONARY:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
+												break;
+											default:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+												var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
+												break;
+										}
 									}
 									
 									// Local variables go to members only (not accessible from outside)
@@ -1966,6 +2093,19 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                     definition.extends.is_empty() ? "RefCounted" : definition.extends,
                     method_count, property_count, signal_count, constant_count, member_count));
             }
+
+			// //WARN_PRINT members
+			// for (const GDClassProperty &member : definition.members) {
+			// 	WARN_PRINT(vformat("Member: %s", member.property.name));
+			// }
+			// //WARN_PRINT properties
+			// for (const GDClassProperty &prop : definition.properties) {
+			// 	WARN_PRINT(vformat("Property: %s", prop.property.name));
+			// }
+			// //WARN_PRINT constants
+			// for (const KeyValue<StringName, Variant> &pair : constants) {
+			// 	WARN_PRINT(vformat("Constant: %s = %s", pair.key, pair.value));
+			// }
         }
 #endif
     }
