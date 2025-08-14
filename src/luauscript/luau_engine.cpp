@@ -57,8 +57,10 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             // Convert each argument to string
             if (lua_isnil(L, i)) {
                 output += "nil";
+
             } else if (lua_isboolean(L, i)) {
                 output += lua_toboolean(L, i) ? "true" : "false";
+
             } else if (lua_isnumber(L, i)) {
                 double num = lua_tonumber(L, i);
                 // Check if it's an integer
@@ -68,22 +70,29 @@ void LuauEngine::register_godot_functions(lua_State *L) {
                 } else {
                     output += String::num(num);
                 }
+
             } else if (lua_isstring(L, i)) {
                 output += lua_tostring(L, i);
+
             } else if (lua_istable(L, i)) {
                 // For tables, try to convert to Variant first
                 Variant v = LuauBridge::get_variant(L, i);
                 output += String(v);
+
             } else if (lua_isuserdata(L, i)) {
                 // Try to get as variant
                 Variant v = LuauBridge::get_variant(L, i);
                 output += String(v);
+
             } else if (lua_isfunction(L, i)) {
                 output += "<function>";
+
             } else if (lua_isthread(L, i)) {
                 output += "<thread>";
+
             } else {
                 output += "<unknown>";
+
             }
         }
         
@@ -479,7 +488,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     // Type conversion
     lua_pushcfunction(L, [](lua_State *L) -> int {
         Variant v = LuauBridge::get_variant(L, 1);
-        LuauBridge::push_variant(L, Variant::get_type_name(v.get_type()));
+        LuauBridge::push_string(L, Variant::get_type_name(v.get_type()));
         return 1;
     }, "typeof");
     lua_setglobal(L, "typeof");
@@ -540,9 +549,20 @@ void LuauEngine::register_godot_globals(lua_State *L) {
     // Register Godot functions (print, etc.)
     register_godot_functions(L);
 
-    luau::Vector2Bridge::registerVariantClass(L);
-    luau::ColorBridge::registerVariantClass(L);
-
+    {
+        lua_newtable(L);
+        lua_setglobal(L, "_G");
+    }
+    {
+        Vector2Bridge::register_variant(L);
+        Rect2Bridge::register_variant(L);
+        ColorBridge::register_variant(L);
+    }
+    {
+        Vector2Bridge::register_variant_class(L);
+        Rect2Bridge::register_variant_class(L);
+        ColorBridge::register_variant_class(L);
+    }
 }
 
 void LuauEngine::init_vm(VMType p_type) {

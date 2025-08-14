@@ -1,5 +1,8 @@
 #include "luau_bridge.h"
 
+#include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/variant/color_names.inc.hpp>
+
 using namespace godot;
 using namespace luau;
 
@@ -85,12 +88,12 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
             break;
             
         case Variant::VECTOR2: {
-            Vector2Bridge::pushNewObject(L, p_var.operator Vector2());
+            Vector2Bridge::push_new(L, p_var.operator Vector2());
             break;
         }
 
         case Variant::COLOR: {
-            ColorBridge::pushNewObject(L, p_var.operator Color());
+            ColorBridge::push_new(L, p_var.operator Color());
             break;
         }
         
@@ -162,8 +165,9 @@ Array LuauBridge::get_array(lua_State *L, int p_index) {
 
 Variant LuauBridge::get_variant(lua_State *L, int p_index) {
     int type = lua_type(L, p_index);
+
     switch (type) {
-                case LUA_TNIL:
+        case LUA_TNIL:
             return Variant();
             
         case LUA_TBOOLEAN:
@@ -183,36 +187,57 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
         case LUA_TSTRING:
             return Variant(get_string(L, p_index));
             
-        case LUA_TTABLE: {
-            lua_pushinteger(L, 1);
-            lua_gettable(L, p_index);
-            bool is_array = !lua_isnil(L, -1);
-            lua_pop(L, 1);
-            
-            if (is_array) {
-                return Variant(get_array(L, p_index));
-            } else {
-                return Variant(get_dictionary(L, p_index));
-            }
-        }
+        case LUA_TTABLE:
+            return Variant(get_dictionary(L, p_index));
         
         case LUA_TUSERDATA: {
-            // Get the type name from the metatable
-            if (!lua_getmetatable(L, p_index)) {
+            void* ud = lua_touserdata(L, p_index);
+            if (!ud) {
+                WARN_PRINT("Invalid userdata");
                 return Variant();
             }
-            lua_getfield(L, -1, "__type");
 
+            // Get the userdata's metatable
+            if (!lua_getmetatable(L, p_index)) {
+                WARN_PRINT("Userdata without metatable");
+                return Variant();
+            }
+
+            // Get the type name
+            lua_getfield(L, -1, "__type");
             if (lua_isnil(L, -1)) {
                 lua_pop(L, 2); // Pop metatable and nil __type
+                WARN_PRINT("Userdata metatable without __type");
+                return Variant();
+            }
+            const char* type_name = lua_tostring(L, -1);
+
+            // Get the registered metatable for this type
+            lua_getfield(L, LUA_REGISTRYINDEX, type_name);
+            if (lua_isnil(L, -1)) {
+                lua_pop(L, 3); // Pop registered metatable, type name, and userdata metatable
+                WARN_PRINT("Type not registered: " + String(type_name));
                 return Variant();
             }
 
-            const char* type_name = lua_tostring(L, -1);
-            lua_pop(L, 2); // Pop metatable and __type string
+            // Compare the metatables
+            bool equal = lua_rawequal(L, -1, -3);
+            lua_pop(L, 3);
 
-            Variant varient = LuauBridge::luaL_checkudata(L, p_index, type_name);
-            return varient;
+            if (!equal) {
+                WARN_PRINT("Userdata metatable does not match registered type: " + String(type_name));
+                return Variant();
+            }
+
+            // Now we know it's a valid userdata of our type
+            if (strcmp(type_name, "Vector2") == 0) {
+                return Vector2Bridge::get_object(L, p_index);
+            } else if (strcmp(type_name, "Color") == 0) {
+                return ColorBridge::get_object(L, p_index);
+            }
+
+            WARN_PRINT("Unhandled userdata type: " + String(type_name));
+            return Variant();
         }
         
         default:
@@ -220,14 +245,15 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
     }
 };
 
-void LuauBridge::protect_metatable(lua_State* thread, int index) {
-	lua_pushstring(thread, "The metatable is locked");
-	lua_setfield(thread, index-1, "__metatable");
+void LuauBridge::protect_metatable(lua_State* L, int index) {
+	lua_pushstring(L, "The metatable is locked");
+	lua_setfield(L, index-1, "__metatable");
 }
 
 
-template <class Variant, bool __eq>
-inline void VariantBridge<Variant, __eq>::registerVariant(lua_State *L) {
+template <class GDV, bool __eq>
+void VariantBridge<GDV, __eq>::register_variant (lua_State *L) {
+    // Create the metatable
     luaL_newmetatable(L, variantName);
     LuauBridge::protect_metatable(L, -1);
 
@@ -266,44 +292,80 @@ inline void VariantBridge<Variant, __eq>::registerVariant(lua_State *L) {
 }
 
 
+
 //MARK: Vector2
-template void VariantBridge<godot::Vector2>::registerVariant(lua_State *);
+template void VariantBridge<Vector2>::register_variant(lua_State *);
 
 template<>
-const char* VariantBridge<godot::Vector2>::variantName("Vector2");
+const char* VariantBridge<Vector2>::variantName("Vector2");
 
-const luaL_Reg Vector2Bridge::staticLibrary[] = {
+const luaL_Reg Vector2Bridge::static_library[] = {
     {"from_angle", from_angle},
 	{NULL, NULL}
 };
 
-void Vector2Bridge::registerVariantClass(lua_State* L) {
-    luaL_register(L, variantName, staticLibrary);
+void Vector2Bridge::register_variant_class(lua_State* L) {
+    luaL_register(L, variantName, static_library);
     lua_setreadonly(L, -1, true);
+
+    // luaL_getmetatable(L, variantName);
+    // lua_setmetatable(L, -2);
     lua_pop(L, 1);
 }
 
 int Vector2Bridge::from_angle(lua_State* L) {
     float angle = luaL_checknumber(L, 1);
     Vector2 result = Vector2::from_angle(angle);
-    pushNewObject(L, result);
+    push_new(L, result);
     return 1;
 }
 
 
-//MARK: Color
-template void VariantBridge<godot::Color>::registerVariant(lua_State *);
+
+//MARK: Rect2
+template void VariantBridge<Rect2>::register_variant(lua_State *);
 
 template<>
-const char* VariantBridge<godot::Color>::variantName("Color");
+const char* VariantBridge<Rect2>::variantName("Rect2");
 
-const luaL_Reg ColorBridge::staticLibrary[] = {
+const luaL_Reg Rect2Bridge::static_library[] = {
+	{NULL, NULL}
+};
+
+void Rect2Bridge::register_variant_class(lua_State* L) {
+    luaL_register(L, variantName, static_library);
+    lua_setreadonly(L, -1, true);
+
+    // luaL_getmetatable(L, variantName);
+    // lua_setmetatable(L, -2);
+    lua_pop(L, 1);
+}
+
+
+
+//MARK: Color
+template void VariantBridge<Color>::register_variant(lua_State *);
+
+template<>
+const char* VariantBridge<Color>::variantName("Color");
+
+const luaL_Reg ColorBridge::static_library[] = {
     {"hex", hex},
 	{NULL, NULL}
 };
 
-void ColorBridge::registerVariantClass(lua_State* L) {
-    luaL_register(L, variantName, staticLibrary);
+void ColorBridge::register_variant_class(lua_State* L) {
+    luaL_register(L, variantName, static_library);
+        
+    // Add named color constants
+    for (int i = 0; named_colors[i].name != nullptr; i++) {
+        const Color &c = named_colors[i].color;
+        ColorBridge::push_new(L, c);
+        lua_setfield(L, -2, named_colors[i].name);
+    }
+
+    luaL_getmetatable(L, variantName);
+    lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);
     lua_pop(L, 1);
 }
@@ -311,11 +373,18 @@ void ColorBridge::registerVariantClass(lua_State* L) {
 int ColorBridge::hex(lua_State* L) {
     uint32_t hex_val = (uint32_t)luaL_checknumber(L, 1);
     Color result = Color::hex(hex_val);
-    pushNewObject(L, result);
+    push_new(L, result);
     return 1;
 }
 
 template<>
-int VariantBridge<godot::Color>::on_newindex(godot::Color& object, const char* name, lua_State* L) {
+int VariantBridge<Color>::on_index(const Color& object, const char* name, lua_State* L) {
+    WARN_PRINT("on_index Color: " + String(name));
+    return 1;
+}
+
+template<>
+int VariantBridge<Color>::on_newindex(Color& object, const char* name, lua_State* L) {
+    WARN_PRINT("on_newindex Color: " + String(name));
     return 1;
 }

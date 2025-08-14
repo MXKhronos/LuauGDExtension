@@ -34,7 +34,7 @@ class VariantBridge {
 public:
     static const char* variantName;
 
-    static GDV* pushNewObject(lua_State* L) {
+    static GDV* push_new(lua_State* L) {
         GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
         new (ud) GDV();
 
@@ -45,7 +45,7 @@ public:
     }
 
     // 1 args
-    static GDV* pushNewObject(lua_State* L, const Variant& arg1) {
+    static GDV* push_new(lua_State* L, const Variant& arg1) {
         GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
         new (ud) GDV(arg1);
 
@@ -56,7 +56,7 @@ public:
     }
 
     // 2 args
-    static GDV* pushNewObject(lua_State* L, const Variant& arg1, const Variant& arg2) {
+    static GDV* push_new(lua_State* L, const Variant& arg1, const Variant& arg2) {
         GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
         new (ud) GDV(arg1, arg2);
 
@@ -67,7 +67,7 @@ public:
     }
 
     // 3 args
-    static GDV* pushNewObject(lua_State* L, const Variant& arg1, const Variant& arg2, const Variant& arg3) {
+    static GDV* push_new(lua_State* L, const Variant& arg1, const Variant& arg2, const Variant& arg3) {
         GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
         new (ud) GDV(arg1, arg2, arg3);
 
@@ -78,7 +78,7 @@ public:
     }
 
     // 4 args
-    static GDV* pushNewObject(lua_State* L, const Variant& arg1, const Variant& arg2, const Variant& arg3, const Variant& arg4) {
+    static GDV* push_new(lua_State* L, const Variant& arg1, const Variant& arg2, const Variant& arg3, const Variant& arg4) {
         GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
         new (ud) GDV(arg1, arg2, arg3, arg4);
 
@@ -88,12 +88,12 @@ public:
         return ud;
     }
 
-    static GDV& getObject(lua_State* L, unsigned int index) {
+    static GDV& get_object(lua_State* L, unsigned int index) {
         void *ud = LuauBridge::luaL_checkudata(L, index, variantName);
         return *reinterpret_cast<GDV*>(ud);
     }
 
-    static void registerVariant (lua_State* L);
+    static void register_variant(lua_State* L);
 
 
     static int on_index(const GDV& object, const char* name, lua_State* L);
@@ -101,12 +101,12 @@ public:
     static int on_call(GDV& object, lua_State* L);
 
     static int on_gc(lua_State *L) {
-		getObject(L, 1).~GDV();
+		get_object(L, 1).~GDV();
 		return 0;
 	}
 
 	static int on_tostring(lua_State *L) {
-        Variant value = getObject(L, 1);
+        Variant value = get_object(L, 1);
         LuauBridge::push_string(L, value.stringify());
         return 1;
 	}
@@ -116,7 +116,7 @@ public:
 
         StringName prop_name(key);
 
-        Variant obj = getObject(L, 1);
+        Variant obj = get_object(L, 1);
         Variant value = obj.get(prop_name); //Get Variant GDV property, type should be Variant
         if (value.get_type() != Variant::NIL) {
             LuauBridge::push_variant(L, value);
@@ -128,44 +128,79 @@ public:
 	}
 
 	static int on_newindex(lua_State *L) {
+        Variant obj = get_object(L, 1);
+		const char* key = lua_tostring(L, 2);
+        Variant value = LuauBridge::get_variant(L, 3);
+
+        StringName prop_name(key);
+
+        // Try to set the property
+        bool valid;
+        obj.set(prop_name, value, &valid);
+        if (!valid) {
+            WARN_PRINT("Failed to set property: " + String(key));
+            return 1;
+        }
+
+        // Get the userdata pointer and update it
+        void* ud = lua_touserdata(L, 1);
+        if (ud) {
+            GDV* ptr = static_cast<GDV*>(ud);
+            *ptr = obj;
+        }
+
         return 1;
 	}
 
     static int on_call(lua_State *L) {
         const int argc = lua_gettop(L);
 
-        pushNewObject(L, new GDV());
+        push_new(L, new GDV());
         return 1;
     }
 
     static int on_eq(lua_State *L) {
-        lua_pushboolean(L, getObject(L, 1) == getObject(L, 2));
+        lua_pushboolean(L, get_object(L, 1) == get_object(L, 2));
         return 1;
     }
 };
 
 
+
 //MARK: Vector2
-class Vector2Bridge: public VariantBridge<godot::Vector2> {
-    friend class VariantBridge <godot::Vector2>;
+class Vector2Bridge: public VariantBridge<Vector2> {
+    friend class VariantBridge <Vector2>;
 
     public:
-        static void registerVariantClass(lua_State* L);
+        static void register_variant_class(lua_State* L);
     private:
         static int from_angle(lua_State* L);
-        static const luaL_Reg staticLibrary[];
+        static const luaL_Reg static_library[];
 };
 
 
-//MARK: Color
-class ColorBridge : public VariantBridge<godot::Color> {
-    friend class VariantBridge <godot::Color>;
+
+//MARK: Rect2
+class Rect2Bridge : public VariantBridge<Rect2> {
+    friend class VariantBridge <Rect2>;
 
     public:
-        static void registerVariantClass(lua_State* L);
+        static void register_variant_class(lua_State* L);
+    private:
+        static const luaL_Reg static_library[];
+};
+
+
+
+//MARK: Color
+class ColorBridge : public VariantBridge<Color> {
+    friend class VariantBridge <Color>;
+
+    public:
+        static void register_variant_class(lua_State* L);
     private:
         static int hex(lua_State* L);
-        static const luaL_Reg staticLibrary[];
+        static const luaL_Reg static_library[];
 };
 
 }; // namespace luau
