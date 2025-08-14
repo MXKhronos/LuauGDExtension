@@ -235,13 +235,7 @@ namespace godot {
         Ref<LuauScript> get_script() const override;
 
     // Initialize the Lua state for this instance
-    void initialize_lua_state(lua_State *p_L, lua_State *p_thread, int p_thread_ref, int p_self_ref) {
-        L = p_L;
-        T = p_thread;
-        thread_ref = p_thread_ref;
-        self_ref = p_self_ref;
-    }
-    
+    void initialize_lua_state(lua_State *p_L, lua_State *p_thread, int p_thread_ref, int p_self_ref);
     int get_self_ref() const { return self_ref; }
     
     LuauScriptInstance(const Ref<LuauScript> &p_script, Object *p_owner, LuauEngine::VMType p_vmtype);

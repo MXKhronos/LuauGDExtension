@@ -3,20 +3,13 @@
 #include <lua.h>
 #include <lualib.h>
 #include <godot_cpp/core/memory.hpp>
-#include <godot_cpp/variant/color.hpp>
-#include <godot_cpp/variant/color_names.inc.hpp>
-#include <godot_cpp/variant/vector2.hpp>
-#include <godot_cpp/variant/vector3.hpp>
-#include <godot_cpp/variant/rect2.hpp>
-#include <godot_cpp/variant/transform2d.hpp>
-#include <godot_cpp/variant/transform3d.hpp>
 #include <godot_cpp/core/math.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include "nobind.h"
-#include "luau_marshal.h"
-#include "variant/color.h"
+#include "luau_bridge.h"
 
 using namespace godot;
+using namespace luau;
 
 LuauEngine *LuauEngine::singleton = nullptr;
 
@@ -35,183 +28,6 @@ void luaGD_close(lua_State *L) {
 	L = lua_mainthread(L);
 
 	lua_close(L);
-}
-
-void LuauEngine::register_vector2_class(lua_State *L) {
-    // Create Vector2 table
-    lua_newtable(L);
-    
-    // Vector2 constants
-    lua_newtable(L);
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-    lua_setfield(L, -2, "ZERO");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "y");
-    lua_setfield(L, -2, "ONE");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, Math_INF); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, Math_INF); lua_setfield(L, -2, "y");
-    lua_setfield(L, -2, "INF");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, -1.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-    lua_setfield(L, -2, "LEFT");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-    lua_setfield(L, -2, "RIGHT");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, -1.0); lua_setfield(L, -2, "y");
-    lua_setfield(L, -2, "UP");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "y");
-    lua_setfield(L, -2, "DOWN");
-    
-    // Add constructor function
-    lua_pushcfunction(L, [](lua_State *L) -> int {
-        float x = luaL_optnumber(L, 1, 0.0);
-        float y = luaL_optnumber(L, 2, 0.0);
-        
-        lua_newtable(L);
-        lua_pushnumber(L, x); lua_setfield(L, -2, "x");
-        lua_pushnumber(L, y); lua_setfield(L, -2, "y");
-        
-        return 1;
-    }, "Vector2");
-    lua_setfield(L, -2, "new");
-    
-    // Set as global
-    lua_setglobal(L, "Vector2");
-}
-
-void LuauEngine::register_vector3_class(lua_State *L) {
-    // Create Vector3 table
-    lua_newtable(L);
-    
-    // Vector3 constants
-    lua_newtable(L);
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "ZERO");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "ONE");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, Math_INF); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, Math_INF); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, Math_INF); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "INF");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, -1.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "LEFT");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "RIGHT");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "UP");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, -1.0); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "DOWN");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, 1.0); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "FORWARD");
-    
-    lua_newtable(L);
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-    lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-    lua_pushnumber(L, -1.0); lua_setfield(L, -2, "z");
-    lua_setfield(L, -2, "BACK");
-    
-    // Add constructor function
-    lua_pushcfunction(L, [](lua_State *L) -> int {
-        float x = luaL_optnumber(L, 1, 0.0);
-        float y = luaL_optnumber(L, 2, 0.0);
-        float z = luaL_optnumber(L, 3, 0.0);
-        
-        lua_newtable(L);
-        lua_pushnumber(L, x); lua_setfield(L, -2, "x");
-        lua_pushnumber(L, y); lua_setfield(L, -2, "y");
-        lua_pushnumber(L, z); lua_setfield(L, -2, "z");
-        
-        return 1;
-    }, "Vector3");
-    lua_setfield(L, -2, "new");
-    
-    // Set as global
-    lua_setglobal(L, "Vector3");
-}
-
-void LuauEngine::register_rect2_class(lua_State *L) {
-    // Register Rect2 constructor
-    lua_pushcfunction(L, [](lua_State *L) -> int {
-        int nargs = lua_gettop(L);
-        lua_newtable(L);
-        
-        if (nargs == 0) {
-            // Default Rect2()
-            lua_newtable(L);
-            lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-            lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-            lua_setfield(L, -2, "position");
-            
-            lua_newtable(L);
-            lua_pushnumber(L, 0.0); lua_setfield(L, -2, "x");
-            lua_pushnumber(L, 0.0); lua_setfield(L, -2, "y");
-            lua_setfield(L, -2, "size");
-        } else if (nargs == 4) {
-            // Four arguments: x, y, width, height
-            lua_newtable(L);
-            lua_pushnumber(L, luaL_checknumber(L, 1)); lua_setfield(L, -2, "x");
-            lua_pushnumber(L, luaL_checknumber(L, 2)); lua_setfield(L, -2, "y");
-            lua_setfield(L, -2, "position");
-            
-            lua_newtable(L);
-            lua_pushnumber(L, luaL_checknumber(L, 3)); lua_setfield(L, -2, "x");
-            lua_pushnumber(L, luaL_checknumber(L, 4)); lua_setfield(L, -2, "y");
-            lua_setfield(L, -2, "size");
-        } else if (nargs == 2) {
-            // Two arguments: position and size tables
-            lua_pushvalue(L, 1);
-            lua_setfield(L, -2, "position");
-            
-            lua_pushvalue(L, 2);
-            lua_setfield(L, -2, "size");
-        }
-        
-        return 1;
-    }, "Rect2");
-    lua_setglobal(L, "Rect2");
 }
 
 void LuauEngine::register_math_constants(lua_State *L) {
@@ -256,11 +72,11 @@ void LuauEngine::register_godot_functions(lua_State *L) {
                 output += lua_tostring(L, i);
             } else if (lua_istable(L, i)) {
                 // For tables, try to convert to Variant first
-                Variant v = LuauMarshal::get_variant(L, i);
+                Variant v = LuauBridge::get_variant(L, i);
                 output += String(v);
             } else if (lua_isuserdata(L, i)) {
                 // Try to get as variant
-                Variant v = LuauMarshal::get_variant(L, i);
+                Variant v = LuauBridge::get_variant(L, i);
                 output += String(v);
             } else if (lua_isfunction(L, i)) {
                 output += "<function>";
@@ -296,7 +112,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
                 output += lua_tostring(L, i);
             } else {
                 // Try to convert to string via Variant
-                Variant v = LuauMarshal::get_variant(L, i);
+                Variant v = LuauBridge::get_variant(L, i);
                 output += String(v);
             }
         }
@@ -325,7 +141,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
                 output += lua_tostring(L, i);
             } else {
                 // Try to convert to string via Variant
-                Variant v = LuauMarshal::get_variant(L, i);
+                Variant v = LuauBridge::get_variant(L, i);
                 output += String(v);
             }
         }
@@ -449,8 +265,8 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             double x = lua_tonumber(L, 1);
             lua_pushnumber(L, UtilityFunctions::floorf(x));
         } else {
-            Variant v = LuauMarshal::get_variant(L, 1);
-            LuauMarshal::push_variant(L, UtilityFunctions::floor(v));
+            Variant v = LuauBridge::get_variant(L, 1);
+            LuauBridge::push_variant(L, UtilityFunctions::floor(v));
         }
         return 1;
     }, "floor");
@@ -461,8 +277,8 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             double x = lua_tonumber(L, 1);
             lua_pushnumber(L, UtilityFunctions::ceilf(x));
         } else {
-            Variant v = LuauMarshal::get_variant(L, 1);
-            LuauMarshal::push_variant(L, UtilityFunctions::ceil(v));
+            Variant v = LuauBridge::get_variant(L, 1);
+            LuauBridge::push_variant(L, UtilityFunctions::ceil(v));
         }
         return 1;
     }, "ceil");
@@ -473,8 +289,8 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             double x = lua_tonumber(L, 1);
             lua_pushnumber(L, UtilityFunctions::roundf(x));
         } else {
-            Variant v = LuauMarshal::get_variant(L, 1);
-            LuauMarshal::push_variant(L, UtilityFunctions::round(v));
+            Variant v = LuauBridge::get_variant(L, 1);
+            LuauBridge::push_variant(L, UtilityFunctions::round(v));
         }
         return 1;
     }, "round");
@@ -486,8 +302,8 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             double x = lua_tonumber(L, 1);
             lua_pushnumber(L, UtilityFunctions::absf(x));
         } else {
-            Variant v = LuauMarshal::get_variant(L, 1);
-            LuauMarshal::push_variant(L, UtilityFunctions::abs(v));
+            Variant v = LuauBridge::get_variant(L, 1);
+            LuauBridge::push_variant(L, UtilityFunctions::abs(v));
         }
         return 1;
     }, "abs");
@@ -499,8 +315,8 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             double x = lua_tonumber(L, 1);
             lua_pushnumber(L, UtilityFunctions::signf(x));
         } else {
-            Variant v = LuauMarshal::get_variant(L, 1);
-            LuauMarshal::push_variant(L, UtilityFunctions::sign(v));
+            Variant v = LuauBridge::get_variant(L, 1);
+            LuauBridge::push_variant(L, UtilityFunctions::sign(v));
         }
         return 1;
     }, "sign");
@@ -523,12 +339,12 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             lua_pushnumber(L, result);
         } else {
             // Use variant min for mixed types
-            Variant result = LuauMarshal::get_variant(L, 1);
+            Variant result = LuauBridge::get_variant(L, 1);
             for (int i = 2; i <= nargs; i++) {
-                Variant v = LuauMarshal::get_variant(L, i);
+                Variant v = LuauBridge::get_variant(L, i);
                 result = UtilityFunctions::min(result, v);
             }
-            LuauMarshal::push_variant(L, result);
+            LuauBridge::push_variant(L, result);
         }
         return 1;
     }, "min");
@@ -550,12 +366,12 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             lua_pushnumber(L, result);
         } else {
             // Use variant max for mixed types
-            Variant result = LuauMarshal::get_variant(L, 1);
+            Variant result = LuauBridge::get_variant(L, 1);
             for (int i = 2; i <= nargs; i++) {
-                Variant v = LuauMarshal::get_variant(L, i);
+                Variant v = LuauBridge::get_variant(L, i);
                 result = UtilityFunctions::max(result, v);
             }
-            LuauMarshal::push_variant(L, result);
+            LuauBridge::push_variant(L, result);
         }
         return 1;
     }, "max");
@@ -569,10 +385,10 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             double max_val = lua_tonumber(L, 3);
             lua_pushnumber(L, UtilityFunctions::clampf(value, min_val, max_val));
         } else {
-            Variant value = LuauMarshal::get_variant(L, 1);
-            Variant min_val = LuauMarshal::get_variant(L, 2);
-            Variant max_val = LuauMarshal::get_variant(L, 3);
-            LuauMarshal::push_variant(L, UtilityFunctions::clamp(value, min_val, max_val));
+            Variant value = LuauBridge::get_variant(L, 1);
+            Variant min_val = LuauBridge::get_variant(L, 2);
+            Variant max_val = LuauBridge::get_variant(L, 3);
+            LuauBridge::push_variant(L, UtilityFunctions::clamp(value, min_val, max_val));
         }
         return 1;
     }, "clamp");
@@ -586,10 +402,10 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             double weight = lua_tonumber(L, 3);
             lua_pushnumber(L, UtilityFunctions::lerpf(from, to, weight));
         } else {
-            Variant from = LuauMarshal::get_variant(L, 1);
-            Variant to = LuauMarshal::get_variant(L, 2);
-            Variant weight = LuauMarshal::get_variant(L, 3);
-            LuauMarshal::push_variant(L, UtilityFunctions::lerp(from, to, weight));
+            Variant from = LuauBridge::get_variant(L, 1);
+            Variant to = LuauBridge::get_variant(L, 2);
+            Variant weight = LuauBridge::get_variant(L, 3);
+            LuauBridge::push_variant(L, UtilityFunctions::lerp(from, to, weight));
         }
         return 1;
     }, "lerp");
@@ -662,8 +478,8 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     
     // Type conversion
     lua_pushcfunction(L, [](lua_State *L) -> int {
-        Variant v = LuauMarshal::get_variant(L, 1);
-        LuauMarshal::push_variant(L, Variant::get_type_name(v.get_type()));
+        Variant v = LuauBridge::get_variant(L, 1);
+        LuauBridge::push_variant(L, Variant::get_type_name(v.get_type()));
         return 1;
     }, "typeof");
     lua_setglobal(L, "typeof");
@@ -673,10 +489,10 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         int nargs = lua_gettop(L);
         String result;
         for (int i = 1; i <= nargs; i++) {
-            Variant v = LuauMarshal::get_variant(L, i);
+            Variant v = LuauBridge::get_variant(L, i);
             result += UtilityFunctions::str(v);
         }
-        LuauMarshal::push_variant(L, result);
+        LuauBridge::push_variant(L, result);
         return 1;
     }, "str");
     lua_setglobal(L, "str");
@@ -686,7 +502,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         int64_t id = luaL_checkinteger(L, 1);
         Object *obj = UtilityFunctions::instance_from_id(id);
         if (obj) {
-            LuauMarshal::push_variant(L, Variant(obj));
+            LuauBridge::push_variant(L, Variant(obj));
         } else {
             lua_pushnil(L);
         }
@@ -696,7 +512,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     
     // Hash function
     lua_pushcfunction(L, [](lua_State *L) -> int {
-        Variant v = LuauMarshal::get_variant(L, 1);
+        Variant v = LuauBridge::get_variant(L, 1);
         lua_pushinteger(L, UtilityFunctions::hash(v));
         return 1;
     }, "hash");
@@ -706,40 +522,27 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     lua_pushcfunction(L, [](lua_State *L) -> int {
         String str = luaL_checkstring(L, 1);
         Variant v = UtilityFunctions::str_to_var(str);
-        LuauMarshal::push_variant(L, v);
+        LuauBridge::push_variant(L, v);
         return 1;
     }, "str_to_var");
     lua_setglobal(L, "str_to_var");
     
     lua_pushcfunction(L, [](lua_State *L) -> int {
-        Variant v = LuauMarshal::get_variant(L, 1);
+        Variant v = LuauBridge::get_variant(L, 1);
         String str = UtilityFunctions::var_to_str(v);
-        LuauMarshal::push_variant(L, str);
+        LuauBridge::push_variant(L, str);
         return 1;
     }, "var_to_str");
     lua_setglobal(L, "var_to_str");
 }
 
 void LuauEngine::register_godot_globals(lua_State *L) {
-    luau::register_color_class(L);
-
-    // Register each Godot type
-    register_vector2_class(L);
-    register_vector3_class(L);
-    register_rect2_class(L);
-    register_math_constants(L);
-    
     // Register Godot functions (print, etc.)
     register_godot_functions(L);
-    
-    // TODO: Add more Godot types as needed:
-    // - Transform2D
-    // - Transform3D
-    // - Basis
-    // - Quaternion
-    // - AABB
-    // - Plane
-    // - etc.
+
+    luau::Vector2Bridge::registerVariantClass(L);
+    luau::ColorBridge::registerVariantClass(L);
+
 }
 
 void LuauEngine::init_vm(VMType p_type) {
@@ -753,12 +556,6 @@ void LuauEngine::init_vm(VMType p_type) {
     luaL_sandbox(L);
 
     vms[p_type] = L;
-}
-
-void LuauEngine::new_vm() {
-    lua_State *L = lua_newstate(luauGD_alloc, nullptr);
-
-    luaL_openlibs(L);
 }
 
 LuauEngine::LuauEngine() {

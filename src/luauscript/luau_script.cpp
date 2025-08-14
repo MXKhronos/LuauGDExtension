@@ -18,7 +18,7 @@
 #include "luau_engine.h"
 #include "luau_cache.h"
 #include "luau_constants.h"
-#include "luau_marshal.h"
+#include "luau_bridge.h"
 #include "luauscript_resource_format.h"
 
 #include <Luau/Compiler.h>
@@ -27,6 +27,7 @@
 #include <Luau/Ast.h>
 
 using namespace godot;
+using namespace luau;
 
 //MARK: GDProperty
 GDProperty::operator Dictionary() const {
@@ -464,14 +465,14 @@ void LuauScriptInstance::call(
             // Push arguments onto the stack
             for (int i = 0; i < p_argument_count; i++) {
                 const Variant &arg = *p_args[i];
-                LuauMarshal::push_variant(ET, arg);
+                LuauBridge::push_variant(ET, arg);
             }
             
             // Add default arguments if needed
             for (int i = p_argument_count; i < args_allowed; i++) {
                 int default_idx = i - (args_allowed - args_default);
                 if (default_idx >= 0 && default_idx < args_default) {
-                    LuauMarshal::push_variant(ET, method.default_arguments[default_idx]);
+                    LuauBridge::push_variant(ET, method.default_arguments[default_idx]);
                 }
             }
             
@@ -481,7 +482,7 @@ void LuauScriptInstance::call(
             
             if (status == LUA_OK) {
                 // Get return value
-                *r_return = LuauMarshal::get_variant(ET, -1);
+                *r_return = LuauBridge::get_variant(ET, -1);
             } else {
                 *r_return = Variant();
                 r_error->error = GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST;
@@ -655,7 +656,7 @@ bool LuauScriptInstance::set(const StringName &p_name, const Variant &p_value, P
 	
 	// Set the value in the self table
 	String prop_str = String(p_name);
-	LuauMarshal::push_variant(L, p_value);
+	LuauBridge::push_variant(L, p_value);
 	lua_setfield(L, -2, prop_str.utf8().get_data());
 	
 	lua_pop(L, 1); // Remove self table
@@ -702,7 +703,7 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
     }
     
     // Convert the Lua value to Variant
-    r_ret = LuauMarshal::get_variant(L, -1);
+    r_ret = LuauBridge::get_variant(L, -1);
     lua_pop(L, 2); // Remove value and self table
     
     if (r_err) *r_err = PROP_OK;
@@ -2125,6 +2126,14 @@ StringName LuauScript::_get_instance_base_type() const {
 	return StringName();
 }
 
+//MARK: initialize_lua_state
+void LuauScriptInstance::initialize_lua_state(lua_State *p_L, lua_State *p_thread, int p_thread_ref, int p_self_ref) {
+	L = p_L;
+	T = p_thread;
+	thread_ref = p_thread_ref;
+	self_ref = p_self_ref;
+}
+	
 void *LuauScript::_instance_create(Object *p_for_object) const {
 #ifdef TOOLS_ENABLED
 	WARN_PRINT(vformat("Creating LuauScript instance for object: %s", p_for_object->get_class()));
@@ -2326,14 +2335,14 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 										// Build argument array, skipping first if it's self
 										int start_idx = skip_first ? 2 : 1;
 										for (int i = start_idx; i <= arg_count; i++) {
-											args.append(LuauMarshal::get_variant(L, i));
+											args.append(LuauBridge::get_variant(L, i));
 										}
 										
 										// Call the method on the owner object
 										Variant result = obj->callv(StringName(method_name), args);
 										
 										// Push result
-										LuauMarshal::push_variant(L, result);
+										LuauBridge::push_variant(L, result);
 										return 1;
 									}
 									
@@ -2346,7 +2355,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 							// Try to get the property value
 							Variant value = owner->get(prop_name);
 							if (value.get_type() != Variant::NIL) {
-								LuauMarshal::push_variant(L, value);
+								LuauBridge::push_variant(L, value);
 								return 1;
 							}
 						}
