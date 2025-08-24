@@ -32,73 +32,44 @@ class LuauBridge {
 template<class GDV, bool __eq = true>
 class VariantBridge {
 public:
-    static const char* variantName;
+    static const char* variant_name;
 
     static GDV* push_new(lua_State* L) {
         GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
         new (ud) GDV();
 
-        luaL_getmetatable(L, variantName);
+        luaL_getmetatable(L, variant_name);
         lua_setmetatable(L, -2);
 
         return ud;
     }
 
-    // 1 args
-    static GDV* push_new(lua_State* L, const Variant& arg1) {
+    static GDV* push_from(lua_State* L, const Variant& v) {
         GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
-        new (ud) GDV(arg1);
+        new (ud) GDV(v.operator GDV());
 
-        luaL_getmetatable(L, variantName);
-        lua_setmetatable(L, -2);
-
-        return ud;
-    }
-
-    // 2 args
-    static GDV* push_new(lua_State* L, const Variant& arg1, const Variant& arg2) {
-        GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
-        new (ud) GDV(arg1, arg2);
-
-        luaL_getmetatable(L, variantName);
-        lua_setmetatable(L, -2);
-
-        return ud;
-    }
-
-    // 3 args
-    static GDV* push_new(lua_State* L, const Variant& arg1, const Variant& arg2, const Variant& arg3) {
-        GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
-        new (ud) GDV(arg1, arg2, arg3);
-
-        luaL_getmetatable(L, variantName);
-        lua_setmetatable(L, -2);
-
-        return ud;
-    }
-
-    // 4 args
-    static GDV* push_new(lua_State* L, const Variant& arg1, const Variant& arg2, const Variant& arg3, const Variant& arg4) {
-        GDV* ud = (GDV*)lua_newuserdata(L, sizeof(GDV));
-        new (ud) GDV(arg1, arg2, arg3, arg4);
-
-        luaL_getmetatable(L, variantName);
+        luaL_getmetatable(L, variant_name);
         lua_setmetatable(L, -2);
 
         return ud;
     }
 
     static GDV& get_object(lua_State* L, unsigned int index) {
-        void *ud = LuauBridge::luaL_checkudata(L, index, variantName);
+        void *ud = LuauBridge::luaL_checkudata(L, index, variant_name);
+
+        if (!ud) {
+            luaL_error(L, "Invalid userdata");
+        }
+
         return *reinterpret_cast<GDV*>(ud);
     }
 
     static void register_variant(lua_State* L);
 
 
-    static int on_index(const GDV& object, const char* name, lua_State* L);
-    static int on_newindex(GDV& object, const char* name, lua_State* L);
-    static int on_call(GDV& object, lua_State* L);
+    static int on_index(lua_State* L, const GDV& object, const char* key);
+    static int on_newindex(lua_State* L, GDV& object, const char* key);
+    static int on_call(lua_State* L);
 
     static int on_gc(lua_State *L) {
 		get_object(L, 1).~GDV();
@@ -112,19 +83,45 @@ public:
 	}
 
 	static int on_index(lua_State *L) {
-		const char* key = lua_tostring(L, 2);
+        Variant obj = get_object(L, 1);
 
+		const char* key = lua_tostring(L, 2);
         StringName prop_name(key);
 
-        Variant obj = get_object(L, 1);
-        Variant value = obj.get(prop_name); //Get Variant GDV property, type should be Variant
-        if (value.get_type() != Variant::NIL) {
+        bool valid;
+        Variant value = obj.get(prop_name, &valid); //Get Variant GDV property
+
+        if (!valid) {
+            luaL_error(L, ("Invalid property: " + String(variant_name) + "." + String(key)).utf8().get_data());
+            return 1;
+        }
+
+        if (value.get_type() == Variant::CALLABLE) {    
+            // Get the metatable methods for this variant type
+            lua_getglobal(L, variant_name);
+            if (lua_isnil(L, -1)) {
+                luaL_error(L, ("No metatable found for: " + String(variant_name)).utf8().get_data());
+                return 1;
+            }
+
+            lua_pushstring(L, key);
+            lua_rawget(L, -2);
+            if (lua_isnil(L, -1)) {
+                luaL_error(L, ("No method found for: " + String(variant_name) + "." + String(key)).utf8().get_data());
+                return 1;
+            }
+            
+            WARN_PRINT(("Found method: " + String(variant_name) + "." + String(key)).utf8().get_data());
+            lua_remove(L, -2); // Remove global table
+
+            return 1;
+
+        } else if (value.get_type() != Variant::NIL) {
             LuauBridge::push_variant(L, value);
             return 1;
         }
 
-        ERR_PRINT("Property not found: " + String(key));
-        return 1;
+        return on_index(L, obj, key);
 	}
 
 	static int on_newindex(lua_State *L) {
@@ -152,13 +149,6 @@ public:
         return 1;
 	}
 
-    static int on_call(lua_State *L) {
-        const int argc = lua_gettop(L);
-
-        push_new(L, new GDV());
-        return 1;
-    }
-
     static int on_eq(lua_State *L) {
         lua_pushboolean(L, get_object(L, 1) == get_object(L, 2));
         return 1;
@@ -174,8 +164,8 @@ class Vector2Bridge: public VariantBridge<Vector2> {
     public:
         static void register_variant_class(lua_State* L);
     private:
-        static int from_angle(lua_State* L);
         static const luaL_Reg static_library[];
+        static int from_angle(lua_State* L);
 };
 
 
@@ -199,8 +189,9 @@ class ColorBridge : public VariantBridge<Color> {
     public:
         static void register_variant_class(lua_State* L);
     private:
-        static int hex(lua_State* L);
         static const luaL_Reg static_library[];
+        static int hex(lua_State* L);
+        static int lerp(lua_State* L);
 };
 
 }; // namespace luau

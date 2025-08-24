@@ -487,9 +487,19 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     
     // Type conversion
     lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_isnil(L, 1)) {
+            LuauBridge::push_string(L, "nil");
+            return 1;
+        }
+        if (lua_isfunction(L, 1)) {
+            LuauBridge::push_string(L, "function");
+            return 1;
+        }
+
         Variant v = LuauBridge::get_variant(L, 1);
         LuauBridge::push_string(L, Variant::get_type_name(v.get_type()));
         return 1;
+        
     }, "typeof");
     lua_setglobal(L, "typeof");
     

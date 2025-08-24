@@ -10,6 +10,3 @@ windows.debug.x86_64 = "res://bin/LuauGDExt/LuauGDExt.windows.editor.dev.x86_64.
 windows.release.x86_64 = "res://bin/LuauGDExt/LuauGDExt.windows.template_release.x86_64.dll"
 linux.debug.x86_64 = "res://bin/LuauGDExt/LuauGDExt.linux.editor.dev.x86_64.so"
 linux.release.x86_64 = "res://bin/LuauGDExt/LuauGDExt.linux.template_release.x86_64.so"
-
-[icons]
-LuauScript = "res://bin/LuauGDExt/LuauScript.svg"
