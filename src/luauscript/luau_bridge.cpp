@@ -445,8 +445,6 @@ void ColorBridge::register_variant_class(lua_State* L) {
 }
 
 int ColorBridge::hex(lua_State* L) {
-    WARN_PRINT("Do Color hex");
-
     uint32_t hex_val = (uint32_t)luaL_checknumber(L, 1);
     Color result = Color::hex(hex_val);
     push_from(L, result);
@@ -454,8 +452,6 @@ int ColorBridge::hex(lua_State* L) {
 }
 
 int ColorBridge::lerp(lua_State* L) {
-    WARN_PRINT("Do Color lerp");
-
     const int argc = lua_gettop(L);
     if (argc < 3) {
         luaL_error(L, "Color.lerp requires at least 3 arguments");
@@ -470,8 +466,6 @@ int ColorBridge::lerp(lua_State* L) {
         return 1;
     }
     float weight = luaL_checknumber(L, 3);
-
-    WARN_PRINT("Color from: " + String(from) + " to: " + String(to) + " weight: " + String::num(weight));
 
     Color result = from.lerp(to, weight);
     push_from(L, result);
@@ -495,8 +489,6 @@ int VariantBridge<Color>::on_newindex(lua_State* L, Color& object, const char* k
 template<>
 int VariantBridge<Color>::on_call(lua_State* L) {
     const int argc = lua_gettop(L)-1;
-
-    //WARN_PRINT("on_call Color with " + itos(argc) + " arguments");
 
     if (argc == 1) {
         Variant a1 = LuauBridge::get_variant(L, 2);

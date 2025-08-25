@@ -111,7 +111,6 @@ public:
                 return 1;
             }
             
-            WARN_PRINT(("Found method: " + String(variant_name) + "." + String(key)).utf8().get_data());
             lua_remove(L, -2); // Remove global table
 
             return 1;

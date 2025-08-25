@@ -2368,17 +2368,37 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 					
 					// Set __newindex to handle both property writes and new variables
 					lua_pushcfunction(thread, [](lua_State *L) -> int {
+						// Get the owner pointer from the self table
+						lua_getfield(L, 1, "__godot_owner");
+						Object *owner = (Object*)lua_touserdata(L, -1);
+						lua_pop(L, 1);
+						
 						// Stack: env_table (self), key, value
 						const char* key = lua_tostring(L, 2);
 						if (!key) {
 							return 0;
 						}
 						
+						//check if object has property: key
+						if (owner) {
+							Variant value = LuauBridge::get_variant(L, 3);
+							
+							Error err = nobind::ClassDB::get_singleton()->class_set_property(owner, StringName(key), value);
+							if (err == OK) {
+								return 1;
+							}
+						}
+
+						// Set is not property
+						// Get Variant from value
+						// Variant value = LuauBridge::get_variant(L, 3);
+						
 						// For now, just store everything in the self table
 						// We'll let Godot handle property setting through the script instance
 						lua_pushvalue(L, 2); // Push key
 						lua_pushvalue(L, 3); // Push value
 						lua_rawset(L, 1); // Set in table
+
 						return 0;
 					}, "__newindex");
 					lua_setfield(thread, -2, "__newindex");
@@ -2433,7 +2453,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 						} else {
 							ERR_PRINT(vformat("Failed to execute Luau script %s: unknown error", script_name));
 						}
-					lua_pop(thread, 1); // Remove error message
+						lua_pop(thread, 1); // Remove error message
 #ifdef TOOLS_ENABLED
 						// In the editor, clean up and create a placeholder instance instead
 						// Clean up the failed instance
