@@ -70,13 +70,23 @@ int VariantBridge<String>::on_newindex(lua_State* L, String& object, const char*
 }
 
 template<>
-int VariantBridge<String>::on_call(lua_State* L) {
+int VariantBridge<String>::on_call(lua_State* L, bool& is_valid) {
     const int argc = lua_gettop(L)-1;
 
-    if (argc == 1) {
-        push_from(L, LuauBridge::get_string(L, 2));
+    if (argc == 0) {
+        push_new(L);
+        return 1;
+        
+    } else if (argc == 1) {
+        Variant v = LuauBridge::get_variant(L, 2);
+
+        if (v.get_type() == Variant::STRING) {
+            push_from(L, v.operator String());
+            return 1;
+        }
+
     }
 
-    push_new(L);
+    is_valid = false;
     return 1;
 }

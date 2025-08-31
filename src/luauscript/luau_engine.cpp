@@ -575,7 +575,17 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         Rect2iBridge::register_variant(L);
         Vector3Bridge::register_variant(L);
         Vector3iBridge::register_variant(L);
+        Transform2DBridge::register_variant(L);
+        Vector4Bridge::register_variant(L);
+        Vector4iBridge::register_variant(L);
+        PlaneBridge::register_variant(L); 
+        QuaternionBridge::register_variant(L);
+        AABBBridge::register_variant(L);
+        BasisBridge::register_variant(L);
+        Transform3DBridge::register_variant(L);
+        ProjectionBridge::register_variant(L);
         ColorBridge::register_variant(L);
+        StringNameBridge::register_variant(L);
     }
     {
         StringBridge::register_variant_class(L);
@@ -585,7 +595,17 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         Rect2iBridge::register_variant_class(L);
         Vector3Bridge::register_variant_class(L);
         Vector3iBridge::register_variant_class(L);
+        Transform2DBridge::register_variant_class(L);
+        Vector4Bridge::register_variant_class(L);
+        Vector4iBridge::register_variant_class(L);
+        PlaneBridge::register_variant_class(L);
+        QuaternionBridge::register_variant_class(L);
+        AABBBridge::register_variant_class(L);
+        BasisBridge::register_variant_class(L);
+        Transform3DBridge::register_variant_class(L);
+        ProjectionBridge::register_variant_class(L);
         ColorBridge::register_variant_class(L);
+        StringNameBridge::register_variant_class(L);
     }
 }
 

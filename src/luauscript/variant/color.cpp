@@ -17,9 +17,19 @@ const luaL_Reg ColorBridge::static_library[] = {
 };
 
 int ColorBridge::hex(lua_State* L) {
-    uint32_t hex_val = (uint32_t)luaL_checknumber(L, 1);
-    Color result = Color::hex(hex_val);
+    Variant v = LuauBridge::get_variant(L, 1);
+
+    if (v.get_type() != Variant::FLOAT) {
+        luaL_error(L, vformat("Cannot pass a value of type %s as %s.", 
+            Variant::get_type_name(v.get_type()), 
+            "int"
+        ).utf8().get_data());
+        return 1;
+    }
+    
+    Color result = Color::hex(v.operator int32_t());
     push_from(L, result);
+
     return 1;
 }
 
@@ -64,82 +74,82 @@ void ColorBridge::register_variant_class(lua_State* L) {
 
 template<>
 int VariantBridge<Color>::on_index(lua_State* L, const Color& object, const char* key) {
-    WARN_PRINT("on_index Color: " + String(key));
-    lua_pushnil(L);
     return 1;
 }
 
 template<>
 int VariantBridge<Color>::on_newindex(lua_State* L, Color& object, const char* key) {
-    WARN_PRINT("on_newindex Color: " + String(key));
     return 1;
 }
 
 template<>
-int VariantBridge<Color>::on_call(lua_State* L) {
+int VariantBridge<Color>::on_call(lua_State* L, bool& is_valid) {
     const int argc = lua_gettop(L)-1;
 
-    if (argc == 1) {
-        Variant a1 = LuauBridge::get_variant(L, 2);
-        if (a1.get_type() == Variant::COLOR) {
-            push_from(L, Color(a1));
+    if (argc == 0) {
+        push_new(L);
+        return 1;
+
+    } else if (argc == 1) {
+        Variant v1 = LuauBridge::get_variant(L, 2);
+
+        if (v1.get_type() == Variant::COLOR) {
+            push_from(L, Color(v1));
             return 1;
 
-        } else if (a1.get_type() == Variant::STRING) {
-            push_from(L, Color(String(a1)));
+        } else if (v1.get_type() == Variant::STRING) {
+            push_from(L, Color(String(v1)));
             return 1;
 
-        } else {
-            luaL_error(L, "Invalid argument type for Color constructor");
-            return 1;
-        }
+        } 
 
     } else if (argc == 2) {
-        Variant a1 = LuauBridge::get_variant(L, 2);
-        Variant a2 = LuauBridge::get_variant(L, 3);
-        if (a1.get_type() == Variant::COLOR && a2.get_type() == Variant::FLOAT) {
-            push_from(L, Color(a1.operator Color(), a2.operator float()));
+        Variant v1 = LuauBridge::get_variant(L, 2);
+        Variant v2 = LuauBridge::get_variant(L, 3);
+        if (v1.get_type() == Variant::COLOR 
+            && v2.get_type() == Variant::FLOAT
+        ) {
+            push_from(L, Color(v1.operator Color(), v2.operator float()));
             return 1;
             
-        } else if (a1.get_type() == Variant::STRING && a2.get_type() == Variant::FLOAT) {
-            push_from(L, Color(String(a1), a2.operator float()));
+        } else if (v1.get_type() == Variant::STRING 
+            && v2.get_type() == Variant::FLOAT
+        ) {
+            push_from(L, Color(String(v1), v2.operator float()));
             return 1;
             
-        } else {
-            luaL_error(L, "Invalid argument type for Color constructor");
-            return 1;
-        }
+        } 
 
     } else if (argc == 3) {
-        Variant a1 = LuauBridge::get_variant(L, 2);
-        Variant a2 = LuauBridge::get_variant(L, 3);
-        Variant a3 = LuauBridge::get_variant(L, 4);
+        Variant v1 = LuauBridge::get_variant(L, 2);
+        Variant v2 = LuauBridge::get_variant(L, 3);
+        Variant v3 = LuauBridge::get_variant(L, 4);
 
-        if (a1.get_type() == Variant::FLOAT && a2.get_type() == Variant::FLOAT && a3.get_type() == Variant::FLOAT) {
-            push_from(L, Color(a1.operator float(), a2.operator float(), a3.operator float()));
+        if (v1.get_type() == Variant::FLOAT 
+            && v2.get_type() == Variant::FLOAT 
+            && v3.get_type() == Variant::FLOAT
+        ) {
+            push_from(L, Color(v1.operator float(), v2.operator float(), v3.operator float()));
             return 1;
             
-        } else {
-            luaL_error(L, "Invalid argument type for Color constructor");
-            return 1;
-        }
+        } 
 
     } else if (argc == 4) {
-        Variant a1 = LuauBridge::get_variant(L, 2);
-        Variant a2 = LuauBridge::get_variant(L, 3);
-        Variant a3 = LuauBridge::get_variant(L, 4);
-        Variant a4 = LuauBridge::get_variant(L, 5);
+        Variant v1 = LuauBridge::get_variant(L, 2);
+        Variant v2 = LuauBridge::get_variant(L, 3);
+        Variant v3 = LuauBridge::get_variant(L, 4);
+        Variant v4 = LuauBridge::get_variant(L, 5);
 
-        if (a1.get_type() == Variant::FLOAT && a2.get_type() == Variant::FLOAT && a3.get_type() == Variant::FLOAT && a4.get_type() == Variant::FLOAT) {
-            push_from(L, Color(a1.operator float(), a2.operator float(), a3.operator float(), a4.operator float()));
+        if (v1.get_type() == Variant::FLOAT 
+            && v2.get_type() == Variant::FLOAT 
+            && v3.get_type() == Variant::FLOAT 
+            && v4.get_type() == Variant::FLOAT
+        ) {
+            push_from(L, Color(v1.operator float(), v2.operator float(), v3.operator float(), v4.operator float()));
             return 1;
-            
-        } else {
-            luaL_error(L, "Invalid argument type for Color constructor");
-            return 1;
-        }
+        }        
     }
 
-    push_new(L);
+    is_valid = false;
     return 1;
 }

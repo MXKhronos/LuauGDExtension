@@ -1,19 +1,20 @@
 
-#include "rect2.h"
+#include "vector4i.h"
 
-#include <godot_cpp/variant/rect2.hpp>
+#include <godot_cpp/variant/vector4i.hpp>
 
 using namespace godot;
 using namespace luau;
 
-template<>
-const char* VariantBridge<Rect2>::variant_name("Rect2");
 
-const luaL_Reg Rect2Bridge::static_library[] = {
+template<>
+const char* VariantBridge<Vector4i>::variant_name("Vector4i");
+
+const luaL_Reg Vector4iBridge::static_library[] = {
 	{NULL, NULL}
 };
 
-void Rect2Bridge::register_variant_class(lua_State* L) {
+void Vector4iBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
     luaL_getmetatable(L, variant_name);
@@ -23,19 +24,18 @@ void Rect2Bridge::register_variant_class(lua_State* L) {
 }
 
 template<>
-int VariantBridge<Rect2>::on_index(lua_State* L, const Rect2& object, const char* key) {
+int VariantBridge<Vector4i>::on_index(lua_State* L, const Vector4i& object, const char* key) {
     return 1;
 }
 
 template<>
-int VariantBridge<Rect2>::on_newindex(lua_State* L, Rect2& object, const char* key) {
+int VariantBridge<Vector4i>::on_newindex(lua_State* L, Vector4i& object, const char* key) {
     return 1;
 }
 
 template<>
-int VariantBridge<Rect2>::on_call(lua_State* L, bool& is_valid) {
+int VariantBridge<Vector4i>::on_call(lua_State* L, bool& is_valid) {
     const int argc = lua_gettop(L)-1;
-
 
     if (argc == 0) {
         push_new(L);
@@ -45,24 +45,15 @@ int VariantBridge<Rect2>::on_call(lua_State* L, bool& is_valid) {
         Variant v = LuauBridge::get_variant(L, 2);
 
         switch(v.get_type()) {
-            case Variant::RECT2: {
-                push_from(L, v.operator Rect2());
+            case Variant::VECTOR4: {
+                push_from(L, v.operator Vector4());
                 return 1;
             }
-            case Variant::RECT2I: {
-                push_from(L, v.operator Rect2());
+            case Variant::VECTOR4I: {
+                push_from(L, v.operator Vector4i());
                 return 1;
             }
         };
-
-    } else if (argc == 2) {
-        Variant v1 = LuauBridge::get_variant(L, 2);
-        Variant v2 = LuauBridge::get_variant(L, 3);
-
-        if (v1.get_type() == Variant::VECTOR2 && v2.get_type() == Variant::VECTOR2) {
-            push_from(L, Rect2(v1.operator Vector2(), v2.operator Vector2()));
-            return 1;
-        }
 
     } else if (argc == 4) {
         Variant v1 = LuauBridge::get_variant(L, 2);
@@ -75,7 +66,7 @@ int VariantBridge<Rect2>::on_call(lua_State* L, bool& is_valid) {
             && v3.get_type() == Variant::FLOAT 
             && v4.get_type() == Variant::FLOAT
         ) {
-            push_from(L, Rect2(v1.operator float(), v2.operator float(), v3.operator float(), v4.operator float()));
+            push_from(L, Vector4i(v1.operator int32_t(), v2.operator int32_t(), v3.operator int32_t(), v4.operator int32_t()));
             return 1;
         }
 

@@ -41,10 +41,14 @@ int VariantBridge<Vector2>::on_newindex(lua_State* L, Vector2& object, const cha
 }
 
 template<>
-int VariantBridge<Vector2>::on_call(lua_State* L) {
+int VariantBridge<Vector2>::on_call(lua_State* L, bool& is_valid) {
     const int argc = lua_gettop(L)-1;
 
-    if (argc == 1) {
+    if (argc == 0) {
+        push_new(L);
+        return 1;
+
+    } else if (argc == 1) {
         Variant v = LuauBridge::get_variant(L, 2);
 
         switch(v.get_type()) {
@@ -73,6 +77,6 @@ int VariantBridge<Vector2>::on_call(lua_State* L) {
 
     }
 
-    push_new(L);
+    is_valid = false;
     return 1;
 }

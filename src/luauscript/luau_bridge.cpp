@@ -176,13 +176,7 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             
         case LUA_TNUMBER: {
             double num = lua_tonumber(L, p_index);
-            // Check if it's effectively an integer by comparing with truncated value
-            int64_t int_val = (int64_t)num;
-            if (num == (double)int_val) {
-                return Variant(int_val);
-            } else {
-                return Variant(num);
-            }
+            return Variant(num); //Default to VARIANT::FLOAT
         }
             
         case LUA_TSTRING:
@@ -266,8 +260,11 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             }
 
             // Now we know it's a valid userdata of our type
+
             if (strcmp(type_name, "Vector2") == 0) {
                 return Vector2Bridge::get_object(L, p_index);
+            } else if (strcmp(type_name, "Vector2i") == 0) {
+                return Vector2iBridge::get_object(L, p_index);
             } else if (strcmp(type_name, "Color") == 0) {
                 return ColorBridge::get_object(L, p_index);
             }
@@ -335,4 +332,14 @@ template void VariantBridge<Rect2>::register_variant(lua_State *);
 template void VariantBridge<Rect2i>::register_variant(lua_State *);
 template void VariantBridge<Vector3>::register_variant(lua_State *);
 template void VariantBridge<Vector3i>::register_variant(lua_State *);
+template void VariantBridge<Transform2D>::register_variant(lua_State *);
+template void VariantBridge<Vector4>::register_variant(lua_State *);
+template void VariantBridge<Vector4i>::register_variant(lua_State *);
+template void VariantBridge<Plane>::register_variant(lua_State *);
+template void VariantBridge<Quaternion>::register_variant(lua_State *);
+template void VariantBridge<AABB>::register_variant(lua_State *);
+template void VariantBridge<Basis>::register_variant(lua_State *);
+template void VariantBridge<Transform3D>::register_variant(lua_State *);
+template void VariantBridge<Projection>::register_variant(lua_State *);
+template void VariantBridge<StringName>::register_variant(lua_State *);
 template void VariantBridge<Color>::register_variant(lua_State *);

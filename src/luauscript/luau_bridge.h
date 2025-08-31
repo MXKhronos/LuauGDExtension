@@ -4,6 +4,7 @@
 #include <lua.h>
 #include <lualib.h>
 #include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/variant/array.hpp>
 
 namespace godot {
 namespace luau {
@@ -69,7 +70,7 @@ public:
 
     static int on_index(lua_State* L, const GDV& object, const char* key);
     static int on_newindex(lua_State* L, GDV& object, const char* key);
-    static int on_call(lua_State* L);
+    static int on_call(lua_State* L, bool& is_valid);
 
     static int on_gc(lua_State *L) {
 		get_object(L, 1).~GDV();
@@ -147,6 +148,33 @@ public:
 
         return 1;
 	}
+
+    static int on_call(lua_State *L) {
+        bool is_valid = true;
+
+        on_call(L, is_valid);
+
+        if (!is_valid) {
+            Variant s = GDV();
+            String v_name = Variant::get_type_name(s.get_type());
+            WARN_PRINT("Invalid constructor for: " + v_name);
+
+            //throw error invalid constructor
+            const int argc = lua_gettop(L)-1;
+
+            Array arg_types;
+
+            for (int i = 0; i < argc; i++) {
+                Variant v = LuauBridge::get_variant(L, i + 2);
+                arg_types.push_back(Variant::get_type_name(v.get_type()));
+            }
+
+            String signature = String("{0}({1})").format(Array::make(v_name, String(",").join(arg_types)));
+            luaL_error(L, vformat("No constructor of %s matches the signature %s", v_name, signature).utf8().get_data());
+        }
+
+        return 1;
+    }
 
     static int on_eq(lua_State *L) {
         lua_pushboolean(L, get_object(L, 1) == get_object(L, 2));
