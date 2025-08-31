@@ -5,8 +5,11 @@
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/core/math.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
+#include <godot_cpp/variant/variant.hpp>
 #include "nobind.h"
+
 #include "luau_bridge.h"
+#include "variant/builtin_types.h"
 
 using namespace godot;
 using namespace luau;
@@ -563,14 +566,25 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         lua_newtable(L);
         lua_setglobal(L, "_G");
     }
-    {
+    //MARK: Register Variant types
+    {   
+        StringBridge::register_variant(L);
         Vector2Bridge::register_variant(L);
+        Vector2iBridge::register_variant(L);
         Rect2Bridge::register_variant(L);
+        Rect2iBridge::register_variant(L);
+        Vector3Bridge::register_variant(L);
+        Vector3iBridge::register_variant(L);
         ColorBridge::register_variant(L);
     }
     {
+        StringBridge::register_variant_class(L);
         Vector2Bridge::register_variant_class(L);
+        Vector2iBridge::register_variant_class(L);
         Rect2Bridge::register_variant_class(L);
+        Rect2iBridge::register_variant_class(L);
+        Vector3Bridge::register_variant_class(L);
+        Vector3iBridge::register_variant_class(L);
         ColorBridge::register_variant_class(L);
     }
 }

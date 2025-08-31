@@ -1,9 +1,9 @@
 #ifndef LUAU_BRIDGE_H
 #define LUAU_BRIDGE_H
 
-#include <godot_cpp/variant/variant.hpp>
 #include <lua.h>
 #include <lualib.h>
+#include <godot_cpp/variant/variant.hpp>
 
 namespace godot {
 namespace luau {
@@ -152,45 +152,6 @@ public:
         lua_pushboolean(L, get_object(L, 1) == get_object(L, 2));
         return 1;
     }
-};
-
-
-
-//MARK: Vector2
-class Vector2Bridge: public VariantBridge<Vector2> {
-    friend class VariantBridge <Vector2>;
-
-    public:
-        static void register_variant_class(lua_State* L);
-    private:
-        static const luaL_Reg static_library[];
-        static int from_angle(lua_State* L);
-};
-
-
-
-//MARK: Rect2
-class Rect2Bridge : public VariantBridge<Rect2> {
-    friend class VariantBridge <Rect2>;
-
-    public:
-        static void register_variant_class(lua_State* L);
-    private:
-        static const luaL_Reg static_library[];
-};
-
-
-
-//MARK: Color
-class ColorBridge : public VariantBridge<Color> {
-    friend class VariantBridge <Color>;
-
-    public:
-        static void register_variant_class(lua_State* L);
-    private:
-        static const luaL_Reg static_library[];
-        static int hex(lua_State* L);
-        static int lerp(lua_State* L);
 };
 
 }; // namespace luau

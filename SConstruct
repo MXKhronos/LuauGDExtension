@@ -40,6 +40,7 @@ env.Append(CPPPATH=["src/"])
 sources = env.Glob("src/*.cpp")
 sources += env.Glob("src/editor/*.cpp")
 sources += env.Glob("src/luauscript/*.cpp")
+sources += env.Glob("src/luauscript/variant/*.cpp")
 
 # Get the godot-cpp library path
 godot_cpp_lib = "extern/godot-cpp/bin/libgodot-cpp"
