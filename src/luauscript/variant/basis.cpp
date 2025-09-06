@@ -146,10 +146,22 @@ int VariantBridge<Basis>::on_call(lua_State* L, bool& is_valid) {
         Variant v2 = LuauBridge::get_variant(L, 3);
 
         if (v1.get_type() == Variant::VECTOR3 && v2.get_type() == Variant::FLOAT) {
-            push_from(L, Vector2i(v1.operator int32_t(), v2.operator int32_t()));
+            push_from(L, Basis(v1.operator Vector3(), v2.operator float()));
             return 1;
         }
 
+    } else if (argc == 3) {
+        Variant v1 = LuauBridge::get_variant(L, 2);
+        Variant v2 = LuauBridge::get_variant(L, 3);
+        Variant v3 = LuauBridge::get_variant(L, 4);
+
+        if (v1.get_type() == Variant::VECTOR3 
+            && v2.get_type() == Variant::VECTOR3 
+            && v3.get_type() == Variant::VECTOR3
+        ) {
+            push_from(L, Basis(v1.operator Vector3(), v2.operator Vector3(), v3.operator Vector3()));
+            return 1;
+        }
     }
 
     is_valid = false;
