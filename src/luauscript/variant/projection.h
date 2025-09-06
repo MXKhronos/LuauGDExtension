@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class ProjectionBridge: public VariantBridge<Projection> {
     friend class VariantBridge <Projection>;
@@ -28,7 +27,6 @@ class ProjectionBridge: public VariantBridge<Projection> {
         static int get_fovy(lua_State* L);
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_PROJECTION_H

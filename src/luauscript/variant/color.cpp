@@ -5,7 +5,6 @@
 #include <godot_cpp/variant/color_names.inc.hpp>
 
 using namespace godot;
-using namespace luau;
 
 template<>
 const char* VariantBridge<Color>::variant_name("Color");

@@ -1,5 +1,5 @@
-#ifndef LUAU_VARIANT_RECT2I_H
-#define LUAU_VARIANT_RECT2I_H
+#ifndef LUAU_VARIANT_NODE_PATH_H
+#define LUAU_VARIANT_NODE_PATH_H
 
 #include <lua.h>
 #include <lualib.h>
@@ -7,8 +7,8 @@
 
 namespace godot {
 
-class Rect2iBridge: public VariantBridge<Rect2i> {
-    friend class VariantBridge <Rect2i>;
+class NodePathBridge: public VariantBridge<NodePath> {
+    friend class VariantBridge <NodePath>;
 
     public:
         static void register_variant_class(lua_State* L);
@@ -18,4 +18,4 @@ class Rect2iBridge: public VariantBridge<Rect2i> {
 
 };
 
-#endif // LUAU_VARIANT_RECT2I_H
+#endif // LUAU_VARIANT_NODE_PATH_H

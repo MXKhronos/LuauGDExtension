@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class Vector3iBridge: public VariantBridge<Vector3i> {
     friend class VariantBridge <Vector3i>;
@@ -17,7 +16,6 @@ class Vector3iBridge: public VariantBridge<Vector3i> {
         static const luaL_Reg static_library[];
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_VECTOR3_H

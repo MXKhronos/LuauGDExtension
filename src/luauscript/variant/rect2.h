@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class Rect2Bridge : public VariantBridge<Rect2> {
     friend class VariantBridge <Rect2>;
@@ -17,7 +16,6 @@ class Rect2Bridge : public VariantBridge<Rect2> {
         static const luaL_Reg static_library[];
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_RECT2_H

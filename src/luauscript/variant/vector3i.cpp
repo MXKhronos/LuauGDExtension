@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/vector3.hpp>
 
 using namespace godot;
-using namespace luau;
 
 template<>
 const char* VariantBridge<Vector3i>::variant_name("Vector3i");

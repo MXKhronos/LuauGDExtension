@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/transform2d.hpp>
 
 using namespace godot;
-using namespace luau;
 
 
 template<>

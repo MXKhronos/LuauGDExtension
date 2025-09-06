@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/quaternion.hpp>
 
 using namespace godot;
-using namespace luau;
 
 template<>
 const char* VariantBridge<Quaternion>::variant_name("Quaternion");

@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class QuaternionBridge: public VariantBridge<Quaternion> {
     friend class VariantBridge <Quaternion>;
@@ -18,7 +17,6 @@ class QuaternionBridge: public VariantBridge<Quaternion> {
         static int from_euler(lua_State* L);
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_QUATERNION_H

@@ -603,7 +603,43 @@ void LuauSyntaxHighlighter::_update_cache() {
     built_in_types.insert("buffer");
     
     // Luau supported Variants
+    built_in_types.insert("String");
+    built_in_types.insert("Vector2");
+    built_in_types.insert("Vector2i");
+    built_in_types.insert("Rect2");
+    built_in_types.insert("Rect2i");
+    built_in_types.insert("Vector3");
+    built_in_types.insert("Vector3i");
+    built_in_types.insert("Transform2D");
+    built_in_types.insert("Vector4");
+    built_in_types.insert("Vector4i");
+    built_in_types.insert("Plane");
+    built_in_types.insert("Quaternion");
+    built_in_types.insert("AABB");
+    built_in_types.insert("Basis");
+    built_in_types.insert("Transform3D");
+    built_in_types.insert("Projection");
+    
     built_in_types.insert("Color");
+    built_in_types.insert("StringName");
+    built_in_types.insert("NodePath");
+    built_in_types.insert("RID");
+    built_in_types.insert("Callable");
+    built_in_types.insert("Signal");
+    built_in_types.insert("Dictionary");
+    built_in_types.insert("Array");
+
+    built_in_types.insert("PackedByteArray");
+    built_in_types.insert("PackedInt32Array");
+    built_in_types.insert("PackedInt64Array");
+    built_in_types.insert("PackedFloat32Array");
+    built_in_types.insert("PackedFloat64Array");
+    built_in_types.insert("PackedStringArray");
+    built_in_types.insert("PackedVector2Array");
+    built_in_types.insert("PackedVector3Array");
+    built_in_types.insert("PackedVector4Array");
+    built_in_types.insert("PackedColorArray");
+    
 
     // Add all Godot registered classes
     PackedStringArray class_list = nobind::ClassDB::get_singleton()->get_class_list();

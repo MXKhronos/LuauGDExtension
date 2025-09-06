@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/vector4i.hpp>
 
 using namespace godot;
-using namespace luau;
 
 
 template<>

@@ -1,11 +1,11 @@
 #ifndef LUAU_CACHE_H
 #define LUAU_CACHE_H
 
+#include "luau_script.h"
+
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string.hpp>
-
-#include "luau_script.h"
 
 namespace godot {
 	// Based on GDScriptCache

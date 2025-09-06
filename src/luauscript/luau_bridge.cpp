@@ -1,11 +1,9 @@
 #include "luau_bridge.h"
 
-#include <cstring>
 #include <godot_cpp/variant/variant.hpp>
 #include "variant/builtin_types.h"
 
 using namespace godot;
-using namespace luau;
 
 void *LuauBridge::luaL_checkudata(lua_State *L, int p_index, const char *p_tname) {
     void *p = lua_touserdata(L, p_index);
@@ -211,13 +209,14 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             }
 
             WARN_PRINT("LUA_TTABLE Type is: " + String(type_name));
-            if (strcmp(type_name, "Vector2") == 0) {
+            String type_str(type_name);
+            if (type_str == "Vector2") {
                 return Vector2();
-            } else if (strcmp(type_name, "Color") == 0) {
+            } else if (type_str == "Color") {
                 return Color();
             }
 
-            WARN_PRINT("Unhandled table type: " + String(type_name));
+            WARN_PRINT("Unhandled table type: " + String(type_name) + " -> defaulted as dictionary");
             return Variant(get_dictionary(L, p_index));
         }
         case LUA_TUSERDATA: {
@@ -261,12 +260,73 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
 
             // Now we know it's a valid userdata of our type
 
-            if (strcmp(type_name, "Vector2") == 0) {
+            String type_str(type_name);
+            if (type_str == "Vector2") {
                 return Vector2Bridge::get_object(L, p_index);
-            } else if (strcmp(type_name, "Vector2i") == 0) {
+            } else if (type_str == "Vector2i") {
                 return Vector2iBridge::get_object(L, p_index);
-            } else if (strcmp(type_name, "Color") == 0) {
+            } else if (type_str == "Rect2") {
+                return Rect2Bridge::get_object(L, p_index);
+            } else if (type_str == "Rect2i") {
+                return Rect2iBridge::get_object(L, p_index);
+            } else if (type_str == "Vector3") {
+                return Vector3Bridge::get_object(L, p_index);
+            } else if (type_str == "Vector3i") {
+                return Vector3iBridge::get_object(L, p_index);
+            } else if (type_str == "Transform2D") {
+                return Transform2DBridge::get_object(L, p_index);
+            } else if (type_str == "Vector4") {
+                return Vector4Bridge::get_object(L, p_index);
+            } else if (type_str == "Vector4i") {
+                return Vector4iBridge::get_object(L, p_index);
+            } else if (type_str == "Plane") {
+                return PlaneBridge::get_object(L, p_index);
+            } else if (type_str == "Quaternion") {
+                return QuaternionBridge::get_object(L, p_index);
+            } else if (type_str == "AABB") {
+                return AABBBridge::get_object(L, p_index);
+            } else if (type_str == "Basis") {
+                return BasisBridge::get_object(L, p_index);
+            } else if (type_str == "Transform3D") {
+                return Transform3DBridge::get_object(L, p_index);
+            } else if (type_str == "Projection") {
+                return ProjectionBridge::get_object(L, p_index);
+
+            } else if (type_str == "Color") {
                 return ColorBridge::get_object(L, p_index);
+            } else if (type_str == "StringName") {
+                return StringNameBridge::get_object(L, p_index);
+            } else if (type_str == "RID") {
+                return RIDBridge::get_object(L, p_index);
+            } else if (type_str == "Callable") {
+                return CallableBridge::get_object(L, p_index);
+            } else if (type_str == "Signal") {
+                return SignalBridge::get_object(L, p_index);
+            } else if (type_str == "Dictionary") {
+                return DictionaryBridge::get_object(L, p_index);
+            } else if (type_str == "Array") {
+                return ArrayBridge::get_object(L, p_index);
+
+            } else if (type_str == "PackedByteArray") {
+                return PackedByteArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedInt32Array") {
+                return PackedInt32ArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedInt64Array") {
+                return PackedInt64ArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedFloat32Array") {
+                return PackedFloat32ArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedFloat64Array") {
+                return PackedFloat64ArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedStringArray") {
+                return PackedStringArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedVector2Array") {
+                return PackedVector2ArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedVector3Array") {
+                return PackedVector3ArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedVector4Array") {
+                return PackedVector4ArrayBridge::get_object(L, p_index);
+            } else if (type_str == "PackedColorArray") {
+                return PackedColorArrayBridge::get_object(L, p_index);
             }
 
             WARN_PRINT("Unhandled userdata type: " + String(type_name));
@@ -326,6 +386,7 @@ void VariantBridge<GDV, __eq>::register_variant (lua_State *L) {
 
 //MARK: register_variants
 template void VariantBridge<String>::register_variant(lua_State *);
+
 template void VariantBridge<Vector2>::register_variant(lua_State *);
 template void VariantBridge<Vector2i>::register_variant(lua_State *);
 template void VariantBridge<Rect2>::register_variant(lua_State *);
@@ -341,5 +402,23 @@ template void VariantBridge<AABB>::register_variant(lua_State *);
 template void VariantBridge<Basis>::register_variant(lua_State *);
 template void VariantBridge<Transform3D>::register_variant(lua_State *);
 template void VariantBridge<Projection>::register_variant(lua_State *);
-template void VariantBridge<StringName>::register_variant(lua_State *);
+
 template void VariantBridge<Color>::register_variant(lua_State *);
+template void VariantBridge<StringName>::register_variant(lua_State *);
+template void VariantBridge<NodePath>::register_variant(lua_State *);
+template void VariantBridge<RID>::register_variant(lua_State *);
+template void VariantBridge<Callable>::register_variant(lua_State *);
+template void VariantBridge<Signal>::register_variant(lua_State *);
+template void VariantBridge<Dictionary>::register_variant(lua_State *);
+template void VariantBridge<Array>::register_variant(lua_State *);
+
+template void VariantBridge<PackedByteArray>::register_variant(lua_State *);
+template void VariantBridge<PackedInt32Array>::register_variant(lua_State *);
+template void VariantBridge<PackedInt64Array>::register_variant(lua_State *);
+template void VariantBridge<PackedFloat32Array>::register_variant(lua_State *);
+template void VariantBridge<PackedFloat64Array>::register_variant(lua_State *);
+template void VariantBridge<PackedStringArray>::register_variant(lua_State *);
+template void VariantBridge<PackedVector2Array>::register_variant(lua_State *);
+template void VariantBridge<PackedVector3Array>::register_variant(lua_State *);
+template void VariantBridge<PackedVector4Array>::register_variant(lua_State *);
+template void VariantBridge<PackedColorArray>::register_variant(lua_State *);

@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/rect2.hpp>
 
 using namespace godot;
-using namespace luau;
 
 template<>
 const char* VariantBridge<Rect2>::variant_name("Rect2");

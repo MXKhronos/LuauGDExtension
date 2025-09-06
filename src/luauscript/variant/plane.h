@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class PlaneBridge: public VariantBridge<Plane> {
     friend class VariantBridge <Plane>;
@@ -17,7 +16,6 @@ class PlaneBridge: public VariantBridge<Plane> {
         static const luaL_Reg static_library[];
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_PLANE_H

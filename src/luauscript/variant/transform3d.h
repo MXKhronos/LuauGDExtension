@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class Transform3DBridge: public VariantBridge<Transform3D> {
     friend class VariantBridge <Transform3D>;
@@ -17,7 +16,6 @@ class Transform3DBridge: public VariantBridge<Transform3D> {
         static const luaL_Reg static_library[];
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_TRANSFORM3D_H

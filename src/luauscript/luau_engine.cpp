@@ -12,7 +12,6 @@
 #include "variant/builtin_types.h"
 
 using namespace godot;
-using namespace luau;
 
 LuauEngine *LuauEngine::singleton = nullptr;
 
@@ -569,6 +568,7 @@ void LuauEngine::register_godot_globals(lua_State *L) {
     //MARK: Register Variant types
     {   
         StringBridge::register_variant(L);
+
         Vector2Bridge::register_variant(L);
         Vector2iBridge::register_variant(L);
         Rect2Bridge::register_variant(L);
@@ -584,11 +584,30 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         BasisBridge::register_variant(L);
         Transform3DBridge::register_variant(L);
         ProjectionBridge::register_variant(L);
+
         ColorBridge::register_variant(L);
         StringNameBridge::register_variant(L);
+        NodePathBridge::register_variant(L);
+        RIDBridge::register_variant(L);
+        CallableBridge::register_variant(L);
+        SignalBridge::register_variant(L);
+        DictionaryBridge::register_variant(L);
+        ArrayBridge::register_variant(L);
+
+        PackedByteArrayBridge::register_variant(L);
+        PackedInt32ArrayBridge::register_variant(L);
+        PackedInt64ArrayBridge::register_variant(L);
+        PackedFloat32ArrayBridge::register_variant(L);
+        PackedFloat64ArrayBridge::register_variant(L);
+        PackedStringArrayBridge::register_variant(L);
+        PackedVector2ArrayBridge::register_variant(L);
+        PackedVector3ArrayBridge::register_variant(L);
+        PackedVector4ArrayBridge::register_variant(L);
+        PackedColorArrayBridge::register_variant(L);
     }
     {
         StringBridge::register_variant_class(L);
+
         Vector2Bridge::register_variant_class(L);
         Vector2iBridge::register_variant_class(L);
         Rect2Bridge::register_variant_class(L);
@@ -604,8 +623,26 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         BasisBridge::register_variant_class(L);
         Transform3DBridge::register_variant_class(L);
         ProjectionBridge::register_variant_class(L);
+
         ColorBridge::register_variant_class(L);
         StringNameBridge::register_variant_class(L);
+        NodePathBridge::register_variant_class(L);
+        RIDBridge::register_variant_class(L);
+        CallableBridge::register_variant_class(L);
+        SignalBridge::register_variant_class(L);
+        DictionaryBridge::register_variant_class(L);
+        ArrayBridge::register_variant_class(L);
+
+        PackedByteArrayBridge::register_variant_class(L);
+        PackedInt32ArrayBridge::register_variant_class(L);
+        PackedInt64ArrayBridge::register_variant_class(L);
+        PackedFloat32ArrayBridge::register_variant_class(L);
+        PackedFloat64ArrayBridge::register_variant_class(L);
+        PackedStringArrayBridge::register_variant_class(L);
+        PackedVector2ArrayBridge::register_variant_class(L);
+        PackedVector3ArrayBridge::register_variant_class(L);
+        PackedVector4ArrayBridge::register_variant_class(L);
+        PackedColorArrayBridge::register_variant_class(L);
     }
 }
 

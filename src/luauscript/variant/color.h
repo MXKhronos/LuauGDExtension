@@ -7,7 +7,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class ColorBridge : public VariantBridge<Color> {
     friend class VariantBridge <Color>;
@@ -20,7 +19,6 @@ class ColorBridge : public VariantBridge<Color> {
         static int lerp(lua_State* L);
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_COLOR_H

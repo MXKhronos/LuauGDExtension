@@ -6,10 +6,9 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class StringBridge : public VariantBridge<godot::String> {
-    friend class VariantBridge <godot::String>;
+friend class VariantBridge<godot::String>;
 
     public:
         static void register_variant_class(lua_State* L);
@@ -23,7 +22,6 @@ class StringBridge : public VariantBridge<godot::String> {
         static int num_uint64(lua_State* L);
 };
 
-};
-};
+}
 
 #endif // LUAU_VARIANT_TEMPLATE_H

@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/transform3d.hpp>
 
 using namespace godot;
-using namespace luau;
 
 template<>
 const char* VariantBridge<Transform3D>::variant_name("Transform3D");

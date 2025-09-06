@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class Vector2Bridge: public VariantBridge<Vector2> {
     friend class VariantBridge <Vector2>;
@@ -18,7 +17,6 @@ class Vector2Bridge: public VariantBridge<Vector2> {
         static int from_angle(lua_State* L);
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_VECTOR2_H

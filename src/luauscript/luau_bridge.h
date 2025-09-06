@@ -7,8 +7,6 @@
 #include <godot_cpp/variant/array.hpp>
 
 namespace godot {
-namespace luau {
-
 
 //MARK: LuauBridge
 class LuauBridge {
@@ -182,7 +180,6 @@ public:
     }
 };
 
-}; // namespace luau
 }; // namespace godot
 
 #endif // LUAU_BRIDGE_H

@@ -1,18 +1,18 @@
 
-#include "string_name.h"
+#include "node_path.h"
 
-#include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/variant/node_path.hpp>
 
 using namespace godot;
 
 template<>
-const char* VariantBridge<StringName>::variant_name("StringName");
+const char* VariantBridge<NodePath>::variant_name("NodePath");
 
-const luaL_Reg StringNameBridge::static_library[] = {
+const luaL_Reg NodePathBridge::static_library[] = {
 	{NULL, NULL}
 };
 
-void StringNameBridge::register_variant_class(lua_State* L) {
+void NodePathBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
     luaL_getmetatable(L, variant_name);
@@ -22,17 +22,17 @@ void StringNameBridge::register_variant_class(lua_State* L) {
 }
 
 template<>
-int VariantBridge<StringName>::on_index(lua_State* L, const StringName& object, const char* key) {
+int VariantBridge<NodePath>::on_index(lua_State* L, const NodePath& object, const char* key) {
     return 1;
 }
 
 template<>
-int VariantBridge<StringName>::on_newindex(lua_State* L, StringName& object, const char* key) {
+int VariantBridge<NodePath>::on_newindex(lua_State* L, NodePath& object, const char* key) {
     return 1;
 }
 
 template<>
-int VariantBridge<StringName>::on_call(lua_State* L, bool& is_valid) {
+int VariantBridge<NodePath>::on_call(lua_State* L, bool& is_valid) {
     const int argc = lua_gettop(L)-1;
 
     if (argc == 0) {
@@ -43,18 +43,18 @@ int VariantBridge<StringName>::on_call(lua_State* L, bool& is_valid) {
         Variant v = LuauBridge::get_variant(L, 2);
 
         switch(v.get_type()) {
-            case Variant::STRING_NAME: {
-                push_from(L, v.operator StringName());
+            case Variant::NODE_PATH: {
+                push_from(L, v.operator NodePath());
                 return 1;
             }
             case Variant::STRING: {
-                push_from(L, StringName(v));
+                push_from(L, v.operator NodePath());
                 return 1;
             }
         };
 
     } 
-
+    
     is_valid = false;
     return 1;
 }

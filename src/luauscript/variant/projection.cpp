@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/projection.hpp>
 
 using namespace godot;
-using namespace luau;
 
 
 template<>
@@ -35,7 +34,15 @@ void ProjectionBridge::register_variant_class(lua_State* L) {
 }
 
 int ProjectionBridge::create_depth_correction(lua_State* L) {
-    //MARK: TODO
+    Variant v = LuauBridge::get_variant(L, 1);
+    if (v.get_type() != Variant::PROJECTION) {
+        luaL_error(L, "create_depth_correction requires a Projection");
+        return 1;
+    }
+
+    Projection result = Projection::create_depth_correction(v.operator bool());
+    push_from(L, result);
+
     return 1;
 }
 

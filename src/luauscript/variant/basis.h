@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class BasisBridge: public VariantBridge<Basis> {
     friend class VariantBridge <Basis>;
@@ -20,7 +19,6 @@ class BasisBridge: public VariantBridge<Basis> {
         static int looking_at(lua_State* L);
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_BASIS_H

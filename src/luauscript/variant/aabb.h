@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class AABBBridge: public VariantBridge<AABB> {
     friend class VariantBridge <AABB>;
@@ -17,7 +16,6 @@ class AABBBridge: public VariantBridge<AABB> {
         static const luaL_Reg static_library[];
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_AABB_H

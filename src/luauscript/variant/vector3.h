@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class Vector3Bridge: public VariantBridge<Vector3> {
     friend class VariantBridge <Vector3>;
@@ -18,7 +17,6 @@ class Vector3Bridge: public VariantBridge<Vector3> {
         static int octahedron_decode(lua_State* L);
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_VECTOR3_H

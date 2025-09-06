@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/aabb.hpp>
 
 using namespace godot;
-using namespace luau;
 
 template<>
 const char* VariantBridge<AABB>::variant_name("AABB");

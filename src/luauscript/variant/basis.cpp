@@ -2,7 +2,6 @@
 #include "basis.h"
 
 using namespace godot;
-using namespace luau;
 
 template<>
 const char* VariantBridge<Basis>::variant_name("Basis");

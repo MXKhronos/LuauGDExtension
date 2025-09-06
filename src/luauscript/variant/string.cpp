@@ -4,7 +4,6 @@
 #include <godot_cpp/variant/string.hpp>
 
 using namespace godot;
-using namespace luau;
 
 template<>
 const char* VariantBridge<String>::variant_name("String");

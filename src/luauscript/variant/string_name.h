@@ -6,7 +6,6 @@
 #include "luauscript/luau_bridge.h"
 
 namespace godot {
-namespace luau {
 
 class StringNameBridge: public VariantBridge<StringName> {
     friend class VariantBridge <StringName>;
@@ -17,7 +16,6 @@ class StringNameBridge: public VariantBridge<StringName> {
         static const luaL_Reg static_library[];
 };
 
-};
 };
 
 #endif // LUAU_VARIANT_STRINGNAME_H
