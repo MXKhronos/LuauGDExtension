@@ -44,7 +44,7 @@ int VariantBridge<AABB>::on_call(lua_State* L, bool& is_valid) {
 
         switch(v.get_type()) {
             case Variant::AABB: {
-                push_from(L, v.operator godot::AABB());
+                push_from(L, v.operator ::AABB());
                 return 1;
             }
         };

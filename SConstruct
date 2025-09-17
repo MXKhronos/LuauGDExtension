@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 env = SConscript("extern/godot-cpp/SConstruct") # type: ignore
 
 # Add Luau include paths
@@ -38,21 +37,28 @@ luau_codegen = luau_env.StaticLibrary(
 # Add existing paths
 env.Append(CPPPATH=["src/"])
 sources = env.Glob("src/*.cpp")
-sources += env.Glob("src/editor/*.cpp")
 sources += env.Glob("src/luauscript/*.cpp")
 sources += env.Glob("src/luauscript/variant/*.cpp")
 
 # Get the godot-cpp library path
+print(f"target={env['target']}")
+print(f"arch={env['arch']}")
+print(f"LIBSUFFIX={env['LIBSUFFIX']}")
+print(f"suffix={env['suffix']}")
+print(f"SHLIBSUFFIX={env['SHLIBSUFFIX']}")
+
 godot_cpp_lib = "extern/godot-cpp/bin/libgodot-cpp"
 if env["platform"] == "windows":
     godot_cpp_lib += ".windows"
-godot_cpp_lib += "." + env["target"] + "." + env["arch"] + env["LIBSUFFIX"]
+godot_cpp_lib += "." + env["target"]
+godot_cpp_lib += "." + env["arch"] + env["LIBSUFFIX"]
 
 # Define output directory
 output_dir = "Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/"
 
 # Add linker flag to ignore PDB warning on Windows
 if env["platform"] == "windows":
+    env.Append(CXXFLAGS=["/EHsc"])
     env.Append(LINKFLAGS=["/ignore:4099"])
 
 # Link against Luau libraries

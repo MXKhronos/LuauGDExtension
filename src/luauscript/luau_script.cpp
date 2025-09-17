@@ -27,7 +27,6 @@
 #include <Luau/Ast.h>
 
 using namespace godot;
-using namespace luau;
 
 //MARK: GDProperty
 GDProperty::operator Dictionary() const {
@@ -812,7 +811,7 @@ GDExtensionPropertyInfo *LuauScriptInstance::get_property_list(uint32_t *r_count
     return list;
 }
 
-Variant::Type godot::LuauScriptInstance::get_property_type(const StringName &p_name, bool *r_is_valid) const {
+Variant::Type LuauScriptInstance::get_property_type(const StringName &p_name, bool *r_is_valid) const {
     if (!L || self_ref == LUA_NOREF) {
         if (r_is_valid) *r_is_valid = false;
         return Variant::NIL;

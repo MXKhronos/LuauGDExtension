@@ -1,10 +1,11 @@
+#include "luauscript_syntax_highlighter.h"
 
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/classes/text_edit.hpp>
 #include <godot_cpp/classes/editor_settings.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/templates/list.hpp>
-#include "luauscript_syntax_highlighter.h"
+
 #include "luau_constants.h"
 #include "nobind.h"
 

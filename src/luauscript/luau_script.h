@@ -1,6 +1,7 @@
 #ifndef LUAU_SCRIPT_H
 #define LUAU_SCRIPT_H
 
+#include <godot_cpp/godot.hpp>
 #include <godot_cpp/classes/script_extension.hpp>
 #include <godot_cpp/classes/script_language_extension.hpp>
 #include <godot_cpp/templates/hash_map.hpp>

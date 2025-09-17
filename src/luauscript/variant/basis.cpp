@@ -43,7 +43,7 @@ int BasisBridge::from_euler(lua_State* L) {
 
     Basis result = Basis::from_euler(
         v1.operator Vector3(),
-        static_cast<godot::EulerOrder>(v2.operator int32_t())
+        static_cast<::EulerOrder>(v2.operator int32_t())
     );
     push_from(L, result);
 

@@ -1,14 +1,17 @@
 #include "register_types.h"
-
 #include "luauscript/luauscript_register.h"
 
-using namespace godot;
+#include <godot_cpp/godot.hpp>
+#include <gdextension_interface.h>
+#include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/core/defs.hpp>
 
-void initialize_luaugdext_module(ModuleInitializationLevel p_level) {
+
+void initialize_luaugdext_module(godot::ModuleInitializationLevel p_level) {
     initialize_luau_module(p_level);
 }
 
-void uninitialize_luaugdext_module(ModuleInitializationLevel p_level) {
+void uninitialize_luaugdext_module(godot::ModuleInitializationLevel p_level) {
     uninitialize_luau_module(p_level);
 }
 

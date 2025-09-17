@@ -1,10 +1,10 @@
 #ifndef LUAU_BRIDGE_H
 #define LUAU_BRIDGE_H
 
-#include <lua.h>
-#include <lualib.h>
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <lua.h>
+#include <lualib.h>
 
 namespace godot {
 
@@ -13,12 +13,12 @@ class LuauBridge {
     public:
         static void *luaL_checkudata(lua_State *L, int p_index, const char *p_tname);
 
-        static void push_string(lua_State *L, const String &p_str);
+        static void push_string(lua_State *L, const godot::String &p_str);
         static void push_dictionary(lua_State *L, const Dictionary &p_dict);
         static void push_array(lua_State *L, const Array &p_array);
         static void push_variant(lua_State *L, const Variant &p_var);
 
-        static String get_string(lua_State *L, int p_index);
+        static godot::String get_string(lua_State *L, int p_index);
         static Dictionary get_dictionary(lua_State *L, int p_index);
         static Array get_array(lua_State *L, int p_index);
         static Variant get_variant(lua_State *L, int p_index);

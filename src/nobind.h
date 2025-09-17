@@ -1,6 +1,7 @@
 #ifndef GODOT_NOBIND_HPP
 #define GODOT_NOBIND_HPP
 
+#include <godot_cpp/godot.hpp>
 #include <godot_cpp/classes/class_db_singleton.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -14,11 +15,8 @@
 #include <godot_cpp/classes/time.hpp>
 #include <godot_cpp/classes/wrapped.hpp>
 #include <godot_cpp/classes/editor_plugin.hpp>
-#include <godot_cpp/godot.hpp>
 
-using namespace godot;
-
-namespace nobind {
+namespace godot::nobind {
 
 // This is a pretty big hack.
 // Avoids the creation of instance bindings by using a protected constructor and not using memnew.
@@ -43,18 +41,18 @@ public:
 template <typename T>
 WrappedNoBinding<T> WrappedNoBinding<T>::singleton = nullptr;
 
-typedef WrappedNoBinding<godot::Object> Object;
-typedef WrappedNoBinding<godot::RefCounted> RefCounted;
-typedef WrappedNoBinding<godot::Engine> Engine;
-typedef WrappedNoBinding<godot::ResourceLoader> ResourceLoader;
-typedef WrappedNoBinding<godot::ResourceSaver> ResourceSaver;
-typedef WrappedNoBinding<godot::OS> OS;
-typedef WrappedNoBinding<godot::Time> Time;
-typedef WrappedNoBinding<godot::EditorInterface> EditorInterface;
+typedef WrappedNoBinding<Object> Object;
+typedef WrappedNoBinding<RefCounted> RefCounted;
+typedef WrappedNoBinding<Engine> Engine;
+typedef WrappedNoBinding<ResourceLoader> ResourceLoader;
+typedef WrappedNoBinding<ResourceSaver> ResourceSaver;
+typedef WrappedNoBinding<OS> OS;
+typedef WrappedNoBinding<Time> Time;
+typedef WrappedNoBinding<EditorInterface> EditorInterface;
 typedef WrappedNoBinding<godot::ClassDBSingleton> ClassDB;
-typedef WrappedNoBinding<godot::EngineDebugger> EngineDebugger;
-typedef WrappedNoBinding<godot::EditorPlugin> EditorPlugin;
+typedef WrappedNoBinding<EngineDebugger> EngineDebugger;
+typedef WrappedNoBinding<EditorPlugin> EditorPlugin;
 
-} // namespace nobind
+} // namespace godot::nobind
 
 #endif

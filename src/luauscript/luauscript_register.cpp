@@ -20,7 +20,7 @@ LuauLanguage *script_language_luau = nullptr;
 Ref<ResourceFormatLoaderLuau> resource_loader_luau;
 Ref<ResourceFormatSaverLuau> resource_saver_luau;
 
-void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
+void initialize_luau_module(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
         WARN_PRINT("[LuauGDExtension] Initializing Extension");
         GDREGISTER_CLASS(LuauScript);
@@ -60,7 +60,7 @@ void godot::initialize_luau_module(ModuleInitializationLevel p_level) {
 #endif
 }
 
-void godot::uninitialize_luau_module(ModuleInitializationLevel p_level) {
+void uninitialize_luau_module(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
         nobind::Engine::get_singleton()->unregister_script_language(script_language_luau);
 

@@ -1,6 +1,7 @@
 #ifndef LUAUSCRIPT_RESOURCE_FORMAT_H
 #define LUAUSCRIPT_RESOURCE_FORMAT_H 
 
+#include <godot_cpp/godot.hpp>
 #include <godot_cpp/classes/resource_format_loader.hpp>
 #include <godot_cpp/classes/resource_format_saver.hpp>
 #include "luau_constants.h"
