@@ -5,4 +5,4 @@
 [submodule "extern/luau"]
 	path = extern/luau
 	url = https://github.com/luau-lang/luau
-	tag = 0.670
+	tag = 0.694

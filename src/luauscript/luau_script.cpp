@@ -1125,19 +1125,25 @@ GDExtensionPropertyInfo *PlaceHolderScriptInstance::get_property_list(uint32_t *
 	props.resize(size);
 
 	if (script->_is_placeholder_fallback_enabled()) {
-		for (int i = 0; i < size; i++) {
+		int i = 0;
+		for(GDProperty prop : properties) {
 			GDExtensionPropertyInfo dst;
-			copy_prop(properties[i], dst);
+			copy_prop(prop, dst);
 
 			props[i] = dst;
+			i++;
 		}
+		
 	} else {
-		for (int i = 0; i < size; i++) {
+		int i = 0;
+		for(GDProperty prop : properties) {
 			GDExtensionPropertyInfo &pinfo = props[i];
-			copy_prop(properties[i], pinfo);
+			copy_prop(prop, pinfo);
 
-			if (!values.has(properties[i].name))
+			if (!values.has(prop.name))
 				pinfo.usage |= PROPERTY_USAGE_SCRIPT_DEFAULT_VALUE;
+
+			i++;
 		}
 	}
 
