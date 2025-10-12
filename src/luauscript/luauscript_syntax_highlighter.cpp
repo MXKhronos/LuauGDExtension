@@ -11,6 +11,8 @@
 
 using namespace godot;
 
+
+
 Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) const {
     Dictionary color_map;
     
@@ -693,91 +695,38 @@ PackedStringArray LuauSyntaxHighlighter::_get_supported_languages() const {
     return languages;
 }
 
+Color set_text_color(EditorSettings* settings, const String& setting, const Color& default_color) {
+    Color cur_color = settings->get(setting);
+
+    if (!settings->has_setting(setting) || cur_color == Color(0, 0, 0, 1)) {
+        settings->set(setting, default_color);
+    }
+
+    return default_color;
+}
+
 Ref<EditorSyntaxHighlighter> LuauSyntaxHighlighter::_create() const {
     Ref<LuauSyntaxHighlighter> highlighter;
     highlighter.instantiate();
 
     Ref<EditorSettings> settings = nobind::EditorInterface::get_singleton()->get_editor_settings();
     
-    highlighter->text_color = Color("#9cdcfe");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/text_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/text_color", text_color);
-    }
-
-    highlighter->symbol_color = Color("#C8C8C8");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/symbol_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/symbol_color", symbol_color);
-    }
-
-    highlighter->number_color = Color("#b5cea8");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/number_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/number_color", number_color);
-    }
-
-    highlighter->function_color = Color("#DCDCAA");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/function_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/function_color", function_color);
-    }
-
-    highlighter->global_function_color = Color("#DCDCAA");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/global_function_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/global_function_color", global_function_color);
-    }
-
-    highlighter->built_in_type_color = Color("#4EC9B0");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/built_in_type_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/built_in_type_color", built_in_type_color);
-    }
-
-    highlighter->keyword_color = Color("#C586C0");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/keyword_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/keyword_color", keyword_color);
-    }
-
-    highlighter->control_flow_keyword_color = Color("#b999ef");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/control_flow_keyword_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/control_flow_keyword_color", control_flow_keyword_color);
-    }
-
-    highlighter->type_color = Color("#4EC9B0");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/type_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/type_color", type_color);
-    }
-
-    highlighter->string_color = Color("#ce9178");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/string_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/string_color", string_color);
-    }
-
-    highlighter->constant_color = Color("#569cd6");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/constant_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/constant_color", constant_color);
-    }
-
-    highlighter->self_keyword_color = Color("#7c9ed1");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/self_keyword_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/self_keyword_color", self_keyword_color);
-    }
-
-    highlighter->comment_color = Color("#6A9955");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/comment_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/comment_color", comment_color);
-    }
-
-    highlighter->member_variable_color = Color("#9cdcfe");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/member_variable_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/member_variable_color", member_variable_color);
-    }
-
-    highlighter->function_definition_color = Color("#DCDCAA");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/function_definition_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/function_definition_color", function_definition_color);
-    }
-
-    highlighter->annotation_color = Color("#C586C0");
-    if (!settings->has_setting("text_editor/theme/highlighting/luauscript/annotation_color")) {
-        settings->set("text_editor/theme/highlighting/luauscript/annotation_color", annotation_color);
-    }
+    highlighter->text_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "text_color", Color("#9cdcfe"));
+    highlighter->symbol_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "symbol_color", Color("#c8c8c8"));
+    highlighter->number_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "number_color", Color("#b5cea8"));
+    highlighter->function_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "function_color", Color("#dcdcaa"));
+    highlighter->global_function_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "global_function_color", Color("#dcdcaa"));
+    highlighter->built_in_type_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "built_in_type_color", Color("#4ec9b0"));
+    highlighter->keyword_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "keyword_color", Color("#c586c0"));
+    highlighter->control_flow_keyword_color  = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "control_flow_keyword_color", Color("#b999ef"));
+    highlighter->type_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "type_color", Color("#4ec9b0"));
+    highlighter->string_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "string_color", Color("#ce9178"));
+    highlighter->constant_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "constant_color", Color("#569cd6"));
+    highlighter->self_keyword_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "self_keyword_color", Color("#7c9ed1"));
+    highlighter->comment_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "comment_color", Color("#6a9955"));
+    highlighter->member_variable_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "member_variable_color", Color("#9cdcfe"));
+    highlighter->function_definition_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "function_definition_color", Color("#dcdcaa"));
+    highlighter->annotation_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "annotation_color", Color("#c586c0"));
 
     return highlighter;
 }
