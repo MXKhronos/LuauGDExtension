@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 env = SConscript("extern/godot-cpp/SConstruct") # type: ignore
+# scons -c
 
 # Add Luau include paths
 luau_dir = "extern/luau/"
@@ -41,17 +42,20 @@ sources += env.Glob("src/luauscript/*.cpp")
 sources += env.Glob("src/luauscript/variant/*.cpp")
 
 # Get the godot-cpp library path
-print(f"target={env['target']}")
-print(f"arch={env['arch']}")
-print(f"LIBSUFFIX={env['LIBSUFFIX']}")
-print(f"suffix={env['suffix']}")
-print(f"SHLIBSUFFIX={env['SHLIBSUFFIX']}")
+print(f"target={env['target']}") # editor
+print(f"arch={env['arch']}") # x86_64
+print(f"LIBSUFFIX={env['LIBSUFFIX']}") #.lib
+print(f"suffix={env['suffix']}") # .windows.editor.dev.x86_64
+print(f"SHLIBSUFFIX={env['SHLIBSUFFIX']}") #.dll
 
 godot_cpp_lib = "extern/godot-cpp/bin/libgodot-cpp"
 if env["platform"] == "windows":
     godot_cpp_lib += ".windows"
 godot_cpp_lib += "." + env["target"]
 godot_cpp_lib += "." + env["arch"] + env["LIBSUFFIX"]
+
+# Use absolute path and ensure it's treated as a file dependency
+godot_cpp_file = env.File(godot_cpp_lib)
 
 # Define output directory
 output_dir = "Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/"
@@ -64,8 +68,8 @@ if env["platform"] == "windows":
 # Link against Luau libraries
 library = env.SharedLibrary(
     output_dir + "LuauGDExt{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
-    source=sources,
-    LIBS=[luau_ast, luau_vm, luau_compiler, luau_codegen, env.File(godot_cpp_lib)]
+    source = sources,
+    LIBS = [godot_cpp_lib, luau_ast, luau_vm, luau_compiler, luau_codegen]
 )
 
 # Copy the LuauGDExt.gdextension file
