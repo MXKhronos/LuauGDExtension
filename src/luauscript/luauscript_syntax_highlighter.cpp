@@ -695,11 +695,15 @@ PackedStringArray LuauSyntaxHighlighter::_get_supported_languages() const {
     return languages;
 }
 
-Color set_text_color(EditorSettings* settings, const String& setting, const Color& default_color) {
-    Color cur_color = settings->get(setting);
+Color set_text_color(EditorSettings* settings, const String& key, const Color& default_color) {
+    Color cur_color = settings->get(key);
 
-    if (!settings->has_setting(setting) || cur_color == Color(0, 0, 0, 1)) {
-        settings->set(setting, default_color);
+    if (!settings->has_setting(key) || cur_color == Color(0, 0, 0, 1)) {
+        settings->set(key, default_color);
+
+        if (key == "background_color") {
+            settings->set("text_editor/theme/highlighting/background_color", default_color);
+        }
     }
 
     return default_color;
@@ -711,6 +715,7 @@ Ref<EditorSyntaxHighlighter> LuauSyntaxHighlighter::_create() const {
 
     Ref<EditorSettings> settings = nobind::EditorInterface::get_singleton()->get_editor_settings();
     
+    set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "background_color", Color("#1f1f1f"));
     highlighter->text_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "text_color", Color("#9cdcfe"));
     highlighter->symbol_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "symbol_color", Color("#c8c8c8"));
     highlighter->number_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "number_color", Color("#b5cea8"));
@@ -718,7 +723,7 @@ Ref<EditorSyntaxHighlighter> LuauSyntaxHighlighter::_create() const {
     highlighter->global_function_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "global_function_color", Color("#dcdcaa"));
     highlighter->built_in_type_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "built_in_type_color", Color("#4ec9b0"));
     highlighter->keyword_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "keyword_color", Color("#c586c0"));
-    highlighter->control_flow_keyword_color  = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "control_flow_keyword_color", Color("#b999ef"));
+    highlighter->control_flow_keyword_color  = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "control_flow_keyword_color", Color("#7ca8e4"));
     highlighter->type_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "type_color", Color("#4ec9b0"));
     highlighter->string_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "string_color", Color("#ce9178"));
     highlighter->constant_color = set_text_color(settings.ptr(), String(luau::THEME_SETTING_PREFIX) + "constant_color", Color("#569cd6"));
