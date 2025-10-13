@@ -23,11 +23,13 @@ void ObjectBridge::register_variant_class(lua_State* L) {
 
 template<>
 int VariantBridge<Object>::on_index(lua_State* L, const Object& object, const char* key) {
+    printf("Object on_index: %s\n", key);
     return 1;
 }
 
 template<>
 int VariantBridge<Object>::on_newindex(lua_State* L, Object& object, const char* key) {
+    printf("Object on_newindex: %s\n", key);
     return 1;
 }
 

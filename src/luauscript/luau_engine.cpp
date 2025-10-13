@@ -87,10 +87,12 @@ void LuauEngine::register_godot_functions(lua_State *L) {
                 output += String(v);
 
             } else if (lua_isfunction(L, i)) {
-                output += "<function>";
+                const void* ptr = lua_topointer(L, i);
+                output += vformat("<function: 0x%x>", (uint64_t)ptr);
 
             } else if (lua_isthread(L, i)) {
-                output += "<thread>";
+                const void* ptr = lua_topointer(L, i);
+                output += vformat("<thread: 0x%x>", (uint64_t)ptr);
 
             } else {
                 output += "<unknown>";

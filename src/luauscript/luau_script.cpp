@@ -20,6 +20,7 @@
 #include "luau_constants.h"
 #include "luau_bridge.h"
 #include "luauscript_resource_format.h"
+#include "variant/builtin_types.h"
 
 #include <Luau/Compiler.h>
 #include <Luau/Parser.h>
@@ -2138,7 +2139,7 @@ void LuauScriptInstance::initialize_lua_state(lua_State *p_L, lua_State *p_threa
 	thread_ref = p_thread_ref;
 	self_ref = p_self_ref;
 }
-	
+
 void *LuauScript::_instance_create(Object *p_for_object) const {
 #ifdef TOOLS_ENABLED
 	WARN_PRINT(vformat("Creating LuauScript instance for object: %s", p_for_object->get_class()));
@@ -2250,8 +2251,12 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 			
 			// Load bytecode if available
 			if (bytecode.size() > 0) {
-				int load_result = luau_load(thread, script_name.utf8().get_data(), 
-					(const char*)bytecode.ptr(), bytecode.size(), 0);
+				int load_result = luau_load(
+					thread, 
+					script_name.utf8().get_data(), 
+					(const char*) bytecode.ptr(), 
+					bytecode.size(), 
+					0);
 				
 				if (load_result == 0) {
 					// The loaded function is now on the stack
@@ -2262,6 +2267,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 					// Create a combined metatable that handles both property access and environment lookups
 					lua_newtable(thread); // Create metatable
 					
+					// MARK: instance __index 
 					// Set __index to handle both Godot property access and environment lookups
 					lua_pushcfunction(thread, [](lua_State *L) -> int {
 						// Stack: env_table (self), key
@@ -2282,6 +2288,12 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 						// Special handling for "self" - return the table itself
 						if (strcmp(key, "self") == 0) {
 							lua_pushvalue(L, 1); // Push the env_table (which is self)
+							return 1;
+						}
+
+						if (nobind::ClassDB::get_singleton()->class_exists(key)) {
+							
+							printf("Node requested\n");
 							return 1;
 						}
 						
@@ -2414,6 +2426,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 					// Set self table as the environment for the loaded function
 					lua_setfenv(thread, -2);
 					
+
 					// Execute the script with no arguments
 					int call_result = lua_pcall(thread, 0, 0, 0);
 					
