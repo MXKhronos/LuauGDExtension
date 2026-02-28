@@ -47,7 +47,7 @@ int VariantBridge<Callable>::on_index(lua_State* L, const Callable& object, cons
 }
 
 template<>
-int VariantBridge<Callable>::on_newindex(lua_State* L, Callable& object, const char* key) {
+int VariantBridge<Callable>::on_newindex(lua_State* L, const Callable& object, const char* key) {
     return 1;
 }
 
@@ -109,7 +109,7 @@ int VariantBridge<Signal>::on_index(lua_State* L, const Signal& object, const ch
 }
 
 template<>
-int VariantBridge<Signal>::on_newindex(lua_State* L, Signal& object, const char* key) {
+int VariantBridge<Signal>::on_newindex(lua_State* L, const Signal& object, const char* key) {
     return 1;
 }
 

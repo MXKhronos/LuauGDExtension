@@ -1,12 +1,13 @@
 
 #include "object.h"
 
+#include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/variant/variant.hpp>
 
 using namespace godot;
 
 template<>
-const char* VariantBridge<Object>::variant_name("Object");
+const char* VariantBridge<Object*>::variant_name("Object");
 
 const luaL_Reg ObjectBridge::static_library[] = {
 	{NULL, NULL}
@@ -22,20 +23,19 @@ void ObjectBridge::register_variant_class(lua_State* L) {
 }
 
 template<>
-int VariantBridge<Object>::on_index(lua_State* L, const Object& object, const char* key) {
-    printf("Object on_index: %s\n", key);
+int VariantBridge<Object*>::on_index(lua_State* L, Object* const &object, const char* key) {
+    UtilityFunctions::print("Object on_index: %s\n", key);
     return 1;
 }
 
 template<>
-int VariantBridge<Object>::on_newindex(lua_State* L, Object& object, const char* key) {
-    printf("Object on_newindex: %s\n", key);
+int VariantBridge<Object*>::on_newindex(lua_State* L, Object* const &object, const char* key) {
+    UtilityFunctions::print("Object on_newindex: %s\n", key);
     return 1;
 }
 
 template<>
-int VariantBridge<Object>::on_call(lua_State* L, bool& is_valid) {
+int VariantBridge<Object*>::on_call(lua_State* L, bool& is_valid) {
     //No constructors
-    is_valid = false;
     return 1;
 }

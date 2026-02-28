@@ -3,6 +3,7 @@
 
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/array.hpp>
+
 #include <lua.h>
 #include <lualib.h>
 
@@ -67,7 +68,7 @@ public:
 
 
     static int on_index(lua_State* L, const GDV& object, const char* key);
-    static int on_newindex(lua_State* L, GDV& object, const char* key);
+    static int on_newindex(lua_State* L, const GDV& object, const char* key);
     static int on_call(lua_State* L, bool& is_valid);
 
     static int on_gc(lua_State *L) {
@@ -175,7 +176,21 @@ public:
     }
 
     static int on_eq(lua_State *L) {
-        lua_pushboolean(L, get_object(L, 1) == get_object(L, 2));
+        GDV& obj1 = get_object(L, 1);
+        GDV& obj2 = get_object(L, 2);
+
+        Variant v1, v2;
+        
+        if constexpr (std::is_base_of_v<Object, GDV>) {
+            v1 = Variant(&obj1); // It's an Object, store the pointer
+            v2 = Variant(&obj2);
+        } else {
+            v1 = Variant(obj1);  // It's a Value Type (Vector2, etc)
+            v2 = Variant(obj2);
+        }
+
+        lua_pushboolean(L, v1 == v2);
+        
         return 1;
     }
 };

@@ -102,7 +102,7 @@ int VariantBridge<Projection>::on_index(lua_State* L, const Projection& object, 
 }
 
 template<>
-int VariantBridge<Projection>::on_newindex(lua_State* L, Projection& object, const char* key) {
+int VariantBridge<Projection>::on_newindex(lua_State* L, const Projection& object, const char* key) {
     return 1;
 }
 

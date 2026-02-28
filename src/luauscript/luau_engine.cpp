@@ -47,6 +47,101 @@ void LuauEngine::register_math_constants(lua_State *L) {
     lua_setglobal(L, "NAN");
 }
 
+
+void lua_rawgetp(lua_State* L, int idx, const void* p) {
+    idx = lua_absindex(L, idx);      // Ensure index is absolute
+    lua_pushlightuserdata(L, (void*)p); 
+    lua_rawget(L, idx);
+}
+
+void lua_rawsetp(lua_State* L, int idx, const void* p) {
+    idx = lua_absindex(L, idx);
+    lua_pushlightuserdata(L, (void*)p);
+    lua_insert(L, -2);               // Move key below the value
+    lua_rawset(L, idx);
+}
+
+
+void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String &class_name) {
+    CharString utf8 = class_name.utf8();
+    const char *class_name_c = utf8.get_data();
+
+    // 1. Check if we already registered this class
+    if (luaL_getmetatable(L, class_name_c) != LUA_TNIL) {
+        // [Stack: Metatable]
+        // If it exists, we just create a new instance table and attach this
+        lua_newtable(L);               // [Stack: Metatable, NewTable]
+
+        lua_pushstring(L, class_name_c);
+        lua_setfield(L, -2, "Name");       // ClassTable.Name = "..."
+
+        lua_insert(L, -2);             // [Stack: NewTable, Metatable]
+        lua_setmetatable(L, -2);       // [Stack: NewTable]
+        return;
+    }
+    lua_pop(L, 1); // Pop the nil from a failed getmetatable
+
+    // 2. Create the Metatable
+    luaL_newmetatable(L, class_name_c); // [Stack: Metatable]
+    LuauBridge::protect_metatable(L, -1);
+
+    // 3. Define the __call metamethod
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        // 1. Extract Class Name from self (Index 1)
+        lua_getfield(L, 1, "Name");
+        const char* class_name = lua_tostring(L, -1);
+        lua_pop(L, 1);
+
+        UtilityFunctions::print("Instantiating class: " + String(class_name));
+
+        // 2. The 'Properties' table is at Index 2
+        // Let's check if the user actually passed a table: Sprite2D{ ... }
+        bool has_props = lua_istable(L, 2);
+
+        // 3. Instantiate Godot Object
+        Object *obj = ClassDB::instantiate(StringName(class_name));
+        if (!obj) {
+            luaL_error(L, "Failed to instantiate %s", class_name);
+            return 0;
+        }
+
+        // 4. If properties were passed, apply them to the Godot Object
+        if (has_props) {
+            lua_pushnil(L); // Start iteration of arg1 (Index 2)
+            while (lua_next(L, 2) != 0) {
+                // Key is at -2, Value is at -1
+                const char* key = lua_tostring(L, -2);
+                Variant val = LuauBridge::get_variant(L, -1);
+                
+                obj->set(StringName(key), val);
+                
+                lua_pop(L, 1); // Pop value, keep key for next lua_next
+            }
+        }
+
+        // 5. Push the final object to Lua
+        LuauBridge::push_variant(L, obj);
+        return 1; 
+    }, "godot_call_handler");
+    
+    lua_setfield(L, -2, "__call"); // [Stack: Metatable]
+
+    // 4. Create the Actual Class Table (The "Instance")
+    lua_newtable(L);                   // [Stack: Metatable, ClassTable]
+    
+    lua_pushstring(L, class_name_c);
+    lua_setfield(L, -2, "Name");       // ClassTable.Name = "..."
+
+    // 5. Link them
+    lua_pushvalue(L, -2);              // [Stack: Metatable, ClassTable, Metatable]
+    lua_setmetatable(L, -2);           // [Stack: Metatable, ClassTable]
+
+    // 6. Cleanup & Finalize
+    lua_remove(L, -2);                 // Remove Metatable, leave ClassTable at top
+    lua_setreadonly(L, -1, true);      // Make the class definition read-only
+}
+
+
 void LuauEngine::register_godot_functions(lua_State *L) {
     // Override print function to use Godot's print
     lua_pushcfunction(L, [](lua_State *L) -> int {
@@ -596,6 +691,8 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         DictionaryBridge::register_variant(L);
         ArrayBridge::register_variant(L);
 
+        ObjectBridge::register_variant(L);
+
         PackedByteArrayBridge::register_variant(L);
         PackedInt32ArrayBridge::register_variant(L);
         PackedInt64ArrayBridge::register_variant(L);
@@ -634,6 +731,8 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         SignalBridge::register_variant_class(L);
         DictionaryBridge::register_variant_class(L);
         ArrayBridge::register_variant_class(L);
+
+        ObjectBridge::register_variant_class(L);
 
         PackedByteArrayBridge::register_variant_class(L);
         PackedInt32ArrayBridge::register_variant_class(L);

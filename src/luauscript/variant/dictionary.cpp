@@ -27,7 +27,7 @@ int VariantBridge<Dictionary>::on_index(lua_State* L, const Dictionary& object, 
 }
 
 template<>
-int VariantBridge<Dictionary>::on_newindex(lua_State* L, Dictionary& object, const char* key) {
+int VariantBridge<Dictionary>::on_newindex(lua_State* L, const Dictionary& object, const char* key) {
     return 1;
 }
 

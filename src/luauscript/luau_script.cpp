@@ -2292,8 +2292,8 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 						}
 
 						if (nobind::ClassDB::get_singleton()->class_exists(key)) {
-							
-							printf("Node requested\n");
+							//Class exists, return class static table;
+							LuauEngine::singleton->register_and_push_godot_class(L, key);
 							return 1;
 						}
 						

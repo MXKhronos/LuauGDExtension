@@ -27,7 +27,7 @@ int VariantBridge<Transform3D>::on_index(lua_State* L, const Transform3D& object
 }
 
 template<>
-int VariantBridge<Transform3D>::on_newindex(lua_State* L, Transform3D& object, const char* key) {
+int VariantBridge<Transform3D>::on_newindex(lua_State* L, const Transform3D& object, const char* key) {
     return 1;
 }
 

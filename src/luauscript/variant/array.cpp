@@ -28,7 +28,7 @@ int VariantBridge<Array>::on_index(lua_State* L, const Array& object, const char
 }
 
 template<>
-int VariantBridge<Array>::on_newindex(lua_State* L, Array& object, const char* key) {
+int VariantBridge<Array>::on_newindex(lua_State* L, const Array& object, const char* key) {
     return 1;
 }
 
@@ -142,7 +142,7 @@ int VariantBridge<PackedByteArray>::on_index(lua_State* L, const PackedByteArray
 }
 
 template<>
-int VariantBridge<PackedByteArray>::on_newindex(lua_State* L, PackedByteArray& object, const char* key) {
+int VariantBridge<PackedByteArray>::on_newindex(lua_State* L, const PackedByteArray& object, const char* key) {
     return 1;
 }
 
@@ -199,7 +199,7 @@ int VariantBridge<PackedInt32Array>::on_index(lua_State* L, const PackedInt32Arr
 }
 
 template<>
-int VariantBridge<PackedInt32Array>::on_newindex(lua_State* L, PackedInt32Array& object, const char* key) {
+int VariantBridge<PackedInt32Array>::on_newindex(lua_State* L, const PackedInt32Array& object, const char* key) {
     return 1;
 }
 
@@ -256,7 +256,7 @@ int VariantBridge<PackedInt64Array>::on_index(lua_State* L, const PackedInt64Arr
 }
 
 template<>
-int VariantBridge<PackedInt64Array>::on_newindex(lua_State* L, PackedInt64Array& object, const char* key) {
+int VariantBridge<PackedInt64Array>::on_newindex(lua_State* L, const PackedInt64Array& object, const char* key) {
     return 1;
 }
 
@@ -314,7 +314,7 @@ int VariantBridge<PackedFloat32Array>::on_index(lua_State* L, const PackedFloat3
 }
 
 template<>
-int VariantBridge<PackedFloat32Array>::on_newindex(lua_State* L, PackedFloat32Array& object, const char* key) {
+int VariantBridge<PackedFloat32Array>::on_newindex(lua_State* L, const PackedFloat32Array& object, const char* key) {
     return 1;
 }
 
@@ -371,7 +371,7 @@ int VariantBridge<PackedFloat64Array>::on_index(lua_State* L, const PackedFloat6
 }
 
 template<>
-int VariantBridge<PackedFloat64Array>::on_newindex(lua_State* L, PackedFloat64Array& object, const char* key) {
+int VariantBridge<PackedFloat64Array>::on_newindex(lua_State* L, const PackedFloat64Array& object, const char* key) {
     return 1;
 }
 
@@ -429,7 +429,7 @@ int VariantBridge<PackedStringArray>::on_index(lua_State* L, const PackedStringA
 }
 
 template<>
-int VariantBridge<PackedStringArray>::on_newindex(lua_State* L, PackedStringArray& object, const char* key) {
+int VariantBridge<PackedStringArray>::on_newindex(lua_State* L, const PackedStringArray& object, const char* key) {
     return 1;
 }
 
@@ -486,7 +486,7 @@ int VariantBridge<PackedVector2Array>::on_index(lua_State* L, const PackedVector
 }
 
 template<>
-int VariantBridge<PackedVector2Array>::on_newindex(lua_State* L, PackedVector2Array& object, const char* key) {
+int VariantBridge<PackedVector2Array>::on_newindex(lua_State* L, const PackedVector2Array& object, const char* key) {
     return 1;
 }
 
@@ -543,7 +543,7 @@ int VariantBridge<PackedVector3Array>::on_index(lua_State* L, const PackedVector
 }
 
 template<>
-int VariantBridge<PackedVector3Array>::on_newindex(lua_State* L, PackedVector3Array& object, const char* key) {
+int VariantBridge<PackedVector3Array>::on_newindex(lua_State* L, const PackedVector3Array& object, const char* key) {
     return 1;
 }
 
@@ -600,7 +600,7 @@ int VariantBridge<PackedVector4Array>::on_index(lua_State* L, const PackedVector
 }
 
 template<>
-int VariantBridge<PackedVector4Array>::on_newindex(lua_State* L, PackedVector4Array& object, const char* key) {
+int VariantBridge<PackedVector4Array>::on_newindex(lua_State* L, const PackedVector4Array& object, const char* key) {
     return 1;
 }
 
@@ -657,7 +657,7 @@ int VariantBridge<PackedColorArray>::on_index(lua_State* L, const PackedColorArr
 }
 
 template<>
-int VariantBridge<PackedColorArray>::on_newindex(lua_State* L, PackedColorArray& object, const char* key) {
+int VariantBridge<PackedColorArray>::on_newindex(lua_State* L, const PackedColorArray& object, const char* key) {
     return 1;
 }
 

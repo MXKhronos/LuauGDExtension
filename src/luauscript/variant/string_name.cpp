@@ -27,7 +27,7 @@ int VariantBridge<StringName>::on_index(lua_State* L, const StringName& object, 
 }
 
 template<>
-int VariantBridge<StringName>::on_newindex(lua_State* L, StringName& object, const char* key) {
+int VariantBridge<StringName>::on_newindex(lua_State* L, const StringName& object, const char* key) {
     return 1;
 }
 

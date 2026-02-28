@@ -96,15 +96,16 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
             break;
         }
         
-        // case Variant::OBJECT: { // GD Class
-        //     Object *obj = p_var.operator Object*();
-        //     if (obj) {
-        //         push_object(L, obj);
-        //     } else {
-        //         lua_pushnil(L);
-        //     }
-        //     break;
-        // }
+        case Variant::OBJECT: { // Push GD Class Object to Lua
+            Object* obj = p_var.get_validated_object();
+            if (obj) {
+                ObjectBridge::push_from(L, p_var.operator Object*());
+            } else {
+                lua_pushnil(L);
+            }
+            
+            break;
+        }
         
         default: {
             WARN_PRINT("Unsupported Variant type: " + Variant::get_type_name(p_var.get_type()));
@@ -327,6 +328,10 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
                 return PackedVector4ArrayBridge::get_object(L, p_index);
             } else if (type_str == "PackedColorArray") {
                 return PackedColorArrayBridge::get_object(L, p_index);
+
+            } else if (type_str == "Object") {
+                return ObjectBridge::get_object(L, p_index);
+                
             }
 
             WARN_PRINT("Unhandled userdata type: " + String(type_name));
@@ -411,6 +416,8 @@ template void VariantBridge<Callable>::register_variant(lua_State *);
 template void VariantBridge<Signal>::register_variant(lua_State *);
 template void VariantBridge<Dictionary>::register_variant(lua_State *);
 template void VariantBridge<Array>::register_variant(lua_State *);
+
+template void VariantBridge<Object*>::register_variant(lua_State *);
 
 template void VariantBridge<PackedByteArray>::register_variant(lua_State *);
 template void VariantBridge<PackedInt32Array>::register_variant(lua_State *);

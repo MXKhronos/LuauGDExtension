@@ -7,8 +7,8 @@
 
 namespace godot {
 
-class ObjectBridge: public VariantBridge<Object> {
-    friend class VariantBridge <Object>;
+class ObjectBridge: public VariantBridge<Object*> {
+    friend class VariantBridge <Object*>;
 
     public:
         static void register_variant_class(lua_State* L);

@@ -47,7 +47,7 @@ int VariantBridge<Quaternion>::on_index(lua_State* L, const Quaternion& object, 
 }
 
 template<>
-int VariantBridge<Quaternion>::on_newindex(lua_State* L, Quaternion& object, const char* key) {
+int VariantBridge<Quaternion>::on_newindex(lua_State* L, const Quaternion& object, const char* key) {
     return 1;
 }
 

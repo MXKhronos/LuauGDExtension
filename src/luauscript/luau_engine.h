@@ -27,6 +27,7 @@ private:
     static void register_godot_globals(lua_State *L);
     static void register_godot_functions(lua_State *L);
     static void register_math_constants(lua_State *L);
+    static void register_and_push_godot_class(lua_State *L, const String &class_name);
 
 public:
     static LuauEngine *get_singleton() { return singleton; };
