@@ -28,6 +28,7 @@ print("v2i", Vector2i(4, 8));
 
 function _init()
 	print("init", helloTable);
+	print("[luau] init!", self, self.name, typeof(self.name));
 	print("PackedStringArray", PackedStringArray{
 		"Hello";
 		"World!";
@@ -76,10 +77,12 @@ function testObject()
 	print(`[info{i}]`, "Node3D", Sprite2D);
 	print(`[info{i}]`, "typeof Node3D", typeof(Sprite2D));
 	print(`[info{i}]`, `get metatable`, getmetatable(Sprite2D));
+	
 	local newSprite2D = Sprite2D{
 		name = "NewSprite2D";
 		offset = Vector2(0, 100);
 	};
+	newSprite2D.texture = self.texture;
 	
 	print(`[info{i}]`, "newSprite2D", newSprite2D, "self.add_child", add_child);
 	add_child(newSprite2D);
