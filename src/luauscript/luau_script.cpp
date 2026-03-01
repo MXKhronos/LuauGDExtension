@@ -560,10 +560,13 @@ void LuauScriptInstance::notification(int32_t p_what) {
         
         // Now push additional arguments if needed
         int argc = 0;
-        if (p_what == 17 || p_what == 16) { // NOTIFICATION_PROCESS or NOTIFICATION_PHYSICS_PROCESS
-            // Get delta time - we'll pass a default for now
-            // TODO: Get actual delta from the engine when available
-            double delta = 1.0 / 60.0; // Default to 60 FPS
+        if (p_what == 17 || p_what == 16) {
+            double delta = 1.0 / 60.0;
+			if (p_what == 17) {
+				delta = ((Node*)owner)->get_process_delta_time(); // NOTIFICATION_PROCESS
+			} else {
+				delta = ((Node*)owner)->get_physics_process_delta_time(); // NOTIFICATION_PHYSICS_PROCESS
+			}
             lua_pushnumber(ET, delta);
             argc = 1;
         }
@@ -2207,12 +2210,12 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 	
 	LuauEngine::VMType vm_type = LuauEngine::VM_USER;
 	
-	LuauScriptInstance *instance = memnew(LuauScriptInstance(Ref<LuauScript>(this), p_for_object, vm_type));
+	LuauScriptInstance *script_instance = memnew(LuauScriptInstance(Ref<LuauScript>(this), p_for_object, vm_type));
 	
 	// Register the instance with the script
 	{
 		MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
-		const_cast<LuauScript*>(this)->instances[p_for_object->get_instance_id()] = instance;
+		const_cast<LuauScript*>(this)->instances[p_for_object->get_instance_id()] = script_instance;
 	}
 
 	String script_name = get_path();
@@ -2238,8 +2241,8 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 			lua_setfield(thread, -2, "__godot_owner");
 			
 			// Store pointer to C++ instance
-			lua_pushlightuserdata(thread, instance);
-			lua_setfield(thread, -2, "__godot_instance");
+			lua_pushlightuserdata(thread, script_instance);
+			lua_setfield(thread, -2, "__godot_script");
 			
 			// Store self table reference on main state, not thread
 			// Move self table from thread to main state
@@ -2247,7 +2250,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 			int self_ref = lua_ref(L, -1);
 			
 			// Initialize the instance's Lua state
-			instance->initialize_lua_state(L, thread, thread_ref, self_ref);
+			script_instance->initialize_lua_state(L, thread, thread_ref, self_ref);
 			
 			// Load bytecode if available
 			if (bytecode.size() > 0) {
@@ -2261,7 +2264,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 				if (load_result == 0) {
 					// The loaded function is now on the stack
 					// Get the self table to use as environment
-					lua_getref(L, instance->get_self_ref());
+					lua_getref(L, script_instance->get_self_ref());
 					lua_xmove(L, thread, 1);
 					
 					// Create a combined metatable that handles both property access and environment lookups
@@ -2303,7 +2306,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 						lua_pop(L, 1);
 						
 						// Get the instance pointer from the self table
-						lua_getfield(L, 1, "__godot_instance");
+						lua_getfield(L, 1, "__godot_script");
 						LuauScriptInstance *instance = (LuauScriptInstance*)lua_touserdata(L, -1);
 						lua_pop(L, 1);
 						
@@ -2489,7 +2492,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 						}
 						
 						// Delete the failed instance
-						memdelete(instance);
+						memdelete(script_instance);
 						
 						// Enable placeholder fallback mode
 						const_cast<LuauScript*>(this)->placeholder_fallback_enabled = true;
@@ -2499,7 +2502,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 #endif // TOOLS_ENABLED
 					} else {
 						// Get the self table from main state
-						lua_getref(L, instance->get_self_ref());
+						lua_getref(L, script_instance->get_self_ref());
 						lua_xmove(L, thread, 1);
 						
 						// Iterate through the self table to see what was added
@@ -2554,7 +2557,7 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 	}
 	
 	// Create and return the GDExtension script instance
-	return internal::gdextension_interface_script_instance_create3(&LuauScriptInstance::INSTANCE_INFO, instance);
+	return internal::gdextension_interface_script_instance_create3(&LuauScriptInstance::INSTANCE_INFO, script_instance);
 }
 
 void *LuauScript::_placeholder_instance_create(Object *p_for_object) const {

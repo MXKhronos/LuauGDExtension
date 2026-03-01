@@ -4,6 +4,9 @@ entry_symbol = "luaugdext_library_init"
 compatibility_minimum = "4.1"
 reloadable = true
 
+[icons]
+LuauScript = "res://bin/LuauGDExt/LuauScript.svg"
+
 [libraries]
 
 windows.debug.x86_64 = "res://bin/LuauGDExt/LuauGDExt.windows.editor.dev.x86_64.dll"

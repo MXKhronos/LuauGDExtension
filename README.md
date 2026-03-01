@@ -15,7 +15,7 @@ local bcount: number = 0; -- Local variable with type annotation
 
 function _init(self: Node2D)
 	print("[luau] init!", self, self.name, typeof(self));
-    -- Prints> [luau] init! { "__godot_owner": <null>, "_init": <null>, "__godot_instance": <null>, "_ready": <null>, "_process": <null>, "ACONST": 123.0, "acount": 1.0 } Dictionary
+    -- Prints> [luau] init! { "__godot_owner": <null>, "_init": <null>, "__godot_script": <null>, "_ready": <null>, "_process": <null>, "ACONST": 123.0, "acount": 1.0 } Dictionary
 end
 
 
