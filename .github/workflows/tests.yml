@@ -1,0 +1,33 @@
+name: LuauGDExtension Unit Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # Important if godot-cpp is a submodule
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install scons
+
+      - name: Build Unit Tests
+        # This calls the "test" alias defined in your SConstruct
+        run: scons test
+
+      - name: Execute Tests
+        run: ./bin/run_tests

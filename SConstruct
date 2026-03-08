@@ -89,3 +89,16 @@ gdext_icon_copy = env.Command(
 env.Depends(library, gdextension_copy)
 env.Depends(library, gdext_icon_copy)
 env.Default(library)
+
+# DOCTEST
+env = Environment()
+
+# Add godot-cpp and doctest paths
+env.Append(CPPPATH=["src/", "tests/", "godot-cpp/include"])
+
+# Define the test executable
+test_sources = ["tests/test_main.cpp", "tests/test_luau.cpp"]
+test_bin = env.Program(target="bin/run_tests", source=test_sources)
+
+# Create an alias to run tests easily: 'scons test'
+env.Alias("test", test_bin)

@@ -14,6 +14,17 @@
                 "panel": "shared"
             },
             "problemMatcher": "$gcc"
+        },
+        {
+            "label": "test",
+            "type": "shell",
+            "command": "scons test",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": "$gcc"
         }
     ]
 }
