@@ -91,6 +91,6 @@ void luaugdext_module_startup_callback() {
         WARN_PRINT("[LuauGDExtension] Running tests");
         doctest::Context().run();
         WARN_PRINT("[LuauGDExtension] Tests finished");
-        OS::get_singleton()->kill(OS::get_singleton()->get_process_id());
+        //OS::get_singleton()->kill(OS::get_singleton()->get_process_id());
     }   
 }

@@ -18,7 +18,7 @@
         {
             "label": "run-extension-tests",
             "type": "shell",
-            "command": "godot_console --headless --path .\\demo -e -v --run-extension-tests",
+            "command": "godot_console --headless --path .\\demo -e -v --run-extension-tests --quit",
             "dependsOn": "build",
             "group": "test",
             "presentation": {

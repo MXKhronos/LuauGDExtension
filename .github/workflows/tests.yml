@@ -46,13 +46,13 @@ jobs:
             ${{ runner.os }}-scons-db-
 
       - name: Build Unit Tests
-        run: scons target=editor bits=64 dev_build=yes tests=true
+        run: scons target=editor arch=x86_64 dev_build=yes tests=true
 
       - name: Install Godot Engine
-        uses: [chickensoft-games/setup-godot@v2](https://github.com/marketplace/actions/setup-godot-action)
+        uses: chickensoft-games/setup-godot@v2
         with:
           version: "4.5"
           use-dotnet: false
 
       - name: Execute Tests
-        run: godot --headless --path .\\demo -e -v --run-extension-tests
+        run: GODOT --headless --path ./demo -e -v --run-extension-tests --quit
