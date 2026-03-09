@@ -9,10 +9,10 @@
             "request": "launch",
             "name": "Debug",
             "preLaunchTask": "build",
-            "program": "Z:/Godot/Godot_v4.6-stable_mono_win64/godot.exe",
+            "program": "godot_console",
             "args": [
                 "--path", 
-                "Z:/Workspace/Dev/K/LuauDev",
+                "./demo",
                 "-e",
                 "-v"
             ],

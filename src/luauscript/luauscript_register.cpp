@@ -1,3 +1,6 @@
+#define DOCTEST_CONFIG_IMPLEMENT
+#include "doctest.h"
+
 #include "luauscript_register.h"
 
 #include <gdextension_interface.h>
@@ -49,15 +52,14 @@ void initialize_luau_module(ModuleInitializationLevel p_level) {
         WARN_PRINT("[LuauGDExtension] Resource Saver registered successfully");
     }
 
-#ifdef TOOLS_ENABLED
     if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
         GDREGISTER_CLASS(LuauPlugin);
         GDREGISTER_CLASS(LuauSyntaxHighlighter);
 
         EditorPlugins::add_by_type<LuauPlugin>();
         WARN_PRINT("[LuauGDExtension] Editor Plugin registered successfully");
+
     }
-#endif
 }
 
 void uninitialize_luau_module(ModuleInitializationLevel p_level) {
@@ -74,4 +76,21 @@ void uninitialize_luau_module(ModuleInitializationLevel p_level) {
         nobind::ResourceSaver::get_singleton()->remove_resource_format_saver(resource_saver_luau);
         resource_saver_luau.unref();
     }
+}
+
+void luaugdext_module_startup_callback() {
+    PackedStringArray args = OS::get_singleton()->get_cmdline_args();
+    bool run_tests = false;
+    for (int i = 0; i < args.size(); i++) {
+        if (args[i] == "--run-extension-tests") {
+            run_tests = true;
+            break;
+        }
+    }
+    if (run_tests) {
+        WARN_PRINT("[LuauGDExtension] Running tests");
+        doctest::Context().run();
+        WARN_PRINT("[LuauGDExtension] Tests finished");
+        OS::get_singleton()->kill(OS::get_singleton()->get_process_id());
+    }   
 }

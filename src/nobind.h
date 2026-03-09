@@ -41,12 +41,12 @@ public:
 template <typename T>
 WrappedNoBinding<T> WrappedNoBinding<T>::singleton = nullptr;
 
-typedef WrappedNoBinding<Object> Object;
+typedef WrappedNoBinding<godot::Object> Object;
 typedef WrappedNoBinding<RefCounted> RefCounted;
-typedef WrappedNoBinding<Engine> Engine;
+typedef WrappedNoBinding<godot::Engine> Engine;
 typedef WrappedNoBinding<ResourceLoader> ResourceLoader;
 typedef WrappedNoBinding<ResourceSaver> ResourceSaver;
-typedef WrappedNoBinding<OS> OS;
+typedef WrappedNoBinding<godot::OS> OS;
 typedef WrappedNoBinding<Time> Time;
 typedef WrappedNoBinding<EditorInterface> EditorInterface;
 typedef WrappedNoBinding<godot::ClassDBSingleton> ClassDB;

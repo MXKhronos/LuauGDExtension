@@ -18,6 +18,10 @@ void uninitialize_luaugdext_module(ModuleInitializationLevel p_level) {
     uninitialize_luau_module(p_level);
 }
 
+void startup_luaugdext_module() {
+    luaugdext_module_startup_callback();
+}
+
 // Initialization.
 extern "C" {
     GDExtensionBool GDE_EXPORT luaugdext_library_init(
@@ -29,6 +33,7 @@ extern "C" {
 
         init_obj.register_initializer(initialize_luaugdext_module);
         init_obj.register_terminator(uninitialize_luaugdext_module);
+        init_obj.register_startup_callback(startup_luaugdext_module);
 
         return init_obj.init();
     }

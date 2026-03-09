@@ -10,3 +10,6 @@
 /gen/**/*
 extern/godot-cpp/**/*
 extern/luau/**/*
+bin/**/*
+demo/bin/**/*
+demo/.godot/**/*

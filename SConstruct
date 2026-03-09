@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 env = SConscript("extern/godot-cpp/SConstruct") # type: ignore
 # scons -c
+ARGUMENTS = ARGUMENTS # Ensure SCons ARGUMENTS are accessible
 
 # Add Luau include paths
 luau_dir = "extern/luau/"
@@ -57,8 +58,17 @@ godot_cpp_lib += "." + env["arch"] + env["LIBSUFFIX"]
 # Use absolute path and ensure it's treated as a file dependency
 godot_cpp_file = env.File(godot_cpp_lib)
 
+# Build with doctest tests
+run_tests = ARGUMENTS.get("tests", "false").lower() == "true"
+if run_tests:
+    print("Building with DOCTEST enabled...")
+    env.Append(CPPPATH=["tests/"])
+    # Add all .cpp files from your tests directory
+    sources += env.Glob("tests/*.cpp")
+
+
 # Define output directory
-output_dir = "Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/"
+output_dir = "./demo/bin/LuauGDExt/" #Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/
 
 # Add linker flag to ignore PDB warning on Windows
 if env["platform"] == "windows":
@@ -89,16 +99,3 @@ gdext_icon_copy = env.Command(
 env.Depends(library, gdextension_copy)
 env.Depends(library, gdext_icon_copy)
 env.Default(library)
-
-# DOCTEST
-env = Environment()
-
-# Add godot-cpp and doctest paths
-env.Append(CPPPATH=["src/", "tests/", "godot-cpp/include"])
-
-# Define the test executable
-test_sources = ["tests/test_main.cpp", "tests/test_luau.cpp"]
-test_bin = env.Program(target="bin/run_tests", source=test_sources)
-
-# Create an alias to run tests easily: 'scons test'
-env.Alias("test", test_bin)

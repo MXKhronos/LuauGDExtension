@@ -2145,7 +2145,7 @@ void LuauScriptInstance::initialize_lua_state(lua_State *p_L, lua_State *p_threa
 
 void *LuauScript::_instance_create(Object *p_for_object) const {
 #ifdef TOOLS_ENABLED
-	WARN_PRINT(vformat("Creating LuauScript instance for object: %s", p_for_object->get_class()));
+	// WARN_PRINT(vformat("Creating LuauScript instance for object: %s", p_for_object->get_class()));
 	// In the editor, check if we should create a placeholder instance instead
 	bool should_create_placeholder = false;
 	

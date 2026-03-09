@@ -4,7 +4,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "scons target=editor bits=64 dev_build=yes",
+            "command": "scons target=editor bits=64 dev_build=yes tests=true",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -16,15 +16,15 @@
             "problemMatcher": "$gcc"
         },
         {
-            "label": "test",
+            "label": "run-extension-tests",
             "type": "shell",
-            "command": "scons test",
+            "command": "godot_console --headless --path .\\demo -e -v --run-extension-tests",
+            "dependsOn": "build",
             "group": "test",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared"
-            },
-            "problemMatcher": "$gcc"
+            }
         }
     ]
 }
