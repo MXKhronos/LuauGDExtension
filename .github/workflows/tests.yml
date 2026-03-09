@@ -46,8 +46,13 @@ jobs:
             ${{ runner.os }}-scons-db-
 
       - name: Build Unit Tests
-        # This calls the "test" alias defined in your SConstruct
-        run: scons test
+        run: scons target=editor bits=64 dev_build=yes tests=true
+
+      - name: Install Godot Engine
+        uses: [chickensoft-games/setup-godot@v2](https://github.com/marketplace/actions/setup-godot-action)
+        with:
+          version: "4.5"
+          use-dotnet: false
 
       - name: Execute Tests
-        run: ./bin/run_tests
+        run: godot --headless --path .\\demo -e -v --run-extension-tests
