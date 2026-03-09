@@ -73,6 +73,8 @@ output_dir = "./demo/bin/LuauGDExt/" #Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/
 if env["platform"] == "windows":
     env.Append(CXXFLAGS=["/EHsc"])
     env.Append(LINKFLAGS=["/ignore:4099"])
+else:
+    env.Append(CCFLAGS=["-fexceptions"])
 
 # Link against Luau libraries
 library = env.SharedLibrary(
