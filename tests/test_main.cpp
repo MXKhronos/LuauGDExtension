@@ -1,4 +1,3 @@
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
 #include "nobind.h"
@@ -22,38 +21,38 @@ using namespace godot;
 
 TEST_CASE("REQUIRE Engine") {
     Engine* engine = nobind::Engine::get_singleton();
-    REQUIRE(engine != nullptr);
+    CHECK(engine != nullptr);
 }
 
 TEST_CASE("REQUIRE LuauLanguage") {
     LuauLanguage* luau_lang = LuauLanguage::get_singleton();
-    REQUIRE(luau_lang != nullptr);
+    CHECK(luau_lang != nullptr);
 }
 
 TEST_CASE("Run sayhello.luau") {
     LuauLanguage* luau_lang = LuauLanguage::get_singleton();
-    REQUIRE(luau_lang != nullptr);
+    CHECK(luau_lang != nullptr);
 
     MainLoop* main_loop = nobind::Engine::get_singleton()->get_main_loop();
-    REQUIRE(main_loop != nullptr);
+    CHECK(main_loop != nullptr);
 
     SceneTree* root_scene = nobind::Object::cast_to<SceneTree>(main_loop);
-    REQUIRE(root_scene != nullptr);
+    CHECK(root_scene != nullptr);
     
     String file_name = "res://luau_scripts/sayhello.luau";
-    REQUIRE(FileAccess::file_exists(file_name));
+    CHECK(FileAccess::file_exists(file_name));
     
     bool recognized = ResourceLoader::get_singleton()->get_recognized_extensions_for_type("Script").has("luau");
-    REQUIRE(recognized); 
+    CHECK(recognized); 
 
     Ref<LuauScript> scr;
     scr.instantiate();
 
     Error err_load_scr = scr->load_source_code(file_name);
-    REQUIRE(err_load_scr == OK);
+    CHECK(err_load_scr == OK);
 
     Error err_load = scr->load(LuauScript::LOAD_FULL);
-    REQUIRE(err_load == OK);
+    CHECK(err_load == OK);
     
     SceneTree* new_node = memnew(SceneTree);
     new_node->set_script(scr);

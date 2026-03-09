@@ -63,7 +63,6 @@ run_tests = ARGUMENTS.get("tests", "false").lower() == "true"
 if run_tests:
     print("Building with DOCTEST enabled...")
     env.Append(CPPPATH=["tests/"])
-    env.Append(CPPDEFINES=["DOCTEST_CONFIG_IMPLEMENT"]) 
     sources += env.Glob("tests/*.cpp")
 
 
