@@ -87,14 +87,14 @@ library = env.SharedLibrary(
 gdextension_copy = env.Command(
     output_dir + "LuauGDExt.gdextension",
     "LuauGDExt.gdextension",
-    Copy("$TARGET", "$SOURCE") # type: ignore
+    Copy("$TARGET", "$SOURCE")
 )
 
 # Copy the LuauScript.svg file
 gdext_icon_copy = env.Command(
     output_dir + "LuauScript.svg",
     "LuauScript.svg",
-    Copy("$TARGET", "$SOURCE") # type: ignore
+    Copy("$TARGET", "$SOURCE")
 )
 
 env.Depends(library, gdextension_copy)

@@ -53,3 +53,18 @@ jobs:
 
       - name: Execute Tests
         run: godot --headless --path ./demo -e -v --run-extension-tests --quit
+
+      - name: Generate report
+        run: echo "Summary of results" > report.txt
+
+      - name: Test Report Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: test-report.txt
+
+      - name: LuauGDExt Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Luau GDExtension
+          path: ./demo/bin/LuauGDExt/
