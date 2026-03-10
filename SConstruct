@@ -2,6 +2,12 @@
 env = SConscript("extern/godot-cpp/SConstruct") # type: ignore
 # scons -c
 
+if env["platform"] == "windows":
+    env.Append(CXXFLAGS=["/EHsc"])
+    env.Append(LINKFLAGS=["/ignore:4099"])
+elif env["platform"] == "linux":
+    env.Append(CCFLAGS=["-fexceptions"])
+    
 # Add Luau include paths
 luau_dir = "extern/luau/"
 luau_subdirs = ["Ast", "VM", "Compiler", "CodeGen", "Common"]
@@ -51,11 +57,13 @@ print(f"SHLIBSUFFIX={env['SHLIBSUFFIX']}") #.dll
 godot_cpp_lib = "extern/godot-cpp/bin/libgodot-cpp"
 if env["platform"] == "windows":
     godot_cpp_lib += ".windows"
+elif env["platform"] == "linux":
+    godot_cpp_lib += ".linux"
+
 godot_cpp_lib += "." + env["target"]
 godot_cpp_lib += "." + env["arch"] + env["LIBSUFFIX"]
-
-# Use absolute path and ensure it's treated as a file dependency
 godot_cpp_file = env.File(godot_cpp_lib)
+
 
 # Build with doctest tests
 run_tests = ARGUMENTS.get("tests", "false").lower() == "true"
@@ -68,19 +76,11 @@ if run_tests:
 # Define output directory
 output_dir = "./demo/bin/LuauGDExt/" #Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/
 
-# Add linker flag to ignore PDB warning on Windows
-if env["platform"] == "windows":
-    env.Append(CXXFLAGS=["/EHsc"])
-    env.Append(LINKFLAGS=["/ignore:4099"])
-elif env["platform"] == "linux":
-    env.Append(CCFLAGS=["-fexceptions"])
-
-
 # Link against Luau libraries
 library = env.SharedLibrary(
     output_dir + "LuauGDExt{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
     source = sources,
-    LIBS = [godot_cpp_lib, luau_codegen, luau_compiler, luau_vm, luau_ast]
+    LIBS = [godot_cpp_file, luau_codegen, luau_compiler, luau_vm, luau_ast]
 )
 
 # Copy the LuauGDExt.gdextension file
