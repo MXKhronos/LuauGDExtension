@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 env = SConscript("extern/godot-cpp/SConstruct") # type: ignore
 # scons -c
-ARGUMENTS = ARGUMENTS # Ensure SCons ARGUMENTS are accessible
 
 # Add Luau include paths
 luau_dir = "extern/luau/"
@@ -80,7 +79,7 @@ else:
 library = env.SharedLibrary(
     output_dir + "LuauGDExt{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
     source = sources,
-    LIBS = [godot_cpp_lib, luau_ast, luau_vm, luau_compiler, luau_codegen]
+    LIBS = [godot_cpp_lib, luau_codegen, luau_compiler, luau_vm, luau_ast]
 )
 
 # Copy the LuauGDExt.gdextension file

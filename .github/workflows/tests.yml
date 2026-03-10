@@ -25,6 +25,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install scons
           
+      - name: SCons Cache Setup
+        run: echo "SCONS_CACHE=scons_cache" >> $GITHUB_ENV
+
+      - name: Cache SCons Objects
+        uses: actions/cache@v4
+        with:
+          path: scons_cache
+          key: ${{ runner.os }}-scons-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-scons-
+
       - name: Cache Godot-CPP
         uses: actions/cache@v4
         with:
@@ -46,7 +56,7 @@ jobs:
             ${{ runner.os }}-scons-db-
 
       - name: Build Unit Tests
-        run: scons target=editor bits=64 dev_build=yes tests=true
+        run: scons target=editor arch=x86_64 bits=64 dev_build=yes tests=true
 
       - name: Install Godot Engine
         uses: chickensoft-games/setup-godot@v2
