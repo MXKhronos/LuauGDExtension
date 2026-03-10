@@ -48,7 +48,7 @@ jobs:
       - name: Install Godot Engine
         uses: chickensoft-games/setup-godot@v2
         with:
-          version: "4.3"
+          version: "4.6.0"
           use-dotnet: true
 
       - name: Execute Tests
