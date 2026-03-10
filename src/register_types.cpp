@@ -18,8 +18,8 @@ void uninitialize_luaugdext_module(ModuleInitializationLevel p_level) {
     uninitialize_luau_module(p_level);
 }
 
-void startup_luaugdext_module() {
-    luaugdext_module_startup_callback();
+void startup_callback_luaugdext_module() {
+    startup_luau_module();
 }
 
 // Initialization.
@@ -33,7 +33,7 @@ extern "C" {
 
         init_obj.register_initializer(initialize_luaugdext_module);
         init_obj.register_terminator(uninitialize_luaugdext_module);
-        init_obj.register_startup_callback(startup_luaugdext_module);
+        init_obj.register_startup_callback(startup_callback_luaugdext_module);
 
         return init_obj.init();
     }

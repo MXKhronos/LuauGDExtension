@@ -6,6 +6,6 @@
 
 void initialize_luau_module(godot::ModuleInitializationLevel p_level);
 void uninitialize_luau_module(godot::ModuleInitializationLevel p_level);
-void luaugdext_module_startup_callback();
+void startup_luau_module();
 
 #endif

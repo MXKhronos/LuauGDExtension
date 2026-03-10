@@ -5,6 +5,6 @@
 
 void initialize_luaugdext_module();
 void uninitialize_luaugdext_module();
-void startup_luaugdext_module();
+void startup_callback_luaugdext_module();
 
 #endif

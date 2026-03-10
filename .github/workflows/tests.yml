@@ -13,7 +13,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          submodules: recursive # Important if godot-cpp is a submodule
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -46,7 +46,7 @@ jobs:
             ${{ runner.os }}-scons-db-
 
       - name: Build Unit Tests
-        run: scons target=editor arch=x86_64 dev_build=yes tests=true
+        run: scons target=editor bits=64 dev_build=yes tests=true
 
       - name: Install Godot Engine
         uses: chickensoft-games/setup-godot@v2

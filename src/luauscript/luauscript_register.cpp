@@ -78,7 +78,7 @@ void uninitialize_luau_module(ModuleInitializationLevel p_level) {
     }
 }
 
-void luaugdext_module_startup_callback() {
+void startup_luau_module() {
     PackedStringArray args = OS::get_singleton()->get_cmdline_args();
     bool run_tests = false;
     for (int i = 0; i < args.size(); i++) {
@@ -91,6 +91,5 @@ void luaugdext_module_startup_callback() {
         WARN_PRINT("[LuauGDExtension] Running tests");
         doctest::Context().run();
         WARN_PRINT("[LuauGDExtension] Tests finished");
-        //OS::get_singleton()->kill(OS::get_singleton()->get_process_id());
     }   
 }
