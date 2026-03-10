@@ -8,7 +8,12 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    
+    env:
+      SCONS_CACHE: ${{ github.workspace }}/scons_cache
+      SCONS_CACHE_LIMIT: 4096
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -19,50 +24,32 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+          cache: 'pip'
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install scons
-          
-      - name: SCons Cache Setup
-        run: echo "SCONS_CACHE=scons_cache" >> $GITHUB_ENV
-
-      - name: Cache SCons Objects
-        uses: actions/cache@v4
-        with:
-          path: scons_cache
-          key: ${{ runner.os }}-scons-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-scons-
-
-      - name: Cache Godot-CPP
-        uses: actions/cache@v4
-        with:
-          # Cache the compiled godot-cpp static libraries
-          path: |
-            godot-cpp/bin/*.a
-            godot-cpp/bin/*.lib
-          # Use a key based on the godot-cpp submodule state
-          key: ${{ runner.os }}-godot-cpp-${{ hashFiles('godot-cpp/SConstruct', 'godot-cpp/include/**') }}
+      - name: Install SCons
+        run: python -m pip install scons
 
       - name: SCons Build Cache
         uses: actions/cache@v4
         with:
-          # SCons uses this file to track what needs recompiling
-          path: .sconsign.db.sqlite
-          key: ${{ runner.os }}-scons-db-${{ github.ref_name }}-${{ github.sha }}
+          path: |
+            ${{ env.SCONS_CACHE }}
+            .sconsign.db.sqlite
+            godot-cpp/bin/*.a
+            godot-cpp/bin/*.lib
+          key: ${{ runner.os }}-scons-${{ hashFiles('**/SConstruct', 'godot-cpp/include/**') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-scons-db-${{ github.ref_name }}-
-            ${{ runner.os }}-scons-db-
+            ${{ runner.os }}-scons-${{ hashFiles('**/SConstruct', 'godot-cpp/include/**') }}-
+            ${{ runner.os }}-scons-
 
       - name: Build Unit Tests
-        run: scons target=editor arch=x86_64 bits=64 dev_build=yes tests=true
+        run: scons target=editor tests=true -j$(nproc)
 
       - name: Install Godot Engine
         uses: chickensoft-games/setup-godot@v2
         with:
           version: "4.5"
-          use-dotnet: false
+          use-dotnet: true
 
       - name: Execute Tests
-        run: GODOT --headless --path ./demo -e -v --run-extension-tests --quit
+        run: godot --headless --path ./demo -e -v --run-extension-tests --quit
