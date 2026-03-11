@@ -8,7 +8,13 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    name: Build on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    
+    runs-on: ${{ matrix.os }}
     
     env:
       SCONS_CACHE: ${{ github.workspace }}/scons_cache
@@ -52,7 +58,7 @@ jobs:
           use-dotnet: false
 
       - name: Execute Tests
-        run: godot --rendering-driver opengl3_es --headless --path ./demo -e -v --run-extension-tests --quit
+        run: godot --headless --path ./demo -e -v --run-extension-tests --quit
 
       - name: Generate report
         run: echo "Summary of results" > test-report.txt
@@ -66,5 +72,23 @@ jobs:
       - name: LuauGDExt Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Luau GDExtension
+          name: build-output-${{ matrix.os }}
           path: ./demo/bin/LuauGDExt/
+
+  package:
+    name: Package
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-output-*
+          path: final-bundle
+          merge-multiple: true
+
+      - name: Upload Combined Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Luau GDExtension
+          path: final-bundle/
