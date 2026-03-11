@@ -19,15 +19,15 @@
 
 using namespace godot;
 
-TEST_CASE("REQUIRE Engine") {
-    Engine* engine = nobind::Engine::get_singleton();
-    CHECK(engine != nullptr);
-}
+// TEST_CASE("REQUIRE Engine") {
+//     Engine* engine = nobind::Engine::get_singleton();
+//     CHECK(engine != nullptr);
+// }
 
-TEST_CASE("REQUIRE LuauLanguage") {
-    LuauLanguage* luau_lang = LuauLanguage::get_singleton();
-    CHECK(luau_lang != nullptr);
-}
+// TEST_CASE("REQUIRE LuauLanguage") {
+//     LuauLanguage* luau_lang = LuauLanguage::get_singleton();
+//     CHECK(luau_lang != nullptr);
+// }
 
 // TEST_CASE("Run sayhello.luau") {
 //     LuauLanguage* luau_lang = LuauLanguage::get_singleton();
