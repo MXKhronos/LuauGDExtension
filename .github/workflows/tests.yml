@@ -52,7 +52,7 @@ jobs:
           use-dotnet: false
 
       - name: Execute Tests
-        run: godot --rendering-driver opengl3 --headless --path ./demo -e -v --run-extension-tests --quit
+        run: godot --rendering-driver opengl3_es --headless --path ./demo -e -v --run-extension-tests --quit
 
       - name: Generate report
         run: echo "Summary of results" > test-report.txt
