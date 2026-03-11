@@ -1,5 +1,4 @@
-[![Build](https://github.com/MXKhronos/LuauGDExtension/actions/workflows/tests.yml/badge.svg)](https://github.com/MXKhronos/LuauGDExtension/actions/workflows/tests.yml)
-# LuauGDExtension
+# LuauGDExtension ![Build](https://github.com/MXKhronos/LuauGDExtension/actions/workflows/tests.yml/badge.svg)
 GD Extension for using Luau as a scripting language. Including syntax highlighting in editor.
 
 ## Examples
