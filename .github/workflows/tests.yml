@@ -49,7 +49,7 @@ jobs:
         uses: chickensoft-games/setup-godot@v2
         with:
           version: "4.6.0"
-          use-dotnet: true
+          use-dotnet: false
 
       - name: Execute Tests
         run: godot --headless --path ./demo -e -v --run-extension-tests --quit

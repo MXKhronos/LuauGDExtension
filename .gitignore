@@ -7,6 +7,9 @@
 *.pdb
 *.pyc
 *.lib
+*.a
+*.so
+*.os
 /gen/**/*
 extern/godot-cpp/**/*
 extern/luau/**/*
