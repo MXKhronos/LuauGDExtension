@@ -50,18 +50,12 @@ sources += env.Glob("src/luauscript/variant/*.cpp")
 # Get the godot-cpp library path
 print(f"target={env['target']}") # editor
 print(f"arch={env['arch']}") # x86_64
-print(f"LIBSUFFIX={env['LIBSUFFIX']}") #.lib
-print(f"suffix={env['suffix']}") # .windows.editor.dev.x86_64
-print(f"SHLIBSUFFIX={env['SHLIBSUFFIX']}") #.dll
+print(f"LIBSUFFIX={env['LIBSUFFIX']}") #.lib / .a
+print(f"suffix={env['suffix']}") # .windows.editor.dev.x86_64 / .linux.editor.dev.x86_64
+print(f"SHLIBSUFFIX={env['SHLIBSUFFIX']}") #.dll / .so
 
 godot_cpp_lib = "extern/godot-cpp/bin/libgodot-cpp"
-if env["platform"] == "windows":
-    godot_cpp_lib += ".windows"
-elif env["platform"] == "linux":
-    godot_cpp_lib += ".linux"
-
-godot_cpp_lib += "." + env["target"]
-godot_cpp_lib += "." + env["arch"] + env["LIBSUFFIX"]
+godot_cpp_lib += env['suffix'] + env["LIBSUFFIX"]
 godot_cpp_file = env.File(godot_cpp_lib)
 
 

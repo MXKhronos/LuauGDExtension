@@ -55,7 +55,7 @@ jobs:
         run: godot --headless --path ./demo -e -v --run-extension-tests --quit
 
       - name: Generate report
-        run: echo "Summary of results" > report.txt
+        run: echo "Summary of results" > test-report.txt
 
       - name: Test Report Upload
         uses: actions/upload-artifact@v4
