@@ -1,4 +1,4 @@
-name: LuauGDExtension Unit Tests
+name: Build & Test
 
 on:
   push:
