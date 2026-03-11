@@ -49,7 +49,7 @@ jobs:
             ${{ runner.os }}-scons-
 
       - name: Build Unit Tests
-        run: scons target=editor dev_build=yes tests=true -j$(nproc)
+        run: scons target=editor dev_build=yes tests=true -j2
 
       - name: Install Godot Engine
         uses: chickensoft-games/setup-godot@v2

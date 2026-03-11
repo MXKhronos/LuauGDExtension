@@ -1,6 +1,9 @@
 #!/usr/bin/env python
+import os
 env = SConscript("extern/godot-cpp/SConstruct") # type: ignore
-# scons -c
+
+if 'SCONS_CACHE' in os.environ:
+    env.CacheDir(os.environ['SCONS_CACHE'])
 
 if env["platform"] == "windows":
     env.Append(CXXFLAGS=["/EHsc"])
