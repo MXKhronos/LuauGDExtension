@@ -58,6 +58,7 @@ jobs:
           use-dotnet: false
 
       - name: Execute Tests
+        shell: bash
         run: |
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
             gdb --args godot --headless --path ./demo -e -v --run-extension-tests --quit
