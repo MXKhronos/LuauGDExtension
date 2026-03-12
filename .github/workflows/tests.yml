@@ -54,17 +54,12 @@ jobs:
       - name: Install Godot Engine
         uses: chickensoft-games/setup-godot@v2
         with:
-          version: "4.6.0"
+          version: "4.6.1"
           use-dotnet: false
 
       - name: Execute Tests
         shell: bash
-        run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            gdb --args godot --headless --path ./demo -e -v --run-extension-tests --quit
-          else
-            godot --headless --path ./demo -e -v --run-extension-tests --quit
-          fi
+        run: godot --headless --path ./demo -e -v --run-extension-tests --quit
 
       - name: LuauGDExt Artifact
         uses: actions/upload-artifact@v4
