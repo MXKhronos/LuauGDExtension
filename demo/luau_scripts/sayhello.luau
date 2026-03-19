@@ -1,6 +1,6 @@
 ---@extends SceneTree
 
 function _init()
-    print("Hello!");
-    quit();
+	print("Hello!");
+	quit();
 end

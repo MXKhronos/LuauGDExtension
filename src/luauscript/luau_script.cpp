@@ -536,7 +536,7 @@ void LuauScriptInstance::notification(int32_t p_what) {
     
     // First try the specific method
     if (method_name != StringName("_notification") && has_method(method_name)) {
-		if (method_name != StringName("_process")) {
+		if (method_name != StringName("_process") && method_name != StringName("_physics_process")) {
         	WARN_PRINT(vformat("Calling method: %s", String(method_name)));
 		}
         lua_State *ET = lua_newthread(T);
@@ -555,8 +555,7 @@ void LuauScriptInstance::notification(int32_t p_what) {
             return;
         }
         
-        // Swap function and self table so self is first argument
-        lua_insert(ET, -2);
+        lua_remove(ET, -2);
         
         // Now push additional arguments if needed
         int argc = 0;
@@ -571,14 +570,13 @@ void LuauScriptInstance::notification(int32_t p_what) {
             argc = 1;
         }
         
-        // Call: function, self, [args...]
-        int call_result = lua_pcall(ET, argc + 1, 0, 0); // +1 for self
+        // Call: function, [args...]
+        int call_result = lua_pcall(ET, argc, 0, 0);
         
         if (call_result != LUA_OK) {
             const char* error_msg = lua_tostring(ET, -1);
             if (error_msg) {
-                ERR_PRINT(vformat("Luau script error in %s: %s", 
-                    method_str, error_msg));
+                UtilityFunctions::printerr(vformat("Luau script error in %s: %s", method_str, error_msg));
             }
             lua_pop(ET, 1); // Remove error message
         }
@@ -884,13 +882,11 @@ bool LuauScriptInstance::has_method(const StringName &p_name) const {
     return false;
 }
 
-Object *LuauScriptInstance::get_owner() const
-{
+Object *LuauScriptInstance::get_owner() const {
     return owner;
 }
 
-Ref<LuauScript> LuauScriptInstance::get_script() const
-{
+Ref<LuauScript> LuauScriptInstance::get_script() const {
     return script;
 }
 
@@ -912,20 +908,19 @@ int LuauScriptInstance::call_internal(const StringName &p_method, lua_State *ET,
         return LUA_ERRRUN;
     }
     
-    // Swap function and self table so self is first argument
-    lua_insert(ET, -2);
+    lua_remove(ET, -2);	//remove self
+	lua_insert(ET, -(argc + 1)); //move function to the top
     
     // The arguments are already on the stack, placed by the caller
     // So we have: function, self, [args...]
-    int call_result = lua_pcall(ET, argc + 1, retc, 0); // +1 for self
+    int call_result = lua_pcall(ET, argc, retc, 0);
     
     if (call_result != LUA_OK) {
         const char* error_msg = lua_tostring(ET, -1);
         if (error_msg) {
-            ERR_PRINT(vformat("Luau script error in %s: %s", 
-                p_method, error_msg));
+            UtilityFunctions::printerr(vformat("Luau script error in %s: %s", p_method, error_msg));
         }
-        lua_pop(ET, 1); // Remove error message
+        lua_pop(ET, 1);
     }
     
     return call_result;

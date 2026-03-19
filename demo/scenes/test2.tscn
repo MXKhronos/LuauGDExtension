@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://cwldjx5rar8i"]
+
+[ext_resource type="Script" uid="uid://ccvxj2n33ox6v" path="res://luau_scripts/character2d.luau" id="1_cy281"]
+[ext_resource type="Texture2D" uid="uid://yqlw5w3emnoe" path="res://icon.svg" id="1_u577f"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_uxr5t"]
+
+[node name="Test2" type="Node2D" unique_id=523829183]
+
+[node name="Label" type="Label" parent="." unique_id=2096943442]
+offset_left = 9.0
+offset_top = 7.0
+offset_right = 145.0
+offset_bottom = 30.0
+text = "Move with WASD."
+
+[node name="CharacterBody2D" type="CharacterBody2D" parent="." unique_id=617270897]
+position = Vector2(92, 116)
+script = ExtResource("1_cy281")
+speed = 300.0
+
+[node name="Sprite2D" type="Sprite2D" parent="CharacterBody2D" unique_id=912674070]
+texture = ExtResource("1_u577f")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CharacterBody2D" unique_id=2001782987]
+scale = Vector2(6.5, 6.5)
+shape = SubResource("CircleShape2D_uxr5t")

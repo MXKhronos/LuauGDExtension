@@ -6,7 +6,7 @@ local BCONST = 345;
 acount = 1;
 local bcount: number = 0;
 
-function _init(self: Node2D)
+function _init()
 	print("[luau] init!", self, self.name, typeof(self.name));
 	print("[luau] init ACONST=", ACONST);
 	print("[luau] init BCONST=", BCONST);
@@ -15,7 +15,7 @@ function _init(self: Node2D)
 	hello();
 end
 
-function _ready(self: Node2D)
+function _ready()
 	print("[luau] ready!", self, self.name, typeof(self.name));
 	while true do
 		print("[luau] hello world!");
@@ -29,12 +29,12 @@ function _ready(self: Node2D)
 	end
 end
 
-function _enter_tree(self: Node2D): nil
+function _enter_tree(): nil
 	print("[luau] enter tree");
 	return;
 end
 
-function _process(self: Node2D, delta: number): nil
+function _process(delta: number): nil
 	return;
 end
 

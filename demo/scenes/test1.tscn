@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://d0mmfnig43yww"]
+
+[ext_resource type="Texture2D" uid="uid://yqlw5w3emnoe" path="res://icon.svg" id="1_h46hq"]
+[ext_resource type="Script" uid="uid://c627n27rn8jon" path="res://luau_scripts/test_node_2d.luau" id="1_oydga"]
+
+[node name="Test1" type="Node2D" unique_id=2104928393]
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=844535462]
+modulate = Color(0.88097984, 0, 0.11902016, 1)
+position = Vector2(100, 100)
+rotation = 512.3575
+texture = ExtResource("1_h46hq")
+script = ExtResource("1_oydga")
+green = Color(0.5, 1, 0, 1)

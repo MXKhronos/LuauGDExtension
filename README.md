@@ -13,7 +13,8 @@ local BCONST = 345; -- Local constant
 acount = 1; -- Exported variable
 local bcount: number = 0; -- Local variable with type annotation
 
-function _init(self: Node2D)
+-- env = self
+function _init()
 	print("[luau] init!", self, self.name, typeof(self));
     -- Prints> [luau] init! { "__godot_owner": <null>, "_init": <null>, "__godot_script": <null>, "_ready": <null>, "_process": <null>, "ACONST": 123.0, "acount": 1.0 } Dictionary
 end
@@ -28,8 +29,9 @@ function _ready()
 	add_child(newSprite2D); -- == self.add_child(newSprite2D);
 end
 
-function _process(self: Sprite2D, delta)
-	rotate(0.02);   -- Calls self.rotate(0.02);
+
+function _process(delta: number)
+	rotate(0.02);   -- Same as self.rotate(0.02);
 
 	totalDelta = totalDelta + delta;
 

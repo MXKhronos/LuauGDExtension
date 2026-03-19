@@ -95,6 +95,11 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
             ColorBridge::push_from(L, p_var.operator Color());
             break;
         }
+
+        case Variant::CALLABLE : {
+            CallableBridge::push_from(L, p_var.operator Callable());
+            break;
+        }
         
         case Variant::OBJECT: { // Push GD Class Object to Lua
             Object* obj = p_var.get_validated_object();
@@ -374,14 +379,38 @@ void VariantBridge<GDV, __eq>::register_variant (lua_State *L) {
     lua_pushcfunction(L, on_call, "__call");
     lua_settable(L, -3);
 
+    lua_pushstring(L, "__tostring");
+    lua_pushcfunction(L, on_tostring, "__tostring");
+    lua_settable(L, -3);
+
     if (__eq) {
         lua_pushstring(L, "__eq");
         lua_pushcfunction(L, on_eq, "__eq");
         lua_settable(L, -3);
     }
 
-    lua_pushstring(L, "__tostring");
-    lua_pushcfunction(L, on_tostring, "__tostring");
+    lua_pushstring(L, "__add");
+    lua_pushcfunction(L, on_add, "__add");
+    lua_settable(L, -3);
+
+    lua_pushstring(L, "__sub");
+    lua_pushcfunction(L, on_sub, "__sub");
+    lua_settable(L, -3);
+    
+    lua_pushstring(L, "__mul");
+    lua_pushcfunction(L, on_mul, "__mul");
+    lua_settable(L, -3);
+
+    lua_pushstring(L, "__div");
+    lua_pushcfunction(L, on_div, "__div");
+    lua_settable(L, -3);
+
+    lua_pushstring(L, "__mod");
+    lua_pushcfunction(L, on_mod, "__mod");
+    lua_settable(L, -3);
+
+    lua_pushstring(L, "__pow");
+    lua_pushcfunction(L, on_pow, "__pow");
     lua_settable(L, -3);
 
     lua_setreadonly(L, -1, true);

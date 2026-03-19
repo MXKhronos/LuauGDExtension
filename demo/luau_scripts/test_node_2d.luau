@@ -58,7 +58,7 @@ function _ready()
 	testObject();
 end
 
-function _process(self: Sprite2D, delta)
+function _process(delta: number)
 	rotate(0.02);
 
 	totalDelta = totalDelta + delta;
