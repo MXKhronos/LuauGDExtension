@@ -504,6 +504,10 @@ void LuauScriptInstance::notification(int32_t p_what) {
         return;
     }
     
+	if (!script->is_tool()) {
+		return;
+	}
+
     // Map common notifications to Luau method names
     StringName method_name;
     switch (p_what) {
@@ -533,7 +537,7 @@ void LuauScriptInstance::notification(int32_t p_what) {
             method_name = "_notification";
             break;
     }
-    
+
     // First try the specific method
     if (method_name != StringName("_notification") && has_method(method_name)) {
 		if (method_name != StringName("_process") && method_name != StringName("_physics_process")) {
@@ -612,7 +616,7 @@ void LuauScriptInstance::notification(int32_t p_what) {
         if (call_result != LUA_OK) {
             const char* error_msg = lua_tostring(ET, -1);
             if (error_msg) {
-                ERR_PRINT(vformat("Luau script error in _notification: %s", error_msg));
+                UtilityFunctions::printerr(vformat("Luau script error in _notification: %s", error_msg));
             }
             lua_pop(ET, 1); // Remove error message
         }
@@ -895,6 +899,10 @@ int LuauScriptInstance::call_internal(const StringName &p_method, lua_State *ET,
         return LUA_ERRRUN;
     }
     
+	if (!script->is_tool()) {
+		return LUA_OK;
+	}
+
     // Get the self table from the main state
     lua_getref(L, self_ref);
     lua_xmove(L, ET, 1);
