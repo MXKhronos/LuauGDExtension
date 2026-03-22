@@ -3,6 +3,7 @@
 
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/core/memory.hpp>
 
 #include <lua.h>
 #include <lualib.h>
@@ -92,50 +93,98 @@ public:
         Variant value = obj.get(prop_name, &valid); //Get Variant GDV property
 
         if (!valid) {
+            lua_getglobal(L, variant_name);
+            lua_pushstring(L, key);
+            lua_rawget(L, -2);
+            if (!lua_isnil(L, -1)) {
+                // Pop global table
+                lua_remove(L, -2);
+                
+                return 1;
+            }
+            lua_pop(L, 2); // Pop nil and global table
+
             luaL_error(L, ("Invalid property: " + String(variant_name) + "." + String(key)).utf8().get_data());
             return 1;
         }
-
+        
+        // WARN_PRINT(vformat("value is: %s (%s)", value, value.get_type_name( value.get_type())));
         if (value.get_type() == Variant::CALLABLE) {
             // obj.prop_name is a method
-            // Get the metatable methods for this variant type
-            lua_getglobal(L, variant_name);
-            if (lua_isnil(L, -1)) {
-                luaL_error(L, ("No metatable found for: " + String(variant_name)).utf8().get_data());
-                return 1;
-            }
 
             lua_pushstring(L, key);
-            lua_rawget(L, -2);
-            if (lua_isnil(L, -1)) {// No method found in metatable
-                lua_pop(L, 1); // Pop nil
+            lua_pushcclosure(L, [](lua_State *L) -> int {
+                const char* key = lua_tostring(L, lua_upvalueindex(1));
+                Variant obj = get_object(L, 1);
 
-                //Push lua closure
-                lua_pushlightuserdata(L, &value);
-                lua_pushstring(L, key);
-                lua_pushcclosure(L, [](lua_State *L) -> int {
-                    Variant* objv = (Variant*)lua_touserdata(L, lua_upvalueindex(1));
-                    const char* key = lua_tostring(L, lua_upvalueindex(2));
+                StringName method_name(key);
 
-                    Array args;
-                    for (int i = 2; i <= lua_gettop(L); i++) {
-                        args.append(LuauBridge::get_variant(L, i));
-                    }
-
-                    Variant result = objv->operator Callable().call(args);
-                    LuauBridge::push_variant(L, result);
+                if (!obj.has_method(method_name)) {
+                    luaL_error(L, vformat("Object does not have method: %s", method_name).utf8().get_data());
                     return 1;
-                }, key, 2);
+                }
+
+                const int argc = lua_gettop(L) -1;
+                Variant* var_buffer = (Variant*)memalloc(sizeof(Variant) * argc);
+                const Variant** ptrs = (const Variant**)memalloc(sizeof(Variant*) * argc);
+                for (int i = 0; i < argc; i++) {
+                    Variant v = LuauBridge::get_variant(L, i + 2);
+                    new (&var_buffer[i]) Variant(v);
+                    ptrs[i] = &var_buffer[i];
+                }
+
+                Variant result;
+                GDExtensionCallError error;
+                obj.callp(method_name, ptrs, argc, result, error);
+                if (error.error != GDEXTENSION_CALL_OK) {
+                    GDExtensionCallErrorType error_type = error.error;
+                    switch (error_type) {
+                        case GDEXTENSION_CALL_ERROR_INVALID_METHOD: {
+                            luaL_error(L, vformat("Object does not have method: %s", method_name).utf8().get_data());
+                            break;
+                        };
+                        case GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT: {
+                            luaL_error(L, vformat("Invalid argument for method: %s", method_name).utf8().get_data());
+                            break;
+                        };
+                        case GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS: {
+                            luaL_error(L, vformat("Too few arguments for method: %s, expected at least %s, got %s", method_name, error.argument, argc).utf8().get_data());
+                            break;
+                        };
+                        case GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS: {
+                            luaL_error(L, vformat("Too many arguments for method: %s, expected %s, got %s", method_name, error.argument, argc).utf8().get_data());
+                            break;
+                        };
+                        case GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST: {
+                            luaL_error(L, vformat("Method is not const: %s", method_name).utf8().get_data());
+                            break;
+                        };
+                        default: {
+                            luaL_error(L, vformat("Failed to call method(%s), Unkown error.", method_name).utf8().get_data());
+                            break;
+                        };
+                    }
+                    
+                    return 1;
+                }
+                LuauBridge::push_variant(L, result);
+
+                // Free the memory
+                for (int i = 0; i < argc; i++) {
+                    var_buffer[i].~Variant();
+                }
+                memfree(var_buffer);
+                memfree(ptrs);
 
                 return 1;
-            }
-            
-            lua_remove(L, -2); // Remove global table
+            }, key, 1);
+
             return 1;
 
         } else if (value.get_type() != Variant::NIL) {
             LuauBridge::push_variant(L, value);
             return 1;
+
         }
 
         return on_index(L, obj, key);
@@ -194,185 +243,120 @@ public:
     }
 
     static int on_eq(lua_State *L) {
-        GDV& obj1 = get_object(L, 1);
-        GDV& obj2 = get_object(L, 2);
+        Variant v1 = LuauBridge::get_variant(L, 1);
+        Variant v2 = LuauBridge::get_variant(L, 2);
 
-        Variant v1, v2;
-        
-        if constexpr (std::is_base_of_v<Object, GDV>) {
-            v1 = Variant(&obj1); // It's an Object, store the pointer
-            v2 = Variant(&obj2);
-        } else {
-            v1 = Variant(obj1);  // It's a Value Type (Vector2, etc)
-            v2 = Variant(obj2);
-        }
-
+        Variant result;
         bool valid;
-        Variant::evaluate(Variant::Operator::OP_EQUAL, v1, v2, v1, valid);
-        
+        Variant::evaluate(Variant::Operator::OP_EQUAL, v1, v2, result, valid);
+
         if (!valid) {
             luaL_error(L, "No equality operator for types: %s and %s", Variant::get_type_name(v1.get_type()), Variant::get_type_name(v2.get_type()));
             return 1;
         }
-        
-        LuauBridge::push_variant(L, v1);
-        
+        LuauBridge::push_variant(L, result);
+            
         return 1;
     }
 
     static int on_add(lua_State *L) {
-        GDV& obj1 = get_object(L, 1);
-        GDV& obj2 = get_object(L, 2);
+        Variant v1 = LuauBridge::get_variant(L, 1);
+        Variant v2 = LuauBridge::get_variant(L, 2);
 
-        Variant v1, v2;
-        
-        if constexpr (std::is_base_of_v<Object, GDV>) {
-            v1 = Variant(&obj1); // It's an Object, store the pointer
-            v2 = Variant(&obj2);
-        } else {
-            v1 = Variant(obj1);  // It's a Value Type (Vector2, etc)
-            v2 = Variant(obj2);
-        }
-        
+        Variant result;
         bool valid;
-        Variant::evaluate(Variant::Operator::OP_ADD, v1, v2, v1, valid);
+        Variant::evaluate(Variant::Operator::OP_ADD, v1, v2, result, valid);
 
         if (!valid) {
             luaL_error(L, "No addition operator for types: %s and %s", Variant::get_type_name(v1.get_type()), Variant::get_type_name(v2.get_type()));
             return 1;
         }
-        
-        LuauBridge::push_variant(L, v1);
+        LuauBridge::push_variant(L, result);
             
         return 1;
     }
 
     static int on_sub(lua_State *L) {
-        GDV& obj1 = get_object(L, 1);
-        GDV& obj2 = get_object(L, 2);
-        
-        Variant v1, v2;
-        if constexpr (std::is_base_of_v<Object, GDV>) {
-            v1 = Variant(&obj1); // It's an Object, store the pointer
-            v2 = Variant(&obj2);
-        } else {
-            v1 = Variant(obj1);  // It's a Value Type (Vector2, etc)
-            v2 = Variant(obj2);
-        }
-        
+        Variant v1 = LuauBridge::get_variant(L, 1);
+        Variant v2 = LuauBridge::get_variant(L, 2);
+
+        Variant result;
         bool valid;
-        Variant::evaluate(Variant::Operator::OP_SUBTRACT, v1, v2, v1, valid);
-        
+        Variant::evaluate(Variant::Operator::OP_SUBTRACT, v1, v2, result, valid);
+
         if (!valid) {
             luaL_error(L, "No subtraction operator for types: %s and %s", Variant::get_type_name(v1.get_type()), Variant::get_type_name(v2.get_type()));
             return 1;
         }
-        
-        LuauBridge::push_variant(L, v1);
+        LuauBridge::push_variant(L, result);
             
         return 1;
     }
 
     static int on_mul(lua_State *L) {
-        GDV& obj1 = get_object(L, 1);
-        GDV& obj2 = get_object(L, 2);
+        Variant v1 = LuauBridge::get_variant(L, 1);
+        Variant v2 = LuauBridge::get_variant(L, 2);
 
-        Variant v1, v2;
-        if constexpr (std::is_base_of_v<Object, GDV>) {
-            v1 = Variant(&obj1); // It's an Object, store the pointer
-            v2 = Variant(&obj2);
-        } else {
-            v1 = Variant(obj1);  // It's a Value Type (Vector2, etc)
-            v2 = Variant(obj2);
-        }
-        
+        Variant result;
         bool valid;
-        Variant::evaluate(Variant::Operator::OP_MULTIPLY, v1, v2, v1, valid);
+        Variant::evaluate(Variant::Operator::OP_MULTIPLY, v1, v2, result, valid);
 
         if (!valid) {
             luaL_error(L, "No multiplication operator for types: %s and %s", Variant::get_type_name(v1.get_type()), Variant::get_type_name(v2.get_type()));
             return 1;
         }
-        
-        LuauBridge::push_variant(L, v1);
+        LuauBridge::push_variant(L, result);
             
         return 1;
     }
 
     static int on_div(lua_State *L) {
-        GDV& obj1 = get_object(L, 1);
-        GDV& obj2 = get_object(L, 2);
-        
-        Variant v1, v2;
-        if constexpr (std::is_base_of_v<Object, GDV>) {
-            v1 = Variant(&obj1); // It's an Object, store the pointer
-            v2 = Variant(&obj2);
-        } else {
-            v1 = Variant(obj1);  // It's a Value Type (Vector2, etc)
-            v2 = Variant(obj2);
-        }
-        
+        Variant v1 = LuauBridge::get_variant(L, 1);
+        Variant v2 = LuauBridge::get_variant(L, 2);
+
+        Variant result;
         bool valid;
-        Variant::evaluate(Variant::Operator::OP_DIVIDE, v1, v2, v1, valid);
-        
+        Variant::evaluate(Variant::Operator::OP_DIVIDE, v1, v2, result, valid);
+
         if (!valid) {
             luaL_error(L, "No division operator for types: %s and %s", Variant::get_type_name(v1.get_type()), Variant::get_type_name(v2.get_type()));
             return 1;
         }
-        
-        LuauBridge::push_variant(L, v1);
+        LuauBridge::push_variant(L, result);
             
         return 1;
     }
 
     static int on_mod(lua_State *L) {
-        GDV& obj1 = get_object(L, 1);
-        GDV& obj2 = get_object(L, 2);
-        
-        Variant v1, v2;
-        if constexpr (std::is_base_of_v<Object, GDV>) {
-            v1 = Variant(&obj1); // It's an Object, store the pointer
-            v2 = Variant(&obj2);
-        } else {
-            v1 = Variant(obj1);  // It's a Value Type (Vector2, etc)
-            v2 = Variant(obj2);
-        }
-        
+        Variant v1 = LuauBridge::get_variant(L, 1);
+        Variant v2 = LuauBridge::get_variant(L, 2);
+
+        Variant result;
         bool valid;
-        Variant::evaluate(Variant::Operator::OP_MODULE, v1, v2, v1, valid);
-        
+        Variant::evaluate(Variant::Operator::OP_MODULE, v1, v2, result, valid);
+
         if (!valid) {
             luaL_error(L, "No modulo operator for types: %s and %s", Variant::get_type_name(v1.get_type()), Variant::get_type_name(v2.get_type()));
             return 1;
         }
-        
-        LuauBridge::push_variant(L, v1);
+        LuauBridge::push_variant(L, result);
             
         return 1;
     }
 
     static int on_pow(lua_State *L) {
-        GDV& obj1 = get_object(L, 1);
-        GDV& obj2 = get_object(L, 2);
-        
-        Variant v1, v2;
-        if constexpr (std::is_base_of_v<Object, GDV>) {
-            v1 = Variant(&obj1); // It's an Object, store the pointer
-            v2 = Variant(&obj2);
-        } else {
-            v1 = Variant(obj1);  // It's a Value Type (Vector2, etc)
-            v2 = Variant(obj2);
-        }
-        
+        Variant v1 = LuauBridge::get_variant(L, 1);
+        Variant v2 = LuauBridge::get_variant(L, 2);
+
+        Variant result;
         bool valid;
-        Variant::evaluate(Variant::Operator::OP_POWER, v1, v2, v1, valid);
-        
+        Variant::evaluate(Variant::Operator::OP_POWER, v1, v2, result, valid);
+
         if (!valid) {
             luaL_error(L, "No power operator for types: %s and %s", Variant::get_type_name(v1.get_type()), Variant::get_type_name(v2.get_type()));
             return 1;
         }
-        
-        LuauBridge::push_variant(L, v1);
+        LuauBridge::push_variant(L, result);
             
         return 1;
     }

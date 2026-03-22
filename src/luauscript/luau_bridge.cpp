@@ -187,7 +187,7 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             return Variant(get_string(L, p_index));
             
         case LUA_TTABLE: {
-            // Get the userdata's metatable
+            // Get the table's metatable
             if (!lua_getmetatable(L, p_index)) {
                 return Variant(get_dictionary(L, p_index));
             }
@@ -216,11 +216,6 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
 
             WARN_PRINT("LUA_TTABLE Type is: " + String(type_name));
             String type_str(type_name);
-            if (type_str == "Vector2") {
-                return Vector2();
-            } else if (type_str == "Color") {
-                return Color();
-            }
 
             WARN_PRINT("Unhandled table type: " + String(type_name) + " -> defaulted as dictionary");
             return Variant(get_dictionary(L, p_index));
@@ -354,7 +349,7 @@ void LuauBridge::protect_metatable(lua_State* L, int index) {
 
 
 template <class GDV, bool __eq>
-void VariantBridge<GDV, __eq>::register_variant (lua_State *L) {
+void VariantBridge<GDV, __eq>::register_variant(lua_State *L) {
     // Create the metatable
     luaL_newmetatable(L, variant_name);
     LuauBridge::protect_metatable(L, -1);

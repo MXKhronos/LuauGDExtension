@@ -11,20 +11,21 @@ green.r = 0.5;
 print("new green", green, Color.GREEN);
 local newColor = Color(0.1, 0.2, 0.3);
 print("newColor", newColor);
+print("Vector2.ZERO", Vector2.ZERO, "Vector2.INF", Vector2.INF);
 
 local i = 0;
 local newDelta = 12;
 local testString: string = `Hello wrold?`;
 local helloTable = {Hello="World"};
 
-print("test self", self)
-print("test Color variant", type(Color));
-print("test Color variant2", typeof(Color));
-print("test Color variant3", type(red));
-print("test Color variant4", typeof(red));
-print("test Color hex", Color.hex(0x008b8bff));
-print("v2", Vector2(32, 64));
-print("v2i", Vector2i(4, 8));
+print("self", self);
+print("Color variant", type(Color)); -- table
+print("Color variant2", typeof(Color)); -- Dictionary
+print("Color variant3", type(red)); -- userdata
+print("Color variant4", typeof(red)); -- Color
+print("Color hex", Color.hex(0x008b8bff)); -- hex (0.0, 0.5451, 0.5451, 1.0)
+print("Vector2", Vector2(32, 64)); -- (32.0, 64.0)
+print("Vector2i", Vector2i(4, 8)); -- (4, 8)
 
 function _init()
 	print("init", helloTable);

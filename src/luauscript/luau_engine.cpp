@@ -76,35 +76,34 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
 
         lua_insert(L, -2);             // [Stack: NewTable, Metatable]
         lua_setmetatable(L, -2);       // [Stack: NewTable]
+
         return;
     }
     lua_pop(L, 1); // Pop the nil from a failed getmetatable
 
-    // Create the Metatable
+    // Class Metatable
     luaL_newmetatable(L, class_name_c); // [Stack: Metatable]
     LuauBridge::protect_metatable(L, -1);
 
     // __call metamethod
     lua_pushcfunction(L, [](lua_State *L) -> int {
-        // 1. Extract Class Name from self (Index 1)
+        // Extract Class Name from self (Index 1)
         lua_getfield(L, 1, "Name");
+
         const char* class_name = lua_tostring(L, -1);
         lua_pop(L, 1);
 
-        UtilityFunctions::print("Instantiating class: " + String(class_name));
-
-        // 2. The 'Properties' table is at Index 2
-        // Let's check if the user actually passed a table: Sprite2D{ ... }
+        // Checking first arg as table of properties
         bool has_props = lua_istable(L, 2);
 
-        // 3. Instantiate Godot Object
+        // Instantiate
         Object *obj = ClassDB::instantiate(StringName(class_name));
         if (!obj) {
             luaL_error(L, "Failed to instantiate %s", class_name);
             return 0;
         }
 
-        // 4. If properties were passed, apply them to the Godot Object
+        // Set properties
         if (has_props) {
             lua_pushnil(L); // Start iteration of arg1 (Index 2)
             while (lua_next(L, 2) != 0) {
@@ -118,12 +117,11 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
             }
         }
 
-        // 5. Push the final object to Lua
         LuauBridge::push_variant(L, obj);
         return 1; 
     }, "godot_call_handler");
-    
     lua_setfield(L, -2, "__call"); // [Stack: Metatable]
+
 
     // __index metamethod to index singleton_obj
     lua_pushcfunction(L, [](lua_State *L) -> int {
@@ -131,12 +129,12 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         const char* class_name = lua_tostring(L, -1);
         lua_pop(L, 1);
 
+        const char* key = lua_tostring(L, 2);
+
         Object *singleton_obj = Engine::get_singleton()->get_singleton(StringName(class_name));
         if (!singleton_obj) {
             return 0;
         }
-
-        const char* key = lua_tostring(L, 2);
 
         //check if key is a method
         if (singleton_obj->has_method(StringName(key))) {
@@ -154,6 +152,7 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
                 }
 
                 Variant result = singleton_obj->callv(StringName(key), args);
+
                 LuauBridge::push_variant(L, result);
                 return 1;
             }, key, 2);
@@ -162,23 +161,21 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         }
 
         Variant val = singleton_obj->get(StringName(key));
+        WARN_PRINT(vformat("Getting singleton property: %s = %s", key, String(val)));
         LuauBridge::push_variant(L, val);
+
         return 1;
-        
     }, "godot_index_handler");
     lua_setfield(L, -2, "__index");
 
-    // 4. Create the Actual Class Table (The "Instance")
     lua_newtable(L);                   // [Stack: Metatable, ClassTable]
     
     lua_pushstring(L, class_name_c);
     lua_setfield(L, -2, "Name");       // ClassTable.Name = "..."
 
-    // 5. Link them
     lua_pushvalue(L, -2);              // [Stack: Metatable, ClassTable, Metatable]
     lua_setmetatable(L, -2);           // [Stack: Metatable, ClassTable]
 
-    // 6. Cleanup & Finalize
     lua_remove(L, -2);                 // Remove Metatable, leave ClassTable at top
     lua_setreadonly(L, -1, true);      // Make the class definition read-only
 }
