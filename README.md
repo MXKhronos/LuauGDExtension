@@ -5,7 +5,7 @@ GD Extension for using Luau as a scripting language. Including syntax highlighti
 See the `demo` folder for more examples.
 
 **Basic 2D Character Controller**
-![In editor syntax highlighting](md\basicCharController.jpg)
+![In editor syntax highlighting](md/basicCharController.jpg)
 
 
 **Syntax and Typing**
