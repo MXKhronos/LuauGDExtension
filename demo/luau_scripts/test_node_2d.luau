@@ -36,7 +36,6 @@ function _init()
 		"Hello";
 		"World!";
 	});
-	print("NOTIFICATION_POSTINITIALIZE", Object.NOTIFICATION_POSTINITIALIZE);
 end
 
 function _ready()

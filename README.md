@@ -4,6 +4,11 @@ GD Extension for using Luau as a scripting language. Including syntax highlighti
 ## Examples
 See the `demo` folder for more examples.
 
+**Basic 2D Character Controller**
+![In editor syntax highlighting](md\basicCharController.jpg)
+
+
+**Syntax and Typing**
 ```luau
 --- @extends Sprite2D   -- script's node
 
@@ -42,4 +47,4 @@ end
 ```
 
 ## Status
-In development, not ready for use. This is a proof of concept and mainly for enthusiasts.
+In development, not ready for use. This is a proof of concept and for enthusiasts development. Contributions are welcome!
