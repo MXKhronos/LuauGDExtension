@@ -16,6 +16,17 @@ const luaL_Reg Transform2DBridge::static_library[] = {
 void Transform2DBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
+    // CONSTANTS
+    Transform2DBridge::push_from(L, Transform2D(1, 0, 0, 1, 0, 0));
+    lua_setfield(L, -2, "IDENTITY");
+
+    Transform2DBridge::push_from(L, Transform2D(-1, 0, 0, 1, 0, 0));
+    lua_setfield(L, -2, "FLIP_X");
+
+    Transform2DBridge::push_from(L, Transform2D(1, 0, 0, -1, 0, 0));
+    lua_setfield(L, -2, "FLIP_Y");
+
+    
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);

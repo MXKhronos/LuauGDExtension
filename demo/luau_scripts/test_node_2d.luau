@@ -12,6 +12,8 @@ print("new green", green, Color.GREEN);
 local newColor = Color(0.1, 0.2, 0.3);
 print("newColor", newColor);
 print("Vector2.ZERO", Vector2.ZERO, "Vector2.INF", Vector2.INF);
+print("Vector3.ZERO", Vector3.ZERO, "Vector3i.MAX", Vector3i.MAX);
+print("Projection.IDENTITY", Projection.IDENTITY);
 
 local i = 0;
 local newDelta = 12;
@@ -34,6 +36,7 @@ function _init()
 		"Hello";
 		"World!";
 	});
+	print("NOTIFICATION_POSTINITIALIZE", Object.NOTIFICATION_POSTINITIALIZE);
 end
 
 function _ready()

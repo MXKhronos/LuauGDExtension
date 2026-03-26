@@ -16,6 +16,53 @@ const luaL_Reg Vector3Bridge::static_library[] = {
 void Vector3Bridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
+    // CONSTANTS
+    Vector3Bridge::push_from(L, Vector3(0, 0, 0));
+    lua_setfield(L, -2, "ZERO");
+
+    Vector3Bridge::push_from(L, Vector3(1, 1, 1));
+    lua_setfield(L, -2, "ONE");
+
+    Vector3Bridge::push_from(L, Vector3(Math_INF, Math_INF, Math_INF));
+    lua_setfield(L, -2, "INF");
+
+    Vector3Bridge::push_from(L, Vector3(-1, 0, 0));
+    lua_setfield(L, -2, "LEFT");
+    
+    Vector3Bridge::push_from(L, Vector3(1, 0, 0));
+    lua_setfield(L, -2, "RIGHT");
+    
+    Vector3Bridge::push_from(L, Vector3(0, -1, 0));
+    lua_setfield(L, -2, "DOWN");
+    
+    Vector3Bridge::push_from(L, Vector3(0, 1, 0));
+    lua_setfield(L, -2, "UP");
+    
+    Vector3Bridge::push_from(L, Vector3(0, 0, -1));
+    lua_setfield(L, -2, "FORWARD");
+    
+    Vector3Bridge::push_from(L, Vector3(0, 0, 1));
+    lua_setfield(L, -2, "BACK");
+
+    Vector3Bridge::push_from(L, Vector3(1, 0, 0));
+    lua_setfield(L, -2, "MODEL_LEFT");
+    
+    Vector3Bridge::push_from(L, Vector3(-1, 0, 0));
+    lua_setfield(L, -2, "MODEL_RIGHT");
+    
+    Vector3Bridge::push_from(L, Vector3(0, 1, 0));
+    lua_setfield(L, -2, "MODEL_TOP");
+    
+    Vector3Bridge::push_from(L, Vector3(0, -1, 0));
+    lua_setfield(L, -2, "MODEL_BOTTOM");
+    
+    Vector3Bridge::push_from(L, Vector3(0, 0, 1));
+    lua_setfield(L, -2, "MODEL_FRONT");
+    
+    Vector3Bridge::push_from(L, Vector3(0, 0, -1));
+    lua_setfield(L, -2, "MODEL_REAR");
+
+
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);

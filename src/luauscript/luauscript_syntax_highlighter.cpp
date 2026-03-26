@@ -279,7 +279,6 @@ Dictionary LuauSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) 
                 // This is a --- comment, might be an annotation
                 int comment_start = j;
                 
-                // First, color all three dashes
                 Dictionary dash_info;
                 dash_info["color"] = comment_color;
                 color_map[j] = dash_info;
@@ -770,8 +769,6 @@ bool LuauSyntaxHighlighter::is_constant_identifier(const String& identifier) con
         return false;
     }
     
-    // Check if all characters are uppercase letters, digits, or underscores
-    // and at least one uppercase letter exists
     bool has_uppercase = false;
     for (int i = 0; i < identifier.length(); i++) {
         char32_t c = identifier[i];

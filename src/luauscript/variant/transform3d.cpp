@@ -15,6 +15,20 @@ const luaL_Reg Transform3DBridge::static_library[] = {
 void Transform3DBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
+    // CONSTANTS
+    Transform3DBridge::push_from(L, Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0));
+    lua_setfield(L, -2, "IDENTITY");
+
+    Transform3DBridge::push_from(L, Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0));
+    lua_setfield(L, -2, "FLIP_X");
+
+    Transform3DBridge::push_from(L, Transform3D(1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0));
+    lua_setfield(L, -2, "FLIP_Y");
+
+    Transform3DBridge::push_from(L, Transform3D(1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0));
+    lua_setfield(L, -2, "FLIP_Z");
+
+
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);

@@ -27,6 +27,14 @@ const luaL_Reg ProjectionBridge::static_library[] = {
 void ProjectionBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
+    // CONSTANTS
+    ProjectionBridge::push_from(L, Projection(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1));
+    lua_setfield(L, -2, "IDENTITY");
+
+    ProjectionBridge::push_from(L, Projection(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+    lua_setfield(L, -2, "ZERO");
+
+    
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);

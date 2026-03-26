@@ -16,6 +16,16 @@ const luaL_Reg ObjectBridge::static_library[] = {
 void ObjectBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
+    // CONSTANTS
+    LuauBridge::push_variant(L, 0);
+    lua_setfield(L, -2, "NOTIFICATION_POSTINITIALIZE");
+    
+    LuauBridge::push_variant(L, 1);
+    lua_setfield(L, -2, "NOTIFICATION_PREDELETE");
+    
+    LuauBridge::push_variant(L, 2);
+    lua_setfield(L, -2, "NOTIFICATION_EXTENSION_RELOADED");
+
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);

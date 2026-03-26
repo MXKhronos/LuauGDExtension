@@ -2,6 +2,7 @@
 #include "vector2.h"
 
 #include <godot_cpp/variant/vector2.hpp>
+#include <godot_cpp/core/memory.hpp>
 
 using namespace godot;
 
@@ -16,7 +17,8 @@ const luaL_Reg Vector2Bridge::static_library[] = {
 void Vector2Bridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
-    Vector2Bridge::push_from(L, Vector2());
+    // CONSTANTS
+    Vector2Bridge::push_from(L, Vector2(0, 0));
     lua_setfield(L, -2, "ZERO");
 
     Vector2Bridge::push_from(L, Vector2(1, 1));
@@ -37,6 +39,7 @@ void Vector2Bridge::register_variant_class(lua_State* L) {
     Vector2Bridge::push_from(L, Vector2(0, 1));
     lua_setfield(L, -2, "UP");
 
+    
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);
@@ -52,11 +55,14 @@ int Vector2Bridge::from_angle(lua_State* L) {
 
 template<>
 int VariantBridge<Vector2>::on_index(lua_State* L, const Vector2& object, const char* key) {
+    WARN_PRINT("Vector2 on_index: " + String(key) + " => return nil");
+    lua_pushnil(L);
     return 1;
 }
 
 template<>
 int VariantBridge<Vector2>::on_newindex(lua_State* L, const Vector2& object, const char* key) {
+    lua_pushnil(L);
     return 1;
 }
 

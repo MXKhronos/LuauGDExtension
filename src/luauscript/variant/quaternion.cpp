@@ -16,6 +16,11 @@ const luaL_Reg QuaternionBridge::static_library[] = {
 void QuaternionBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
+    // CONSTANTS
+    QuaternionBridge::push_from(L, Quaternion(0, 0, 0, 1));
+    lua_setfield(L, -2, "IDENTITY");
+
+
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);

@@ -1,7 +1,6 @@
 --- @extends CharacterBody2D
 
 local speed: number = 300;
-local vecZero: Vector2 = Vector2.ZERO;
 
 function _physics_process(delta: number): nil
 	local dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down");
@@ -10,7 +9,7 @@ function _physics_process(delta: number): nil
 		velocity = dir * speed;
 
 	else
-		velocity = velocity:move_toward(vecZero, speed);
+		velocity = velocity:move_toward(Vector2.ZERO, speed);
 
 	end
 	

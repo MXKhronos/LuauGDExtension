@@ -15,6 +15,32 @@ const luaL_Reg Vector2iBridge::static_library[] = {
 void Vector2iBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
+    // CONSTANTS
+    Vector2iBridge::push_from(L, Vector2i(0, 0));
+    lua_setfield(L, -2, "ZERO");
+
+    Vector2iBridge::push_from(L, Vector2i(1, 1));
+    lua_setfield(L, -2, "ONE");
+
+    Vector2iBridge::push_from(L, Vector2i(-1, 0));
+    lua_setfield(L, -2, "LEFT");
+    
+    Vector2iBridge::push_from(L, Vector2i(1, 0));
+    lua_setfield(L, -2, "RIGHT");
+    
+    Vector2iBridge::push_from(L, Vector2i(0, -1));
+    lua_setfield(L, -2, "DOWN");
+    
+    Vector2iBridge::push_from(L, Vector2i(0, 1));
+    lua_setfield(L, -2, "UP");
+    
+    Vector2iBridge::push_from(L, Vector2i(INT32_MIN, INT32_MIN));
+    lua_setfield(L, -2, "MIN");
+    
+    Vector2iBridge::push_from(L, Vector2i(INT32_MAX, INT32_MAX));
+    lua_setfield(L, -2, "MAX");
+
+
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);

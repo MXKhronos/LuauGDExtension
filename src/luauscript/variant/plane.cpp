@@ -15,6 +15,17 @@ const luaL_Reg PlaneBridge::static_library[] = {
 void PlaneBridge::register_variant_class(lua_State* L) {
     luaL_register(L, variant_name, static_library);
 
+    // CONSTANTS
+    PlaneBridge::push_from(L, Plane(1, 0, 0, 0));
+    lua_setfield(L, -2, "PLANE_YZ");
+
+    PlaneBridge::push_from(L, Plane(0, 1, 0, 0));
+    lua_setfield(L, -2, "PLANE_XZ");
+    
+    PlaneBridge::push_from(L, Plane(0, 0, 1, 0));
+    lua_setfield(L, -2, "PLANE_XY");
+
+
     luaL_getmetatable(L, variant_name);
     lua_setmetatable(L, -2);
     lua_setreadonly(L, -1, true);

@@ -65,29 +65,24 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
         case Variant::FLOAT:
             lua_pushnumber(L, p_var.operator float());
             break;
-            
-        case Variant::STRING:
-            push_string(L, p_var.operator String());
+
+        case Variant::AABB: {
+            AABBBridge::push_from(L, p_var.operator ::AABB());
             break;
-            
-        case Variant::STRING_NAME:
-            push_string(L, String(p_var.operator StringName()));
-            break;
-            
-        case Variant::NODE_PATH:
-            push_string(L, String(p_var.operator NodePath()));
-            break;
-            
-        case Variant::DICTIONARY:
-            push_dictionary(L, p_var.operator Dictionary());
-            break;
-            
-        case Variant::ARRAY:
+        }
+
+        case Variant::ARRAY: {
             push_array(L, p_var.operator Array());
             break;
-            
-        case Variant::VECTOR2: {
-            Vector2Bridge::push_from(L, p_var.operator Vector2());
+        }
+
+        case Variant::BASIS: {
+            BasisBridge::push_from(L, p_var.operator Basis());
+            break;
+        }
+
+        case Variant::CALLABLE : {
+            CallableBridge::push_from(L, p_var.operator Callable());
             break;
         }
 
@@ -95,9 +90,14 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
             ColorBridge::push_from(L, p_var.operator Color());
             break;
         }
-
-        case Variant::CALLABLE : {
-            CallableBridge::push_from(L, p_var.operator Callable());
+            
+        case Variant::DICTIONARY: {
+            push_dictionary(L, p_var.operator Dictionary());
+            break;
+        }
+            
+        case Variant::NODE_PATH: {
+            push_string(L, String(p_var.operator NodePath()));
             break;
         }
         
@@ -109,6 +109,81 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
                 lua_pushnil(L);
             }
             
+            break;
+        }
+
+        case Variant::PLANE: {
+            PlaneBridge::push_from(L, p_var.operator Plane());
+            break;
+        }
+
+        case Variant::QUATERNION: {
+            QuaternionBridge::push_from(L, p_var.operator Quaternion());
+            break;
+        }
+
+        case Variant::RECT2: {
+            Rect2Bridge::push_from(L, p_var.operator Rect2());
+            break;
+        }
+
+        case Variant::RECT2I: {
+            Rect2iBridge::push_from(L, p_var.operator Rect2i());
+            break;
+        }
+
+        case Variant::RID: {
+            RIDBridge::push_from(L, p_var.operator ::RID());
+            break;
+        }
+            
+        case Variant::STRING: {
+            push_string(L, p_var.operator String());
+            break;
+        }
+        
+        case Variant::STRING_NAME: {
+            push_string(L, String(p_var.operator StringName()));
+            break;
+        }
+
+        case Variant::TRANSFORM2D: {
+            Transform2DBridge::push_from(L, p_var.operator Transform2D());
+            break;
+        }
+
+        case Variant::TRANSFORM3D: {
+            Transform3DBridge::push_from(L, p_var.operator Transform3D());
+            break;
+        }   
+
+        case Variant::VECTOR2: {
+            Vector2Bridge::push_from(L, p_var.operator Vector2());
+            break;
+        }
+        
+        case Variant::VECTOR2I: {
+            Vector2iBridge::push_from(L, p_var.operator Vector2i());
+            break;
+        }
+
+        case Variant::VECTOR3: {
+            Vector3Bridge::push_from(L, p_var.operator Vector3());
+            break;
+        }
+
+        case Variant::VECTOR3I: {
+            Vector3iBridge::push_from(L, p_var.operator Vector3i());
+            break;
+        }
+
+        case Variant::VECTOR4: {
+            Vector4Bridge::push_from(L, p_var.operator Vector4());
+            break;
+        }
+
+        case Variant::VECTOR4I: {
+            Vector4iBridge::push_from(L, p_var.operator Vector4i());
             break;
         }
         
@@ -214,10 +289,10 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
                 return Variant(get_dictionary(L, p_index));
             }
 
-            WARN_PRINT("LUA_TTABLE Type is: " + String(type_name));
+            // WARN_PRINT("LUA_TTABLE Type is: " + String(type_name));
             String type_str(type_name);
 
-            WARN_PRINT("Unhandled table type: " + String(type_name) + " -> defaulted as dictionary");
+            // WARN_PRINT("Unhandled table type: " + String(type_name) + " -> defaulted as dictionary");
             return Variant(get_dictionary(L, p_index));
         }
         case LUA_TUSERDATA: {

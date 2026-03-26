@@ -92,6 +92,7 @@ public:
         bool valid;
         Variant value = obj.get(prop_name, &valid); //Get Variant GDV property
 
+        // WARN_PRINT(vformat("value (%s) is: %s (%s) valid: %s", prop_name, value, value.get_type_name(value.get_type()), (valid? "true" : "false")));
         if (!valid) {
             lua_getglobal(L, variant_name);
             lua_pushstring(L, key);
@@ -108,7 +109,6 @@ public:
             return 1;
         }
         
-        // WARN_PRINT(vformat("value is: %s (%s)", value, value.get_type_name( value.get_type())));
         if (value.get_type() == Variant::CALLABLE) {
             // obj.prop_name is a method
 
@@ -182,6 +182,7 @@ public:
             return 1;
 
         } else if (value.get_type() != Variant::NIL) {
+            // get variant property
             LuauBridge::push_variant(L, value);
             return 1;
 

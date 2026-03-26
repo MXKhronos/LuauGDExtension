@@ -538,10 +538,10 @@ void LuauScriptInstance::notification(int32_t p_what) {
             break;
     }
 
-    // First try the specific method
+    // try the specific method
     if (method_name != StringName("_notification") && has_method(method_name)) {
 		if (method_name != StringName("_process") && method_name != StringName("_physics_process")) {
-        	WARN_PRINT(vformat("Calling method: %s", String(method_name)));
+        	// WARN_PRINT(vformat("Calling method: %s", String(method_name)));
 		}
         lua_State *ET = lua_newthread(T);
         
@@ -586,9 +586,8 @@ void LuauScriptInstance::notification(int32_t p_what) {
         }
         
         lua_pop(T, 1); // Remove thread
-    }
-    // Then try the generic _notification method
-    else if (has_method("_notification")) {
+
+    } else if (has_method("_notification")) {
         lua_State *ET = lua_newthread(T);
         
         // Get the self table from the main state
@@ -686,12 +685,11 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
     String prop_str = String(p_name);
     lua_getfield(L, -1, prop_str.utf8().get_data());
     
-    // Check if the value exists (not nil)
     if (lua_isnil(L, -1)) {
 		// self[p_name] does not exist
-        lua_pop(L, 2); // Remove nil and self table
+        lua_pop(L, 2); // pop nil and self table
 
-        // Try to get from script constants as fallback
+        // get from script constants as fallback
         const LuauScript *s = script.ptr();
         while (s) {
             if (s->constants.has(p_name)) {
@@ -741,7 +739,7 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
 }
 
 GDExtensionPropertyInfo *LuauScriptInstance::get_property_list(uint32_t *r_count) {
-    // First, get properties from script definition (static properties)
+    // get properties from script definition (static properties)
     LocalVector<GDExtensionPropertyInfo> properties;
     HashSet<StringName> seen;
     
@@ -762,12 +760,9 @@ GDExtensionPropertyInfo *LuauScriptInstance::get_property_list(uint32_t *r_count
     
     // Only try to get properties from Lua state if it's properly initialized
     if (L && self_ref != LUA_NOREF) {
-        // Get properties from the self table
-        lua_getref(L, self_ref);
+        lua_getref(L, self_ref); //get from self
         
-        // Check if we got a valid table
         if (lua_istable(L, -1)) {
-            // Iterate through the self table
             lua_pushnil(L);
             while (lua_next(L, -2) != 0) {
                 // Key is at -2, value is at -1
@@ -887,7 +882,7 @@ Variant::Type LuauScriptInstance::get_property_type(const StringName &p_name, bo
 }
 
 bool LuauScriptInstance::has_method(const StringName &p_name) const {
-    // First check the actual self table for runtime methods
+    // check self for runtime methods
     if (L && self_ref != LUA_NOREF) {
         lua_getref(L, self_ref);
         String method_str = String(p_name);
@@ -899,7 +894,7 @@ bool LuauScriptInstance::has_method(const StringName &p_name) const {
         }
     }
     
-    // Then fall back to checking the script metadata
+    // fall back to checking the script metadata
     const LuauScript *s = script.ptr();
     while (s) {
         if (s->definition.methods.has(p_name)) {
@@ -1426,8 +1421,6 @@ void LuauScript::_update_exports() {
 }
 
 StringName LuauScript::_get_doc_class_name() const {
-	// Return the script's class name for documentation purposes
-	// First try the script's defined name, then extends, then empty
 	if (!definition.name.is_empty()) {
 		return definition.name;
 	}
@@ -1546,7 +1539,6 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
         return OK;
     }
     
-    // Check if source is empty
     if (source.is_empty()) {
         ERR_FAIL_V_MSG(ERR_INVALID_DATA, "Script source is empty");
     }
@@ -1617,52 +1609,45 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
             definition.constants.clear();
             constants.clear();
             
-            // Parse comment annotations first
-            // Look for annotations like @extends, @class, @tool, etc.
-            // These are typically in comments at the top of the file
             {
-                // Parse source line by line to find comment annotations
+                // parse line by line for annotations
                 PackedStringArray lines_packed = source.split("\n");
                 for (int i = 0; i < lines_packed.size(); i++) {
                     String line = lines_packed[i];
                     String trimmed = line.strip_edges();
                     
-                    // Look for comment lines starting with --- or --
                     if (trimmed.begins_with("---") || trimmed.begins_with("--")) {
                         // Remove comment prefix
                         String comment = trimmed.substr(trimmed.begins_with("---") ? 3 : 2).strip_edges();
                         
-                        // Check for @extends annotation
+                        // MARK: @extends annotation
                         if (comment.begins_with("@extends ")) {
                             String base_class = comment.substr(9).strip_edges();
                             if (!base_class.is_empty()) {
                                 definition.extends = base_class;
                             }
                         }
-                        // Check for @class annotation
+                        // MARK: @class annotation
                         else if (comment.begins_with("@class ")) {
                             String class_name = comment.substr(7).strip_edges();
                             if (!class_name.is_empty()) {
-                                definition.name = class_name; //MARK: custom class
+                                definition.name = class_name; //MARK: TODO custom class
                             }
                         }
-                        // Check for @tool annotation
+                        // MARK: @tool annotation
                         else if (comment == "@tool") {
                             definition.is_tool = true;
                         }
                     }
-                    // Stop parsing after we hit non-comment content (optimization)
+                    // optimization
                     else if (!trimmed.is_empty() && !trimmed.begins_with("--")) {
-                        // We've hit actual code, annotations should be at the top
+                        // code now, no more defining annotations
                         break;
                     }
                 }
             }
             
-            // Walk through the AST to extract additional metadata
-            // This handles actual code structure (functions, constants, etc.)
-            
-            // For now, just extract basic information from the AST
+            // Walk through the AST to extract additional metadata (functions, constants, etc.)
             for (Luau::AstStat* stat : parse_result.root->body) {
                 // Check for global variable assignments (e.g., ACONST = 123)
                 if (auto* assign = stat->as<Luau::AstStatAssign>()) {
@@ -2158,12 +2143,23 @@ StringName LuauScript::_get_instance_base_type() const {
 	return StringName();
 }
 
+
 //MARK: initialize_lua_state
 void LuauScriptInstance::initialize_lua_state(lua_State *p_L, lua_State *p_thread, int p_thread_ref, int p_self_ref) {
 	L = p_L;
 	T = p_thread;
 	thread_ref = p_thread_ref;
 	self_ref = p_self_ref;
+}
+
+bool is_variant_type(const String &type_name) {
+	for (int i = 0; i < Variant::VARIANT_MAX; i++) {
+        if (Variant::get_type_name(Variant::Type(i)) == type_name) {
+            return true;
+        }
+    }
+
+	return false;
 }
 
 void *LuauScript::_instance_create(Object *obj_ptr) const {
@@ -2303,7 +2299,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 							return 1;
 						}
 						
-						// First check in the table itself (raw access, no metamethods)
+						// raw get first
 						lua_pushvalue(L, 2); // Push key
 						lua_rawget(L, 1); // Get from table
 						if (!lua_isnil(L, -1)) {
@@ -2320,6 +2316,23 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						if (nobind::ClassDB::get_singleton()->class_exists(key)) {
 							LuauEngine::singleton->register_and_push_godot_class(L, key);
 							return 1;
+
+						} else if (is_variant_type(key)) {
+							// Check if key is registered variant type
+							lua_getglobal(L, key);
+							if (!lua_isnil(L, -1)) {
+								// WARN_PRINT(vformat("Found variant in global: %s", key));
+								// new table with metatable of global
+
+								lua_newtable(L);
+								lua_pushvalue(L, -2); // Push global metatable
+								lua_setmetatable(L, -2);
+								lua_pop(L, 1); // Pop metatable
+
+								lua_setreadonly(L, -1, true);
+
+								return 1;
+							}
 						}
 						
 						// Get the owner pointer from the self table
@@ -3024,7 +3037,6 @@ Dictionary LuauLanguage::_lookup_code(const String &p_code, const String &p_symb
 	// Try to find information about the symbol
 	String symbol = p_symbol.strip_edges();
 	
-	// Check if it's a known Godot class
 	if (nobind::ClassDB::get_singleton()->class_exists(symbol)) {
 		ret["result"] = 1; // LOOKUP_RESULT_CLASS
 		ret["type"] = 0; // TYPE_CLASS

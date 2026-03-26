@@ -66,7 +66,7 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
     CharString utf8 = class_name.utf8();
     const char *class_name_c = utf8.get_data();
 
-    // Check if registered
+    // check if registered
     if (luaL_getmetatable(L, class_name_c) != LUA_TNIL) {
         // [Stack: Metatable]
         lua_newtable(L);
@@ -93,7 +93,7 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         const char* class_name = lua_tostring(L, -1);
         lua_pop(L, 1);
 
-        // Checking first arg as table of properties
+        // has properties input
         bool has_props = lua_istable(L, 2);
 
         // Instantiate
@@ -190,7 +190,6 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         for (int i = 1; i <= n; i++) {
             if (i > 1) output += " ";
             
-            // Convert each argument to string
             if (lua_isnil(L, i)) {
                 output += "nil";
 
@@ -199,7 +198,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
 
             } else if (lua_isnumber(L, i)) {
                 double num = lua_tonumber(L, i);
-                // Check if it's an integer
+                
                 int64_t int_val = (int64_t)num;
                 if (num == (double)int_val) {
                     output += String::num_int64(int_val);
@@ -211,12 +210,12 @@ void LuauEngine::register_godot_functions(lua_State *L) {
                 output += lua_tostring(L, i);
 
             } else if (lua_istable(L, i)) {
-                // For tables, try to convert to Variant first
+                // is table
                 Variant v = LuauBridge::get_variant(L, i);
                 output += String(v);
 
             } else if (lua_isuserdata(L, i)) {
-                // Try to get as variant
+                // is userdata
                 Variant v = LuauBridge::get_variant(L, i);
                 output += String(v);
 
