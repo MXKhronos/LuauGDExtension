@@ -71,7 +71,7 @@ if run_tests:
 
 
 # Define output directory
-output_dir = "./demo/bin/LuauGDExt/" #Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/
+output_dir = "./bin/" #Z:/Workspace/Dev/K/LuauDev/bin/LuauGDExt/
 
 # Link against Luau libraries
 library = env.SharedLibrary(
@@ -80,20 +80,27 @@ library = env.SharedLibrary(
     LIBS = [godot_cpp_file, luau_codegen, luau_compiler, luau_vm, luau_ast]
 )
 
-# Copy the LuauGDExt.gdextension file
-gdextension_copy = env.Command(
-    output_dir + "LuauGDExt.gdextension",
-    "LuauGDExt.gdextension",
-    Copy("$TARGET", "$SOURCE")
-)
+demo_dirs = [
+    "./demo/bin/LuauGDExt/",
+    "./demo-fps-template-by-bukkbeek/bin/LuauGDExt/"
+]
+extra_files = ["LuauGDExt.gdextension", "LuauScript.svg"]
 
-# Copy the LuauScript.svg file
-gdext_icon_copy = env.Command(
-    output_dir + "LuauScript.svg",
-    "LuauScript.svg",
-    Copy("$TARGET", "$SOURCE")
-)
-
-env.Depends(library, gdextension_copy)
-env.Depends(library, gdext_icon_copy)
-env.Default(library)
+for d in demo_dirs:
+    # 1. Copy the compiled library to each demo folder
+    lib_name = "LuauGDExt{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
+    lib_copy = env.Command(
+        d + lib_name,
+        library,
+        Copy("$TARGET", "$SOURCE")
+    )
+    
+    for f in extra_files:
+        f_copy = env.Command(
+            d + f,
+            f,
+            Copy("$TARGET", "$SOURCE")
+        )
+        env.Depends(lib_copy, f_copy)
+        
+    env.Default(lib_copy)

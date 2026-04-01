@@ -17,7 +17,6 @@ text = "Move with WASD."
 [node name="CharacterBody2D" type="CharacterBody2D" parent="." unique_id=617270897]
 position = Vector2(92, 116)
 script = ExtResource("1_cy281")
-speed = 300.0
 
 [node name="Sprite2D" type="Sprite2D" parent="CharacterBody2D" unique_id=912674070]
 texture = ExtResource("1_u577f")
@@ -25,3 +24,5 @@ texture = ExtResource("1_u577f")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CharacterBody2D" unique_id=2001782987]
 scale = Vector2(6.5, 6.5)
 shape = SubResource("CircleShape2D_uxr5t")
+
+[node name="Camera2D" type="Camera2D" parent="CharacterBody2D" unique_id=1649627372]

@@ -65,7 +65,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-output-${{ matrix.os }}
-          path: ./demo/bin/LuauGDExt/
+          path: ./bin/
 
   package:
     name: Package

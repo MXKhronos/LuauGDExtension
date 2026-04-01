@@ -21,6 +21,7 @@
 #include "luau_bridge.h"
 #include "luauscript_resource_format.h"
 #include "variant/builtin_types.h"
+#include "lamda_wrapper.h"
 
 #include <Luau/Compiler.h>
 #include <Luau/Parser.h>
@@ -441,6 +442,18 @@ void LuauScriptInstance::call(
     
     const LuauScript *s = script.ptr();
     
+	if (p_method == StringName("_ready") && !is_ready) {
+		is_ready = true;
+		for (int a=0; a < on_ready_funcs.size(); a++) {
+			godot::Callable c = on_ready_funcs[a];
+			if (!c.is_valid()) {
+				continue;
+			} 
+			c.call();
+		}
+		on_ready_funcs.clear();
+	}
+
     // Look for the method in the script hierarchy
     while (s) {
         if (s->definition.methods.has(p_method)) {
@@ -957,7 +970,6 @@ LuauScriptInstance::LuauScriptInstance(
 	script(p_script), 
 	owner(p_owner), 
 	vm_type(p_vmtype) {
-
 }
 
 LuauScriptInstance::~LuauScriptInstance() {
@@ -1216,9 +1228,8 @@ PlaceHolderScriptInstance::PlaceHolderScriptInstance(const Ref<LuauScript> &p_sc
     script = p_script;
     owner = p_owner;
 
-	// Placeholder instance creation takes place in a const method.
 	script->placeholders.insert(p_owner->get_instance_id(), this);
-	//script->update_exports_internal(this);
+	// script->update_exports_internal(this);
 }
 
 PlaceHolderScriptInstance::~PlaceHolderScriptInstance() {
@@ -1508,6 +1519,14 @@ TypedArray<StringName> LuauScript::_get_members() const {
 }
 
 bool LuauScript::_is_placeholder_fallback_enabled() const {
+#ifdef TOOLS_ENABLED
+	return placeholder_fallback_enabled;
+#else
+	return false;
+#endif // TOOLS_ENABLED
+}
+
+bool LuauScript::is_placeholder_fallback_enabled() const {
 #ifdef TOOLS_ENABLED
 	return placeholder_fallback_enabled;
 #else
@@ -2164,18 +2183,14 @@ bool is_variant_type(const String &type_name) {
 
 void *LuauScript::_instance_create(Object *obj_ptr) const {
 #ifdef TOOLS_ENABLED
-	// WARN_PRINT(vformat("Creating LuauScript instance for object: %s", obj_ptr->get_class()));
-	// In the editor, check if we should create a placeholder instance instead
+	//WARN_PRINT(vformat("Creating LuauScript instance for object: %s", obj_ptr->get_class()));
 	bool should_create_placeholder = false;
 	
-	// Check if script can be instantiated
-	if (!_can_instantiate()) {
+	if (!can_instantiate()) {
 		should_create_placeholder = true;
 	}
-	
-	// Check if script is properly loaded
+
 	if (!should_create_placeholder && load_stage != LOAD_FULL) {
-		// Try to load the script if not already loaded
 		const_cast<LuauScript*>(this)->load(LOAD_FULL, false);
 		if (load_stage != LOAD_FULL) {
 			// Script failed to load fully, use placeholder
@@ -2183,7 +2198,6 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 		}
 	}
 	
-	// Check base type compatibility
 	if (!should_create_placeholder) {
 		StringName base_type = _get_instance_base_type();
 		if (base_type != StringName()) {
@@ -2194,12 +2208,8 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 		}
 	}
 	
-	// If we should create a placeholder, do so
 	if (should_create_placeholder) {
-		// Enable placeholder fallback mode
 		const_cast<LuauScript*>(this)->placeholder_fallback_enabled = true;
-		
-		// Create and return a placeholder instance
 		return _placeholder_instance_create(obj_ptr);
 	}
 
@@ -2322,8 +2332,6 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 							lua_getglobal(L, key);
 							if (!lua_isnil(L, -1)) {
 								// WARN_PRINT(vformat("Found variant in global: %s", key));
-								// new table with metatable of global
-
 								lua_newtable(L);
 								lua_pushvalue(L, -2); // Push global metatable
 								lua_setmetatable(L, -2);
@@ -2356,7 +2364,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						// Try to access Godot owner properties and methods
 						if (owner_obj) {
 							StringName prop_name(key);
-							
+
 							// Check if it's a method first
 							bool is_method = nobind::ClassDB::get_singleton()->class_has_method(
 								owner_obj->get_class(), 
@@ -2368,9 +2376,64 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 								lua_pushlightuserdata(L, owner_obj);
 								lua_pushstring(L, key);
 								lua_pushlightuserdata(L, instance);
-								
+
+								if (!instance->is_ready) {
+									//WARN_PRINT(vformat("queue %s", key));
+									
+									lua_pushcclosure(L, [](lua_State *L) -> int {
+										Object *obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
+										const char *method_name = lua_tostring(L, lua_upvalueindex(2));
+										LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(3));
+										
+										if (obj == nullptr || method_name == nullptr) {
+											return 0;
+										}
+
+										int arg_count = lua_gettop(L);
+										Array args;
+										
+										bool skip_first = false;
+										if (arg_count > 0 && lua_istable(L, 1)) {
+											lua_getfield(L, 1, "__godot_owner");
+											if (lua_touserdata(L, -1) == obj) {
+												skip_first = true;
+											}
+											lua_pop(L, 1);
+										}
+										
+										int start_idx = skip_first ? 2 : 1;
+										for (int i = start_idx; i <= arg_count; i++) {
+											args.append(LuauBridge::get_variant(L, i));
+										}
+
+										void** proxy = (void**)lua_newuserdata(L, sizeof(void*));
+										*proxy = nullptr;
+										luaL_getmetatable(L, "OnReadyWrapper");
+										lua_setmetatable(L, -2);
+
+										LambdaWrapper *wrapper = memnew(LambdaWrapper);
+
+										wrapper->set_function(
+											[obj, method_name, args, proxy]() {
+												if (!godot::UtilityFunctions::is_instance_id_valid(obj->get_instance_id())) {
+													WARN_PRINT("Object is no longer valid!");
+													return;
+												}
+
+												Variant result = obj->callv(StringName(method_name), args);
+												Variant* heap_result = memnew(Variant(result));
+												*proxy = (void*)heap_result;
+											}
+										);
+										inst->on_ready_funcs.append(godot::Callable(wrapper, "execute"));
+
+										return 1;
+									}, "not_ready_call", 3);
+
+									return 1;
+								}
+
 								lua_pushcclosure(L, [](lua_State *L) -> int {
-									// Get upvalues
 									Object *obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
 									const char *method_name = lua_tostring(L, lua_upvalueindex(2));
 									LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(3));
@@ -2391,23 +2454,20 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 										lua_pop(L, 1);
 									}
 									
-									// Build argument array, skipping first if it's self
 									int start_idx = skip_first ? 2 : 1;
 									for (int i = start_idx; i <= arg_count; i++) {
 										args.append(LuauBridge::get_variant(L, i));
 									}
 									
-									// Call the method on the owner object
 									Variant result = obj->callv(StringName(method_name), args);
-									
-									// Push result
+
 									LuauBridge::push_variant(L, result);
 									return 1;
 								}, "method_call", 3);
 								
 								return 1;
 							}
-							
+
 							// Try to get the property value
 							Variant value = owner_obj->get(prop_name);
 							if (value.get_type() != Variant::NIL) {
@@ -2446,20 +2506,16 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						if (owner) {
 							Variant value = LuauBridge::get_variant(L, 3);
 							
+							//WARN_PRINT(vformat("A instance set %s.%s = %s", String(owner->get_class()), key, String(value)));
+
 							Error err = nobind::ClassDB::get_singleton()->class_set_property(owner, StringName(key), value);
 							if (err == OK) {
-								return 1;
+								return 0;
 							}
 						}
 
-						// Set is not property
-						// Get Variant from value
-						// Variant value = LuauBridge::get_variant(L, 3);
-						
-						// For now, just store everything in the self table
-						// We'll let Godot handle property setting through the script instance
-						lua_pushvalue(L, 2); // Push key
-						lua_pushvalue(L, 3); // Push value
+						lua_pushvalue(L, 2); // key
+						lua_pushvalue(L, 3); // value
 						lua_rawset(L, 1); // Set in table
 
 						return 0;
@@ -2600,13 +2656,17 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 	}
 	
 	// Create and return the GDExtension script instance
-	return internal::gdextension_interface_script_instance_create3(&LuauScriptInstance::INSTANCE_INFO, script_instance);
+	return internal::gdextension_interface_script_instance_create3(
+		&LuauScriptInstance::INSTANCE_INFO, 
+		script_instance
+	);
 }
 
 void *LuauScript::_placeholder_instance_create(Object *obj_ptr) const {
     #ifdef TOOLS_ENABLED
 	    PlaceHolderScriptInstance *internal = memnew(PlaceHolderScriptInstance(Ref<LuauScript>(this), obj_ptr));
-	    return internal::gdextension_interface_script_instance_create3(&PlaceHolderScriptInstance::INSTANCE_INFO, internal);
+		return internal::gdextension_interface_script_instance_create3(&PlaceHolderScriptInstance::INSTANCE_INFO, internal);
+
     #else
         return nullptr;
     #endif // TOOLS_ENABLED
@@ -2631,8 +2691,16 @@ void LuauScript::_placeholder_erased(void *p_placeholder) {
 #endif // TOOLS_ENABLED
 }
 
+bool LuauScript::can_instantiate() const {
+#ifdef TOOLS_ENABLED
+    return _is_valid() && (_is_tool() || !Engine::get_singleton()->is_editor_hint());
+#else
+	return _is_valid();
+#endif
+}
+
 bool LuauScript::_can_instantiate() const {
-    return true;
+	return true;
 }
 
 Ref<Script> LuauScript::_get_base_script() const {

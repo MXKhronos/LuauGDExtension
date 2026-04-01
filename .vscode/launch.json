@@ -7,17 +7,18 @@
         {
             "type": "cppvsdbg",
             "request": "launch",
-            "name": "Debug",
+            "name": "cppvsdbg Debug",
             "preLaunchTask": "build",
-            "program": "godot_console",
+            "program": "Y:/OpenSource/godot/bin/godot.windows.editor.dev.x86_64.console.exe",
             "args": [
                 "--path", 
-                "./demo",
+                "./demo-fps-template-by-bukkbeek",
                 "-e",
                 "-v"
             ],
             "console": "integratedTerminal", 
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "symbolSearchPath": "${workspaceFolder}/demo/bin/LuauGDExt/;Y:/OpenSource/godot/bin/;"
         }
     ]
 }

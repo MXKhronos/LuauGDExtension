@@ -152,7 +152,7 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
                 }
 
                 Variant result = singleton_obj->callv(StringName(key), args);
-
+                Variant* heap_result = memnew(Variant(result));
                 LuauBridge::push_variant(L, result);
                 return 1;
             }, key, 2);
@@ -634,6 +634,15 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         }
 
         Variant v = LuauBridge::get_variant(L, 1);
+        if (v.get_type() == Variant::OBJECT) {
+            Object* obj = v.get_validated_object();
+            
+            if (obj) {
+                LuauBridge::push_string(L, obj->get_class());
+                return 1;
+            }
+        }
+
         LuauBridge::push_string(L, Variant::get_type_name(v.get_type()));
         return 1;
         
@@ -784,6 +793,52 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         PackedVector4ArrayBridge::register_variant_class(L);
         PackedColorArrayBridge::register_variant_class(L);
     }
+
+    //Custom functionalities;
+
+    //MARK: OnReadyWrapper
+    luaL_newmetatable(L, "OnReadyWrapper");
+
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        Variant variant = LuauBridge::get_variant(L, 1);
+
+        const char* key = lua_tostring(L, 2);
+
+        String prop_name = String(key);
+        bool* valid_get;
+
+        Variant result = variant.get(prop_name, valid_get);
+        Variant* heap_result = memnew(Variant(result));
+        //WARN_PRINT(vformat("OnReadyWrapper indexed %s of %s = %s", key, String(variant), String(*heap_result)));
+        if (valid_get) {
+            LuauBridge::push_variant(L, *heap_result);
+        } else {
+            lua_pushnil(L);
+        }
+
+        return 1;
+    }, "onreadyobj_index_handler");
+    lua_setfield(L, -2, "__index");
+
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        Variant variant = LuauBridge::get_variant(L, 1);
+
+        const char* key = lua_tostring(L, 2);
+
+        String prop_name = String(key);
+
+        Variant value = LuauBridge::get_variant(L, 3);
+        variant.set(prop_name, value);
+
+        return 0;
+    }, "onreadyobj_newindex_handler");
+    lua_setfield(L, -2, "__newindex");
+
+    lua_pushstring(L, "__type");
+    lua_pushstring(L, "OnReadyWrapper");
+    lua_settable(L, -3);
+
+    LuauBridge::protect_metatable(L, -1);
 }
 
 void LuauEngine::init_vm(VMType p_type) {

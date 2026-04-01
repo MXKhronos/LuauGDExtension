@@ -407,6 +407,19 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             } else if (type_str == "Object") {
                 return ObjectBridge::get_object(L, p_index);
                 
+            } else if (type_str == "OnReadyWrapper") {
+                void** proxy = (void**)lua_touserdata(L, p_index);
+
+                if (proxy == nullptr || *proxy == nullptr) {
+                    luaL_error(L, "Proxy is null or uninitialized");
+                    return 0;
+                }
+
+                void* result = *proxy;
+                Variant* proxy_var = (Variant*)result;
+
+                //WARN_PRINT(vformat("get_variant = %s", String(*proxy_var)));
+                return *proxy_var;
             }
 
             WARN_PRINT("Unhandled userdata type: " + String(type_name));

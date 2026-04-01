@@ -205,6 +205,7 @@ public:
             WARN_PRINT("Failed to set property: " + String(key));
             return 1;
         }
+        //WARN_PRINT(vformat("set %s.%s = %s", String(obj), prop_name, String(value)));
 
         // Get the userdata pointer and update it
         void* ud = lua_touserdata(L, 1);
@@ -213,7 +214,7 @@ public:
             *ptr = obj;
         }
 
-        return 1;
+        return 0;
 	}
 
     static int on_call(lua_State *L) {

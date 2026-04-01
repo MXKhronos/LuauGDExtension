@@ -16,6 +16,7 @@
 #include "luau_engine.h"
 #include "luau_script.h"
 #include "luau_plugin.h"
+#include "lamda_wrapper.h"
 
 using namespace godot;
 
@@ -25,6 +26,8 @@ Ref<ResourceFormatSaverLuau> resource_saver_luau;
 
 void initialize_luau_module(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
+        GDREGISTER_CLASS(LambdaWrapper);
+
         WARN_PRINT("[LuauGDExtension] Initializing Extension");
         GDREGISTER_CLASS(LuauScript);
 

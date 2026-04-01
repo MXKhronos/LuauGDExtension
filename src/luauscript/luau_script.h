@@ -216,6 +216,8 @@ namespace godot {
     public:
         // Recursion guard for property access (needs to be public for lambda access)
         mutable bool getting_property = false;
+        mutable bool is_ready = false;
+        godot::TypedArray<godot::Callable> on_ready_funcs;
         
     public:
         static const GDExtensionScriptInstanceInfo3 INSTANCE_INFO;
@@ -381,6 +383,9 @@ namespace godot {
         TypedArray<StringName> _get_members() const override;
         bool _is_placeholder_fallback_enabled() const override;
         // virtual Variant _get_rpc_config() const;
+
+        bool is_placeholder_fallback_enabled() const;
+        bool can_instantiate() const;
     };
 
 
