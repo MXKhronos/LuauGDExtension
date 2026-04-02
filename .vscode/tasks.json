@@ -18,7 +18,7 @@
         {
             "label": "run-extension-tests",
             "type": "shell",
-            "command": "godot_console --headless --path .\\demo -e -v --run-extension-tests --quit",
+            "command": "Y:/OpenSource/godot/bin/godot.windows.editor.dev.x86_64.console.exe --headless --path .\\demo -e -v --run-extension-tests --quit",
             "dependsOn": "build",
             "group": "test",
             "presentation": {

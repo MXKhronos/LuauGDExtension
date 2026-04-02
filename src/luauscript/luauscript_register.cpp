@@ -26,12 +26,12 @@ Ref<ResourceFormatSaverLuau> resource_saver_luau;
 
 void initialize_luau_module(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
-        GDREGISTER_CLASS(LambdaWrapper);
+        GDREGISTER_INTERNAL_CLASS(LambdaWrapper);
 
         WARN_PRINT("[LuauGDExtension] Initializing Extension");
-        GDREGISTER_CLASS(LuauScript);
+        GDREGISTER_INTERNAL_CLASS(LuauScript);
 
-        GDREGISTER_CLASS(LuauLanguage);
+        GDREGISTER_INTERNAL_CLASS(LuauLanguage);
         script_language_luau = memnew(LuauLanguage);
         Error reg_script_lang = nobind::Engine::get_singleton()->register_script_language(script_language_luau);
         ERR_FAIL_COND_MSG(reg_script_lang != OK,
@@ -40,14 +40,14 @@ void initialize_luau_module(ModuleInitializationLevel p_level) {
     } 
     else if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 
-        GDREGISTER_CLASS(ResourceFormatLoaderLuau);
+        GDREGISTER_INTERNAL_CLASS(ResourceFormatLoaderLuau);
         resource_loader_luau.instantiate();
         ERR_FAIL_COND_MSG(!resource_loader_luau.is_valid(), 
             "Failed to instantiate Luau resource loader.");
         nobind::ResourceLoader::get_singleton()->add_resource_format_loader(resource_loader_luau);
         WARN_PRINT("[LuauGDExtension] Resource Loader registered successfully");
 
-        GDREGISTER_CLASS(ResourceFormatSaverLuau);
+        GDREGISTER_INTERNAL_CLASS(ResourceFormatSaverLuau);
         resource_saver_luau.instantiate();
         ERR_FAIL_COND_MSG(!resource_saver_luau.is_valid(), 
             "Failed to instantiate Luau resource saver.");
@@ -56,8 +56,8 @@ void initialize_luau_module(ModuleInitializationLevel p_level) {
     }
 
     if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
-        GDREGISTER_CLASS(LuauPlugin);
-        GDREGISTER_CLASS(LuauSyntaxHighlighter);
+        GDREGISTER_INTERNAL_CLASS(LuauPlugin);
+        GDREGISTER_INTERNAL_CLASS(LuauSyntaxHighlighter);
 
         EditorPlugins::add_by_type<LuauPlugin>();
         WARN_PRINT("[LuauGDExtension] Editor Plugin registered successfully");
