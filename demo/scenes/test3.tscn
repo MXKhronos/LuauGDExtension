@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://cx1waqpqn71uw"]
+
+[ext_resource type="Script" uid="uid://ddwgavc1kekco" path="res://luau_scripts/test_class_member_assign.luau" id="1_ilhlq"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_h4vc6"]
+
+[node name="Node3D" type="CharacterBody2D" unique_id=690823418]
+script = ExtResource("1_ilhlq")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1593881726]
+shape = SubResource("CircleShape2D_h4vc6")

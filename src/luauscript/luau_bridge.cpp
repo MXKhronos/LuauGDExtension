@@ -81,7 +81,7 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
             break;
         }
 
-        case Variant::CALLABLE : {
+        case Variant::CALLABLE: {
             CallableBridge::push_from(L, p_var.operator Callable());
             break;
         }
@@ -188,6 +188,7 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
         }
         
         default: {
+            lua_pushnil(L);
             WARN_PRINT("Unsupported Variant type: " + Variant::get_type_name(p_var.get_type()));
             break;
         }

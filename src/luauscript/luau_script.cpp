@@ -2468,7 +2468,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 								return 1;
 							}
 
-							// Try to get the property value
+							// Get object member
 							Variant value = owner_obj->get(prop_name);
 							if (value.get_type() != Variant::NIL) {
 								LuauBridge::push_variant(L, value);

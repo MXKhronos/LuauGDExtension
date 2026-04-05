@@ -205,9 +205,8 @@ public:
             WARN_PRINT("Failed to set property: " + String(key));
             return 1;
         }
-        //WARN_PRINT(vformat("set %s.%s = %s", String(obj), prop_name, String(value)));
 
-        // Get the userdata pointer and update it
+        // Get, modify, set
         void* ud = lua_touserdata(L, 1);
         if (ud) {
             GDV* ptr = static_cast<GDV*>(ud);

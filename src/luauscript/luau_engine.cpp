@@ -805,13 +805,88 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         const char* key = lua_tostring(L, 2);
 
         String prop_name = String(key);
-        bool* valid_get;
+        bool valid_get;
 
-        Variant result = variant.get(prop_name, valid_get);
+        Variant result = variant.get(prop_name, &valid_get);
         Variant* heap_result = memnew(Variant(result));
         //WARN_PRINT(vformat("OnReadyWrapper indexed %s of %s = %s", key, String(variant), String(*heap_result)));
         if (valid_get) {
-            LuauBridge::push_variant(L, *heap_result);
+            if (heap_result->get_type() == Variant::CALLABLE) {
+                
+                lua_pushlightuserdata(L, heap_result);
+                lua_pushstring(L, key);
+                lua_pushcclosure(L, [](lua_State *L) -> int {
+                    Variant* variant = (Variant*) lua_upvalueindex(1);
+                    const char* key = lua_tostring(L, lua_upvalueindex(2));
+                    Variant obj = LuauBridge::get_variant(L, 1);
+
+                    StringName method_name(key);
+
+                    if (!obj.has_method(method_name)) {
+                        luaL_error(L, vformat("Object does not have method: %s", method_name).utf8().get_data());
+                        return 1;
+                    }
+
+                    const int argc = lua_gettop(L) -1;
+                    Variant* var_buffer = (Variant*)memalloc(sizeof(Variant) * argc);
+                    const Variant** ptrs = (const Variant**)memalloc(sizeof(Variant*) * argc);
+                    for (int i = 0; i < argc; i++) {
+                        Variant v = LuauBridge::get_variant(L, i + 2);
+                        new (&var_buffer[i]) Variant(v);
+                        ptrs[i] = &var_buffer[i];
+                    }
+
+                        Variant result;
+                        GDExtensionCallError error;
+                        obj.callp(method_name, ptrs, argc, result, error);
+                        if (error.error != GDEXTENSION_CALL_OK) {
+                            GDExtensionCallErrorType error_type = error.error;
+                            switch (error_type) {
+                                case GDEXTENSION_CALL_ERROR_INVALID_METHOD: {
+                                    luaL_error(L, vformat("Object does not have method: %s", method_name).utf8().get_data());
+                                    break;
+                                };
+                                case GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT: {
+                                    luaL_error(L, vformat("Invalid argument for method: %s", method_name).utf8().get_data());
+                                    break;
+                                };
+                                case GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS: {
+                                    luaL_error(L, vformat("Too few arguments for method: %s, expected at least %s, got %s", method_name, error.argument, argc).utf8().get_data());
+                                    break;
+                                };
+                                case GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS: {
+                                    luaL_error(L, vformat("Too many arguments for method: %s, expected %s, got %s", method_name, error.argument, argc).utf8().get_data());
+                                    break;
+                                };
+                                case GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST: {
+                                    luaL_error(L, vformat("Method is not const: %s", method_name).utf8().get_data());
+                                    break;
+                                };
+                                default: {
+                                    luaL_error(L, vformat("Failed to call method(%s), Unkown error.", method_name).utf8().get_data());
+                                    break;
+                                };
+                            }
+                            
+                            return 1;
+                        }
+                        LuauBridge::push_variant(L, result);
+
+                        // Free the memory
+                        for (int i = 0; i < argc; i++) {
+                            var_buffer[i].~Variant();
+                        }
+                        memfree(var_buffer);
+                        memfree(ptrs);
+
+                        return 1;
+                }, key, 2);
+
+                return 1;
+
+            } else {
+                LuauBridge::push_variant(L, *heap_result);
+            }
         } else {
             lua_pushnil(L);
         }
