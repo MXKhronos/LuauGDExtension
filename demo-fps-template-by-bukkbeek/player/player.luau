@@ -15,6 +15,10 @@ local cameraHolder: Node3D = get_node("CameraPivot/CameraHolder");
 
 local wasOnFloor: boolean = false;
 
+function _ready(): nil
+	Global.Player = self;
+end
+
 function _unhandled_input(event: InputEvent): nil
 	if typeof(event) ~= "InputEventMouseMotion" then return end;
 	--if Input.get_mouse_mode() ~= Input.MOUSE_MODE_CAPTURED then return end;
@@ -31,10 +35,10 @@ function _unhandled_input(event: InputEvent): nil
 end
 
 function _physics_process(delta: number): nil
-	local newVelo = velocity;
+	local newVelocity = velocity;
 	-- Add the gravity
 	if not is_on_floor() then 
-		newVelo.y += GRAVITY * delta;
+		newVelocity.y += GRAVITY * delta;
 	end;
 	
 	-- Detect landing from air
@@ -47,7 +51,7 @@ function _physics_process(delta: number): nil
 	
 	-- Handle jump
 	if Input.is_action_just_pressed("jump") and is_on_floor() then
-		newVelo.y = jumpVelocity;
+		newVelocity.y = jumpVelocity;
 	end
 	
 	-- Handle sprint
@@ -63,17 +67,17 @@ function _physics_process(delta: number): nil
 	
 	if is_on_floor() then
 		if not moveDir:is_zero_approx() then
-			newVelo.x = moveDir.x * speed;
-			newVelo.z = moveDir.z * speed;
+			newVelocity.x = moveDir.x * speed;
+			newVelocity.z = moveDir.z * speed;
 		else
-			newVelo.x = lerp(newVelo.x, moveDir.x * speed, delta * inertiaGround);
-			newVelo.z = lerp(newVelo.z, moveDir.z * speed, delta * inertiaGround);
+			newVelocity.x = lerp(newVelocity.x, moveDir.x * speed, delta * inertiaGround);
+			newVelocity.z = lerp(newVelocity.z, moveDir.z * speed, delta * inertiaGround);
 		end
 	else
-		newVelo.x = lerp(newVelo.x, moveDir.x * speed, delta * inertiaAir);
-		newVelo.z = lerp(newVelo.z, moveDir.z * speed, delta * inertiaAir);
+		newVelocity.x = lerp(newVelocity.x, moveDir.x * speed, delta * inertiaAir);
+		newVelocity.z = lerp(newVelocity.z, moveDir.z * speed, delta * inertiaAir);
 	end
 	
-	velocity = newVelo;
+	velocity = newVelocity;
 	move_and_slide();
 end

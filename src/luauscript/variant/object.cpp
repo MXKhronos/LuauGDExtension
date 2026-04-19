@@ -34,13 +34,13 @@ void ObjectBridge::register_variant_class(lua_State* L) {
 
 template<>
 int VariantBridge<Object*>::on_index(lua_State* L, Object* const &object, const char* key) {
-    UtilityFunctions::print("Object on_index: %s\n", key);
+    UtilityFunctions::print("Object.%s = nil; fallback on_index.", key);
     return 1;
 }
 
 template<>
 int VariantBridge<Object*>::on_newindex(lua_State* L, Object* const &object, const char* key) {
-    UtilityFunctions::print("Object on_newindex: %s\n", key);
+    UtilityFunctions::print("Object.%s = nil; on_newindex setting.", key);
     return 1;
 }
 

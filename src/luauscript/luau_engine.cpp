@@ -161,25 +161,56 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         }
 
         Variant val = singleton_obj->get(StringName(key));
-        WARN_PRINT(vformat("Getting singleton property: %s = %s", key, String(val)));
+        //WARN_PRINT(vformat("Getting singleton property: %s = %s", key, String(val)));
         LuauBridge::push_variant(L, val);
 
         return 1;
     }, "godot_index_handler");
     lua_setfield(L, -2, "__index");
 
-    lua_newtable(L);                   // [Stack: Metatable, ClassTable]
+    // Stack: [Metatable]
+    lua_newtable(L);   
     
     lua_pushstring(L, class_name_c);
-    lua_setfield(L, -2, "Name");       // ClassTable.Name = "..."
+    lua_setfield(L, -2, "Name");
 
-    lua_pushvalue(L, -2);              // [Stack: Metatable, ClassTable, Metatable]
-    lua_setmetatable(L, -2);           // [Stack: Metatable, ClassTable]
+    lua_pushvalue(L, -2);
+    lua_setmetatable(L, -2);
 
-    lua_remove(L, -2);                 // Remove Metatable, leave ClassTable at top
-    lua_setreadonly(L, -1, true);      // Make the class definition read-only
+    lua_remove(L, -2);
+    lua_setreadonly(L, -1, true);  
 }
 
+void LuauEngine::register_godot_enums(lua_State *L) {
+    // lua_newtable(L); //Enum table
+
+    // ClassDBSingleton* classdb_singleton = nobind::ClassDB::get_singleton();
+
+    // PackedStringArray class_list = classdb_singleton->get_class_list();
+    // for (int a = 0; a < class_list.size(); a++) {
+    //     String class_name = class_list[a];
+
+    //     lua_newtable(L);
+    //     //register enums
+    //     PackedStringArray enum_list = classdb_singleton->class_get_enum_list(class_name, true);
+    //     for (int b = 0; b < enum_list.size(); b++) {
+    //         String enum_name = enum_list[b];
+
+    //         PackedStringArray enum_constants = classdb_singleton->class_get_enum_constants(class_name, enum_name, true);
+    //         if (class_name == "Window") {
+    //             for (int c = 0; c < enum_constants.size(); c++) {
+    //                 String enum_constant = enum_constants[c];
+    //                 //WARN_PRINT(vformat("%s enum_name %s: %s", class_name , enum_name, enum_constant));
+
+
+
+    //             };
+    //         };
+    //     };
+    // };
+
+    // lua_setglobal(L, "Enum");
+}
 
 void LuauEngine::register_godot_functions(lua_State *L) {
     // Override print function to use Godot's print
@@ -703,7 +734,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
 
 
 void LuauEngine::register_godot_globals(lua_State *L) {
-    // Register Godot functions (print, etc.)
+    register_godot_enums(L);
     register_godot_functions(L);
 
     {

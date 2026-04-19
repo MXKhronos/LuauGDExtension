@@ -15,6 +15,7 @@
 #include <godot_cpp/classes/time.hpp>
 #include <godot_cpp/classes/wrapped.hpp>
 #include <godot_cpp/classes/editor_plugin.hpp>
+#include <godot_cpp/classes/project_settings.hpp>
 
 namespace godot::nobind {
 
@@ -52,6 +53,7 @@ typedef WrappedNoBinding<EditorInterface> EditorInterface;
 typedef WrappedNoBinding<godot::ClassDBSingleton> ClassDB;
 typedef WrappedNoBinding<EngineDebugger> EngineDebugger;
 typedef WrappedNoBinding<EditorPlugin> EditorPlugin;
+typedef WrappedNoBinding<ProjectSettings> ProjectSettings;
 
 } // namespace godot::nobind
 

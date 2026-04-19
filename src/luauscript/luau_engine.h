@@ -24,6 +24,7 @@ private:
     void init_vm(VMType p_type);
     
     // Godot type registration functions
+    static void register_godot_enums(lua_State *L);
     static void register_godot_globals(lua_State *L);
     static void register_godot_functions(lua_State *L);
     static void register_math_constants(lua_State *L);

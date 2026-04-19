@@ -7,6 +7,7 @@
 #include <godot_cpp/templates/list.hpp>
 
 #include "luau_constants.h"
+#include "luau_script.h"
 #include "nobind.h"
 
 using namespace godot;
@@ -647,6 +648,11 @@ void LuauSyntaxHighlighter::_update_cache() {
     PackedStringArray class_list = nobind::ClassDB::get_singleton()->get_class_list();
     for (const String &class_name : class_list) {
         built_in_types.insert(class_name);
+    }
+
+    // Add registered globals
+    for(const KeyValue<StringName, Variant> &pair : LuauLanguage::get_singleton()->global_constants) {
+        built_in_types.insert(pair.key);
     }
 
     // Common Luau built-in functions

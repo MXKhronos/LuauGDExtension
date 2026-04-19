@@ -402,7 +402,6 @@ namespace godot {
         LuauCache *cache = nullptr;
 
         uint64_t ticks_usec = 0;
-        HashMap<StringName, Variant> global_constants;
         
         SelfList<LuauScript>::List script_list;
 
@@ -462,6 +461,7 @@ namespace godot {
         static void _bind_methods() {};
 
     public:
+        HashMap<StringName, Variant> global_constants;
         static LuauLanguage *get_singleton() { return singleton; };
         
 #ifdef TOOLS_ENABLED

@@ -2075,12 +2075,10 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
     if (p_load_stage >= LOAD_FULL) {
         // Resolve base script references if extends another Luau script
         if (!definition.extends.is_empty()) {
-            // Check if the base is a script path (starts with res://)
+            //MARK: extends Custom Class
             if (definition.extends.begins_with("res://")) {
-                // Load the base script
                 Ref<LuauScript> base_script = ResourceLoader::get_singleton()->load(definition.extends);
                 if (base_script.is_valid()) {
-                    // Ensure base script is fully loaded
                     base_script->load(LOAD_FULL, false);
                     base = base_script;
                 } else {
@@ -2112,11 +2110,10 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
             // Properties are validated during registration
         }
         
-        // Mark as fully loaded
         load_stage = LOAD_FULL;
         
 #ifdef TOOLS_ENABLED
-        // In editor, print summary of what was loaded
+        // Debug print loaded information
         if (Engine::get_singleton()->is_editor_hint()) {
             int method_count = definition.methods.size();
             int property_count = definition.properties.size();
@@ -2130,7 +2127,6 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                     definition.extends.is_empty() ? "RefCounted" : definition.extends,
                     method_count, property_count, signal_count, constant_count, member_count));
             }
-
 			// //WARN_PRINT members
 			// for (const GDClassProperty &member : definition.members) {
 			// 	WARN_PRINT(vformat("Member: %s", member.property.name));
@@ -2317,12 +2313,6 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						}
 						lua_pop(L, 1); // Remove nil
 						
-						// Special handling for "self" - return the table itself
-						if (strcmp(key, "self") == 0) {
-							lua_pushvalue(L, 1); // Push the env_table (which is self)
-							return 1;
-						}
-
 						if (nobind::ClassDB::get_singleton()->class_exists(key)) {
 							LuauEngine::singleton->register_and_push_godot_class(L, key);
 							return 1;
@@ -2353,6 +2343,13 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						LuauScriptInstance *instance = (LuauScriptInstance*)lua_touserdata(L, -1);
 						lua_pop(L, 1);
 						
+						// Special handling for "self" - return the table itself
+						if (strcmp(key, "self") == 0) {
+							//lua_pushvalue(L, 1); // Push the env_table (which is self)
+							LuauBridge::push_variant(L, owner_obj);
+							return 1;
+						}
+
 						// Check if we're already getting a property to avoid recursion
 						if (instance && instance->getting_property) {
 							// We're already in a get() call from the editor/engine
@@ -2476,6 +2473,13 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 							}
 						}
 						
+						if (LuauLanguage::singleton->global_constants.has(key)) {
+							Variant v = LuauLanguage::singleton->global_constants.get(key);
+							//WARN_PRINT(vformat("Found %s in global_constants=%s", key, v));
+							LuauBridge::push_variant(L, v);
+							return 1;
+						}
+
 						// check global env for key
 						lua_getglobal(L, key);
 						if (lua_isnil(L, -1)) {
@@ -3262,6 +3266,7 @@ Dictionary LuauLanguage::_lookup_code(const String &p_code, const String &p_symb
 	
 	// Check global constants registered with the language
 	if (global_constants.has(symbol)) {
+		WARN_PRINT(vformat("global_constants.has(%s)", symbol));
 		Variant value = global_constants[symbol];
 		
 		ret["result"] = 2; // LOOKUP_RESULT_CLASS_CONSTANT
