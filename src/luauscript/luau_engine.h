@@ -9,6 +9,7 @@ namespace godot {
 
 class LuauEngine {
 friend class LuauScript;
+friend class LuauLanguage;
 
 public:
     enum VMType {

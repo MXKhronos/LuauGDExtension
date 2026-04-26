@@ -522,119 +522,121 @@ void LuauScriptInstance::notification(int32_t p_what) {
 	}
 
     // Map common notifications to Luau method names
-    StringName method_name;
-    switch (p_what) {
-        case 13: // NOTIFICATION_READY
-            method_name = "_ready";
-            break;
-        case 17: // NOTIFICATION_PROCESS
-            method_name = "_process";
-            break;
-        case 16: // NOTIFICATION_PHYSICS_PROCESS
-            method_name = "_physics_process";
-            break;
-        case 10: // NOTIFICATION_ENTER_TREE
-            method_name = "_enter_tree";
-            break;
-        case 11: // NOTIFICATION_EXIT_TREE
-            method_name = "_exit_tree";
-            break;
-        case 25: // NOTIFICATION_UNPAUSED
-            method_name = "_unpaused";
-            break;
-        case 14: // NOTIFICATION_PAUSED  
-            method_name = "_paused";
-            break;
-        default:
-            // For other notifications, try the generic _notification method
-            method_name = "_notification";
-            break;
-    }
+    // StringName method_name;
+    // switch (p_what) {
+    //     case 13: // NOTIFICATION_READY
+    //         method_name = "_ready";
+    //         break;
+    //     case 17: // NOTIFICATION_PROCESS
+    //         method_name = "_process";
+    //         break;
+    //     case 16: // NOTIFICATION_PHYSICS_PROCESS
+    //         method_name = "_physics_process";
+    //         break;
+    //     case 10: // NOTIFICATION_ENTER_TREE
+    //         method_name = "_enter_tree";
+    //         break;
+    //     case 11: // NOTIFICATION_EXIT_TREE
+    //         method_name = "_exit_tree";
+    //         break;
+    //     case 25: // NOTIFICATION_UNPAUSED
+    //         method_name = "_unpaused";
+    //         break;
+    //     case 14: // NOTIFICATION_PAUSED  
+    //         method_name = "_paused";
+    //         break;
+    //     default:
+    //         // For other notifications, try the generic _notification method
+    //         method_name = "_notification";
+    //         break;
+    // }
 
-    // try the specific method
-    if (method_name != StringName("_notification") && has_method(method_name)) {
-		if (method_name != StringName("_process") && method_name != StringName("_physics_process")) {
-        	// WARN_PRINT(vformat("Calling method: %s", String(method_name)));
+    // // try the specific method
+    // if (method_name != StringName("_notification") && has_method(method_name)) {
+	// 	if (method_name != StringName("_process") && method_name != StringName("_physics_process")) {
+    //     	// WARN_PRINT(vformat("Calling method: %s", String(method_name)));
+	// 	}
+    //     lua_State *ET = lua_newthread(T);
+        
+    //     // Get the self table from the main state
+    //     lua_getref(L, self_ref);
+    //     lua_xmove(L, ET, 1);
+        
+    //     // Get the method from the self table
+    //     String method_str = String(method_name);
+    //     lua_getfield(ET, -1, method_str.utf8().get_data());
+        
+    //     if (!lua_isfunction(ET, -1)) {
+    //         lua_pop(ET, 2); // Remove non-function and self table
+    //         lua_pop(T, 1); // Remove thread
+    //         return;
+    //     }
+        
+    //     lua_remove(ET, -2);
+        
+    //     // Now push additional arguments if needed
+    //     int argc = 0;
+    //     if (p_what == 17 || p_what == 16) {
+    //         double delta = 1.0 / 60.0;
+	// 		if (p_what == 17) {
+	// 			delta = ((Node*)owner)->get_process_delta_time(); // NOTIFICATION_PROCESS
+	// 		} else {
+	// 			delta = ((Node*)owner)->get_physics_process_delta_time(); // NOTIFICATION_PHYSICS_PROCESS
+	// 		}
+    //         lua_pushnumber(ET, delta);
+    //         argc = 1;
+    //     }
+        
+    //     // Call: function, [args...]
+    //     int call_result = lua_pcall(ET, argc, 0, 0);
+        
+    //     if (call_result != LUA_OK) {
+    //         const char* error_msg = lua_tostring(ET, -1);
+    //         if (error_msg) {
+    //             UtilityFunctions::printerr(vformat("Luau script error in %s: %s", method_str, error_msg));
+    //         }
+    //         lua_pop(ET, 1); // Remove error message
+    //     }
+        
+    //     lua_pop(T, 1); // Remove thread
+    // } else if (has_method("_notification")) {
+    // }
+
+	if (p_what > 10000) return;
+
+	lua_State *ET = lua_newthread(T);
+	
+	// Get the self table from the main state
+	lua_getref(L, self_ref);
+	lua_xmove(L, ET, 1);
+	
+	// Get the method from the self table
+	lua_getfield(ET, -1, "_notification");
+	
+	if (!lua_isfunction(ET, -1)) {
+		lua_pop(ET, 2); // Remove non-function and self table
+		lua_pop(T, 1); // Remove thread
+		return;
+	}
+	
+	// Swap function and self table so self is first argument
+	lua_insert(ET, -2);
+	
+	// Push the notification code as argument
+	lua_pushinteger(ET, p_what);
+	
+	// Call: function, self, notification_code
+	int call_result = lua_pcall(ET, 2, 0, 0); // 1 for self + 1 for notification code
+	
+	if (call_result != LUA_OK) {
+		const char* error_msg = lua_tostring(ET, -1);
+		if (error_msg) {
+			UtilityFunctions::printerr(vformat("Luau script error in _notification: %s", error_msg));
 		}
-        lua_State *ET = lua_newthread(T);
-        
-        // Get the self table from the main state
-        lua_getref(L, self_ref);
-        lua_xmove(L, ET, 1);
-        
-        // Get the method from the self table
-        String method_str = String(method_name);
-        lua_getfield(ET, -1, method_str.utf8().get_data());
-        
-        if (!lua_isfunction(ET, -1)) {
-            lua_pop(ET, 2); // Remove non-function and self table
-            lua_pop(T, 1); // Remove thread
-            return;
-        }
-        
-        lua_remove(ET, -2);
-        
-        // Now push additional arguments if needed
-        int argc = 0;
-        if (p_what == 17 || p_what == 16) {
-            double delta = 1.0 / 60.0;
-			if (p_what == 17) {
-				delta = ((Node*)owner)->get_process_delta_time(); // NOTIFICATION_PROCESS
-			} else {
-				delta = ((Node*)owner)->get_physics_process_delta_time(); // NOTIFICATION_PHYSICS_PROCESS
-			}
-            lua_pushnumber(ET, delta);
-            argc = 1;
-        }
-        
-        // Call: function, [args...]
-        int call_result = lua_pcall(ET, argc, 0, 0);
-        
-        if (call_result != LUA_OK) {
-            const char* error_msg = lua_tostring(ET, -1);
-            if (error_msg) {
-                UtilityFunctions::printerr(vformat("Luau script error in %s: %s", method_str, error_msg));
-            }
-            lua_pop(ET, 1); // Remove error message
-        }
-        
-        lua_pop(T, 1); // Remove thread
-
-    } else if (has_method("_notification")) {
-        lua_State *ET = lua_newthread(T);
-        
-        // Get the self table from the main state
-        lua_getref(L, self_ref);
-        lua_xmove(L, ET, 1);
-        
-        // Get the method from the self table
-        lua_getfield(ET, -1, "_notification");
-        
-        if (!lua_isfunction(ET, -1)) {
-            lua_pop(ET, 2); // Remove non-function and self table
-            lua_pop(T, 1); // Remove thread
-            return;
-        }
-        
-        // Swap function and self table so self is first argument
-        lua_insert(ET, -2);
-        
-        // Push the notification code as argument
-        lua_pushinteger(ET, p_what);
-        
-        // Call: function, self, notification_code
-        int call_result = lua_pcall(ET, 2, 0, 0); // 1 for self + 1 for notification code
-        
-        if (call_result != LUA_OK) {
-            const char* error_msg = lua_tostring(ET, -1);
-            if (error_msg) {
-                UtilityFunctions::printerr(vformat("Luau script error in _notification: %s", error_msg));
-            }
-            lua_pop(ET, 1); // Remove error message
-        }
-        
-        lua_pop(T, 1); // Remove thread
-    }
+		lua_pop(ET, 1); // Remove error message
+	}
+	
+	lua_pop(T, 1); // Remove thread
 }
 
 void LuauScriptInstance::to_string(GDExtensionBool *r_is_valid, String *r_out) {
@@ -740,6 +742,16 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
 				}
 			}
 		}
+	}
+
+	if (lua_isfunction(L, -1)) {
+		// when a field is a function
+		r_ret = Variant();
+    	lua_pop(L, 2); // Remove value and self table
+
+		if (r_err) *r_err = PROP_OK;
+		getting_property = false;
+		return true;
 	}
 
     // Convert the Lua value to Variant
@@ -2462,6 +2474,40 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 									return 1;
 								}, "method_call", 3);
 								
+								return 1;
+							}
+
+							//MARK: self.signal
+							if (strcmp(key, "signal") == 0) {
+								lua_pushlightuserdata(L, owner_obj);
+								lua_pushlightuserdata(L, instance);
+
+								lua_pushcclosure(L, [](lua_State *L) -> int {
+									Object *obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
+									LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(2));
+									LuauScript *script = const_cast<LuauScript*>(inst->get_script().ptr());
+
+									if (lua_gettop(L) < 1) {
+										luaL_error(L, "signal() requires a signal name argument");
+										return 0;
+									}
+									
+									Variant arg1 = LuauBridge::get_variant(L, 1);
+									if (arg1.get_type() != Variant::STRING
+									 && arg1.get_type() != Variant::STRING_NAME) {
+										luaL_error(L, vformat("signal() requires a String or StringName argument, got %s.", arg1.get_type_name(arg1.get_type())).utf8().get_data() );
+										return 0;
+									}
+
+									StringName sig_name = StringName(String(arg1));
+									
+									script->definition.signals[sig_name] = GDMethod();
+
+									Signal sig(obj, sig_name);
+									LuauBridge::push_variant(L, sig);
+
+									return 1;
+								}, "create_signal", 2);
 								return 1;
 							}
 

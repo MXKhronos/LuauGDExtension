@@ -1,4 +1,5 @@
 #include "luau_engine.h"
+#include "luau_script.h"
 
 #include <lua.h>
 #include <lualib.h>
@@ -8,6 +9,7 @@
 #include <godot_cpp/variant/variant.hpp>
 #include "nobind.h"
 
+#include "lamda_wrapper.h"
 #include "luau_bridge.h"
 #include "variant/builtin_types.h"
 
@@ -730,6 +732,15 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         return 1;
     }, "var_to_str");
     lua_setglobal(L, "var_to_str");
+
+    //MARK: Custom global functions
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        Variant v = Variant(Time::get_singleton()->get_unix_time_from_system());
+        String str = UtilityFunctions::var_to_str(v);
+        LuauBridge::push_variant(L, str);
+        return 1;
+    }, "tick");
+    lua_setglobal(L, "tick");
 }
 
 

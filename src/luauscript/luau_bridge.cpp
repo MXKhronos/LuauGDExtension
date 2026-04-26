@@ -1,6 +1,8 @@
 #include "luau_bridge.h"
+#include "lamda_wrapper.h"
 
 #include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/variant/callable.hpp>
 #include "variant/builtin_types.h"
 
 using namespace godot;
@@ -186,6 +188,11 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
             Vector4iBridge::push_from(L, p_var.operator Vector4i());
             break;
         }
+
+        case Variant::SIGNAL: {
+            SignalBridge::push_from(L, p_var.operator Signal());
+            break;
+        }
         
         default: {
             lua_pushnil(L);
@@ -296,6 +303,7 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             // WARN_PRINT("Unhandled table type: " + String(type_name) + " -> defaulted as dictionary");
             return Variant(get_dictionary(L, p_index));
         }
+
         case LUA_TUSERDATA: {
             void* ud = lua_touserdata(L, p_index);
             if (!ud) {
@@ -426,8 +434,33 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             WARN_PRINT("Unhandled userdata type: " + String(type_name));
             return Variant();
         }
-        default:
+
+        case LUA_TFUNCTION: {
+            lua_pushvalue(L, p_index);
+            int func_ref = lua_ref(L, -1);
+            lua_pop(L, 1);
+            
+            // Use main thread to ensure the Lua state stays valid
+            lua_State* main_L = lua_mainthread(L);
+            
+            LuaFunctionWrapper* wrapper = memnew(LuaFunctionWrapper); // wrapper obj for lua func ref
+            wrapper->set_lua_state(main_L);
+            wrapper->set_function_ref(func_ref);
+            
+            Callable callable(wrapper, "invoke");
+            return callable;
+        }
+
+        default: {
+            const char* type_name = lua_typename(L, type);
+            const char* str_value = luaL_tolstring(L, p_index, nullptr);
+            
+            WARN_PRINT(vformat("Unhandled lua type: %s (%d), value: %s", type_name, type, str_value ? str_value : "nil"));
+            
+            lua_pop(L, 1); // pop str_value
+            
             return Variant();
+        }
     }
 };
 

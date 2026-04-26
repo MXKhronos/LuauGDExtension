@@ -14,9 +14,11 @@ local cameraPivot: Node3D = get_node("CameraPivot");
 local cameraHolder: Node3D = get_node("CameraPivot/CameraHolder");
 
 local wasOnFloor: boolean = false;
+local isAiming: boolean = false;
 
 function _ready(): nil
 	Global.Player = self;
+	Global.OnAimModeChanged:connect(_OnAimModeChanged);
 end
 
 function _unhandled_input(event: InputEvent): nil
@@ -80,4 +82,9 @@ function _physics_process(delta: number): nil
 	
 	velocity = newVelocity;
 	move_and_slide();
+end
+
+function _OnAimModeChanged(aimMode: boolean): nil
+	isAiming = aimMode;
+	print("isAiming", isAiming);
 end

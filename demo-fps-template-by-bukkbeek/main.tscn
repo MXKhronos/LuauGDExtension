@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://x864rhe4b188"]
 
 [ext_resource type="PackedScene" uid="uid://i3v82muv47ra" path="res://world/test_level.tscn" id="2_5vw27"]
+[ext_resource type="Script" uid="uid://cvt1rvnmtwxg2" path="res://common/managers/input_manager.luau" id="3_h2yge"]
 [ext_resource type="PackedScene" uid="uid://cdbipjyx57al2" path="res://player/player.tscn" id="3_kek77"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_w755r"]
@@ -50,3 +51,6 @@ navigation_mesh = SubResource("NavigationMesh_11gm3")
 [node name="Enemies" type="Node3D" parent="." unique_id=546610455]
 
 [node name="explosive_items" type="Node3D" parent="." unique_id=411582752]
+
+[node name="InputManager" type="Node" parent="." unique_id=1616851217]
+script = ExtResource("3_h2yge")

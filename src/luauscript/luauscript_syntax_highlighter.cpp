@@ -584,6 +584,8 @@ void LuauSyntaxHighlighter::_update_cache() {
     keywords.insert("export");
     keywords.insert("type");
     keywords.insert("typeof");
+
+    keywords.insert("signal");
     
     // Control flow keywords (subset of keywords with special coloring)
     control_flow_keywords.clear();

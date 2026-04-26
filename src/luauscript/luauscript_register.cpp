@@ -27,6 +27,7 @@ Ref<ResourceFormatSaverLuau> resource_saver_luau;
 void initialize_luau_module(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
         GDREGISTER_INTERNAL_CLASS(LambdaWrapper);
+        GDREGISTER_INTERNAL_CLASS(LuaFunctionWrapper);
 
         WARN_PRINT("[LuauGDExtension] Initializing Extension");
         GDREGISTER_INTERNAL_CLASS(LuauScript);
