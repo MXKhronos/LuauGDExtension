@@ -4,11 +4,13 @@
 --MARK: properties
 DebugMode = false;
 EnemiesKilled = 0;
-InVehicle = false;
+IsInVehicle = false;
 
-Player = (nil :: CharacterBody3D);
+Player = nil :: CharacterBody3D;
 
 --MARK: signals
 OnAimModeChanged = signal("OnAimModeChanged");
-
-print("OnAimModeChanged", OnAimModeChanged, type(OnAimModeChanged), typeof(OnAimModeChanged))
+OnFireInput = signal("OnFireInput");
+OnReloadInput = signal("OnReloadInput");
+OnWeaponSwitchInput = signal("OnWeaponSwitchInput");
+OnActivatePressed = signal("OnActivatePressed");

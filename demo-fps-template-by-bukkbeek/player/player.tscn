@@ -1,6 +1,10 @@
 [gd_scene format=3 uid="uid://cdbipjyx57al2"]
 
 [ext_resource type="Script" uid="uid://ddcejlr5hw3ve" path="res://player/player.luau" id="1_oul6g"]
+[ext_resource type="Script" uid="uid://cjuuf4bnxtuq" path="res://common/managers/weapons_manager.luau" id="2_qjkh3"]
+[ext_resource type="PackedScene" uid="uid://c5cmenins5u2w" path="res://weapons/knife.tscn" id="3_rgyib"]
+[ext_resource type="PackedScene" uid="uid://dw2hcpsqkygc2" path="res://weapons/pistol.tscn" id="4_hg6s5"]
+[ext_resource type="PackedScene" uid="uid://5r64a43lxupx" path="res://weapons/assualt_rifle.tscn" id="5_8t03j"]
 [ext_resource type="AudioStream" uid="uid://tohbwu7jgoab" path="res://player/sfx/footstep_ground.ogg" id="19_bjvpn"]
 [ext_resource type="AudioStream" uid="uid://drpdbxpt2fu6u" path="res://player/sfx/footstep_jump.wav" id="20_s7qer"]
 [ext_resource type="AudioStream" uid="uid://ol7ybyeu817g" path="res://player/sfx/footstep_metal.ogg" id="21_g4c7l"]
@@ -27,12 +31,21 @@ cull_mask = 1048573
 
 [node name="WeaponsManager" type="Node3D" parent="." unique_id=1444023138]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+script = ExtResource("2_qjkh3")
+WeaponsArray = Array[Node3D]([null, null, null])
 
 [node name="RayCastOrigin" type="Node3D" parent="WeaponsManager" unique_id=964028775]
 
 [node name="WeaponRayCast" type="RayCast3D" parent="WeaponsManager/RayCastOrigin" unique_id=1650999367]
 target_position = Vector3(0, 0, -10)
 collision_mask = 6
+
+[node name="Knife" parent="WeaponsManager" unique_id=1058031305 instance=ExtResource("3_rgyib")]
+
+[node name="Pistol" parent="WeaponsManager" unique_id=594164260 instance=ExtResource("4_hg6s5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.7, 0)
+
+[node name="AssualtRifle" parent="WeaponsManager" unique_id=1187477528 instance=ExtResource("5_8t03j")]
 
 [node name="WeaponSubViewport" type="SubViewportContainer" parent="." unique_id=884807026]
 anchors_preset = 15

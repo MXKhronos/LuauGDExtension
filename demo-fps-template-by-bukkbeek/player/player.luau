@@ -18,12 +18,12 @@ local isAiming: boolean = false;
 
 function _ready(): nil
 	Global.Player = self;
-	Global.OnAimModeChanged:connect(_OnAimModeChanged);
+	Global.OnAimModeChanged:connect(OnAimModeChanged);
 end
 
 function _unhandled_input(event: InputEvent): nil
 	if typeof(event) ~= "InputEventMouseMotion" then return end;
-	--if Input.get_mouse_mode() ~= Input.MOUSE_MODE_CAPTURED then return end;
+	if Input.get_mouse_mode() ~= Input.MOUSE_MODE_CAPTURED then return end;
 	
 	cameraPivot:rotate_y(-event.relative.x * sensitivity);
 	cameraHolder:rotate_x(-event.relative.y * sensitivity);
@@ -84,7 +84,6 @@ function _physics_process(delta: number): nil
 	move_and_slide();
 end
 
-function _OnAimModeChanged(aimMode: boolean): nil
+function OnAimModeChanged(aimMode: boolean): nil
 	isAiming = aimMode;
-	print("isAiming", isAiming);
 end

@@ -1692,7 +1692,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                 // Get the variable name
                                 String var_name = String(global->name.value);
                                 bool is_constant = true;
-                                
+
                                 // Check if all alphabetic characters are uppercase (constant convention)
                                 for (int j = 0; j < var_name.length(); j++) {
                                     char32_t c = var_name[j];
@@ -1705,6 +1705,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                 // Extract the value
                                 Variant var_value;
                                 bool has_value = false;
+                                String typed_array_elem_type = "";  // Track element type for typed arrays
                                 
                                 if (auto* num = value->as<Luau::AstExprConstantNumber>()) {
                                     var_value = num->value;
@@ -1718,10 +1719,42 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 								} else if (value->as<Luau::AstExprTable>()) {
 									var_value = Dictionary();
 									has_value = true;
-                                } else if (value->as<Luau::AstExprConstantNil>()) {
+
+								} else if (auto* type_assert = value->as<Luau::AstExprTypeAssertion>()) {
+									// Handle type assertions for tables ({} :: {Type} or {Name: string; Value: number})
+									if (type_assert->expr->as<Luau::AstExprTable>()) {
+										// Check if annotation is a table type
+										if (auto* table_type = type_assert->annotation->as<Luau::AstTypeTable>()) {
+											if (table_type->indexer) {
+												// Array-like table type ({} :: {Node3D})
+												// Get element type from indexer's resultType
+												if (auto* elem_type_ref = table_type->indexer->resultType->as<Luau::AstTypeReference>()) {
+													typed_array_elem_type = String(elem_type_ref->name.value);
+													Array typed_arr;
+													// Set the typed array element type
+													typed_arr.set_typed(Variant::OBJECT, StringName(typed_array_elem_type), Variant());
+													var_value = typed_arr;
+													has_value = true;
+												}
+											} else if (table_type->props.size > 0) {
+												// Dictionary-like table type with named properties ({Name: string; Value: number})
+												var_value = Dictionary();
+												has_value = true;
+											}
+										}
+										// Fallback to untyped array if we couldn't extract the type
+										if (!has_value) {
+											var_value = Array();
+											has_value = true;
+										}
+									}
+
+								} else if (value->as<Luau::AstExprConstantNil>()) {
                                     var_value = Variant();
                                     has_value = true;
                                 }
+                                
+								// WARN_PRINT(vformat("Global assign %s=%s", var_name, var_value));
                                 
                                 if (has_value) {
                                     if (is_constant) {
@@ -1732,7 +1765,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                         // Create the variable definition
                                         GDClassProperty var_def;
                                         var_def.property.name = StringName(var_name);
-                                        var_def.property.class_name = "";
+                                        var_def.property.class_name = definition.name;
                                         var_def.property.hint = PROPERTY_HINT_NONE;
                                         var_def.property.hint_string = "";
                                         var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
@@ -1754,6 +1787,13 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                                 break;
 											case Variant::DICTIONARY:
 												var_def.property.type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
+												break;
+											case Variant::ARRAY:
+												var_def.property.type = GDEXTENSION_VARIANT_TYPE_ARRAY;
+												if (!typed_array_elem_type.is_empty()) {
+													var_def.property.hint = PROPERTY_HINT_ARRAY_TYPE;
+													var_def.property.hint_string = typed_array_elem_type;
+												}
 												break;
                                             default:
                                                 var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;

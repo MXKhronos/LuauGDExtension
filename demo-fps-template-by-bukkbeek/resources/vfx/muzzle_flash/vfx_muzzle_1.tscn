@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://4ps1gadiwdtg"]
 
-[ext_resource type="Script" uid="uid://b4h7cuggv0nco" path="res://resources/vfx/muzzle_flash/vfx_muzzle_1.gd" id="1_5phk3"]
+[ext_resource type="Script" uid="uid://gmr808ij3nik" path="res://resources/vfx/muzzle_flash/vfx_muzzle_1.luau" id="1_5phk3"]
 [ext_resource type="Texture2D" uid="uid://ddxqnj3rbpdn2" path="res://resources/textures/muzzle_flash_fps_1.png" id="2_gpcjb"]
 [ext_resource type="ArrayMesh" uid="uid://h5irgfap2gqc" path="res://resources/vfx/standard_particle_icosphere.mesh" id="3_86x1g"]
 [ext_resource type="ArrayMesh" uid="uid://rumxv4mhvxuk" path="res://resources/vfx/standard_particle_spike.mesh" id="4_wff67"]

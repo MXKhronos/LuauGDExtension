@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://oyk8o6a5s3rp"]
 
 [ext_resource type="Texture2D" uid="uid://3ffho2k8jbls" path="res://resources/textures/decal_bullethole_1.png" id="1_ja0wo"]
-[ext_resource type="Script" uid="uid://cpgb170eklb2m" path="res://resources/vfx/bullet_decal.gd" id="2_4s81q"]
+[ext_resource type="Script" uid="uid://8pkiy0t143k3" path="res://resources/vfx/bullet_decal.luau" id="2_4s81q"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_4s81q"]
 size = Vector3(0.2, 0.2, 0.2)
