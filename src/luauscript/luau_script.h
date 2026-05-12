@@ -260,17 +260,8 @@ namespace godot {
         HashMap<StringName, Variant> constants;
 
     public:
-        // Accessors for script reload functionality
-        void update_properties(const Vector<GDClassProperty> &p_properties) {
-            properties.clear();
-            for (const GDClassProperty &prop : p_properties) {
-                properties.push_back(prop.property);
-            }
-        }
-        
-        void update_constants(const HashMap<StringName, Variant> &p_constants) {
-            constants = p_constants;
-        }
+        void update(const Vector<GDClassProperty> &p_properties);
+
         static const GDExtensionScriptInstanceInfo3 INSTANCE_INFO;
 
         bool property_set_fallback(const StringName &p_name, const Variant &p_value);
@@ -335,6 +326,10 @@ namespace godot {
         bool placeholder_fallback_enabled = false;
 #endif // TOOLS_ENABLED 
         
+#ifdef DEBUG_ENABLED
+	HashMap<uint64_t, List<Pair<StringName, Variant>>> pending_reload_state;
+#endif
+
     public:
         Error load_source_code(const String &p_path);
         Error load(LoadStage p_load_stage, bool p_force = false);
@@ -355,6 +350,7 @@ namespace godot {
 
         bool instance_has(uint64_t p_obj_id) const;
         bool _instance_has(Object *p_object) const override;
+        ScriptInstance *get_instance(uint16_t p_obj_id) const;
 
         bool _has_source_code() const override;
         String _get_source_code() const override;
@@ -386,6 +382,8 @@ namespace godot {
 
         bool is_placeholder_fallback_enabled() const;
         bool can_instantiate() const;
+
+        void update_exports_internal(PlaceHolderScriptInstance *p_instance) const;
     };
 
 

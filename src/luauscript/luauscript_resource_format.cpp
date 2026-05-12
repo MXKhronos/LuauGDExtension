@@ -11,7 +11,7 @@ using namespace godot;
 //MARK: Loader
 String ResourceFormatLoaderLuau::get_resource_type(const String &p_path) {
 	String extension = p_path.get_extension().to_lower();
-
+	
 	if (extension == luau::LUAUSCRIPT_EXTENSION) {
 		return luau::LUAUSCRIPT_TYPE;
 	}
@@ -46,13 +46,11 @@ Variant ResourceFormatLoaderLuau::_load(const String &p_path, const String &p_or
 	Ref<LuauScript> scr = LuauCache::get_singleton()->get_script(p_path, err, ignoring);
 
 	if (err && scr.is_valid()) {
-		// If !scr.is_valid(), the error was likely from scr->load_source_code(), which already generates an error.
 		ERR_PRINT(vformat(R"(Failed to load script "%s" with error(s).)", p_original_path));
 	}
 
 	return scr;
 }
-
 
 //MARK: Saver
 PackedStringArray ResourceFormatSaverLuau::_get_recognized_extensions(const Ref<Resource> &p_resource) const {

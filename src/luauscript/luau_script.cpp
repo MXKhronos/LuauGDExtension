@@ -757,7 +757,7 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
     // Convert the Lua value to Variant
     r_ret = LuauBridge::get_variant(L, -1);
     lua_pop(L, 2); // Remove value and self table
-    
+
     if (r_err) *r_err = PROP_OK;
     getting_property = false;
     return true;
@@ -1045,6 +1045,7 @@ static GDExtensionScriptInstanceInfo3 init_placeholder_instance_info() {
 const GDExtensionScriptInstanceInfo3 PlaceHolderScriptInstance::INSTANCE_INFO = init_placeholder_instance_info();
 
 bool PlaceHolderScriptInstance::set(const StringName &p_name, const Variant &p_value, PropertySetGetError *r_err) {
+	WARN_PRINT(vformat("LuauScript PlaceHolderScriptInstance::set %s", p_name));
 	if (script->_is_placeholder_fallback_enabled()) {
 		if (r_err)
 			*r_err = PROP_NOT_FOUND;
@@ -1109,6 +1110,71 @@ bool PlaceHolderScriptInstance::get(const StringName &p_name, Variant &r_ret, Pr
 		*r_err = PROP_NOT_FOUND;
 
 	return false;
+}
+
+void PlaceHolderScriptInstance::update(const Vector<GDClassProperty> &p_properties) {
+	HashSet<StringName> new_values;
+	HashMap<StringName, GDClassProperty> prop_map;
+	
+	const HashMap<StringName, Variant> &old_values = values;
+
+	properties.clear();
+	for (const GDClassProperty &prop : p_properties) {
+		GDProperty property = prop.property;
+
+		if (property.usage & (PROPERTY_USAGE_GROUP | PROPERTY_USAGE_SUBGROUP | PROPERTY_USAGE_CATEGORY)) {
+			continue;
+		}
+
+		StringName n = property.name;
+		new_values.insert(n);
+
+		if (!values.has(n) || (property.type != Variant::NIL && values[n].get_type() != property.type)) {
+			// if (old_values.has(n)) {
+			// 	values[n] = old_values[n];
+			// }
+			values[n] = prop.default_value;
+		}
+
+		properties.push_back(prop.property);
+
+		prop_map[n] = prop;
+	}
+
+	List<StringName> to_remove;
+
+	ScriptInstance *script_instance = script->get_instance(script->get_instance_id());
+
+	for (KeyValue<StringName, Variant> &E : values) {
+		if (!new_values.has(E.key)) {
+			to_remove.push_back(E.key);
+		}
+
+		Variant defval = prop_map.has(E.key) ? prop_map[E.key].default_value : Variant();
+		if (script->get_property_default_value(E.key)) {
+			//remove because it's the same as the default value
+			if (defval == E.value) {
+				to_remove.push_back(E.key);
+			}
+		}
+	}
+
+	while (to_remove.size()) {
+		values.erase(to_remove.front()->get());
+		to_remove.pop_front();
+	}
+
+	constants.clear();
+	Dictionary consts_dict = script->_get_constants();
+	Array keys = consts_dict.keys();
+	for (int i = 0; i < keys.size(); ++i) {
+		Variant key = keys[i];
+		constants[StringName(key)] = consts_dict[key];
+	}
+
+	if (owner && owner->get_script() == this) {
+		owner->notify_property_list_changed();
+	}
 }
 
 bool PlaceHolderScriptInstance::property_set_fallback(const StringName &p_name, const Variant &p_value) {
@@ -1241,7 +1307,7 @@ PlaceHolderScriptInstance::PlaceHolderScriptInstance(const Ref<LuauScript> &p_sc
     owner = p_owner;
 
 	script->placeholders.insert(p_owner->get_instance_id(), this);
-	// script->update_exports_internal(this);
+	script->update_exports_internal(this);
 }
 
 PlaceHolderScriptInstance::~PlaceHolderScriptInstance() {
@@ -1320,16 +1386,12 @@ Error LuauScript::_reload(bool p_keep_state) {
 	// After successful reload, update instances if needed
 	if (reload_err == OK) {
 		if (placeholder_fallback_enabled) {
-			// Update placeholder instances with new script information
 			MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
 			
-			// Update all placeholder instances
 			for (const KeyValue<uint64_t, PlaceHolderScriptInstance *> &E : placeholders) {
 				PlaceHolderScriptInstance *placeholder = E.value;
 				if (placeholder) {
-					// Update the property list and constants using the accessor methods
-					placeholder->update_properties(definition.properties);
-					placeholder->update_constants(constants);
+					placeholder->update(definition.properties);
 				}
 			}
 		}
@@ -1338,14 +1400,10 @@ Error LuauScript::_reload(bool p_keep_state) {
 		if (p_keep_state) {
 			MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
 			
-			// Notify all instances that the script has been reloaded
 			for (const KeyValue<uint64_t, LuauScriptInstance *> &E : instances) {
 				LuauScriptInstance *instance = E.value;
 				if (instance) {
-					// Re-initialize the instance with the new bytecode
-					// This would involve re-running the script in the instance's Lua state
-					// For now, we just mark that a reload happened
-					// Full implementation would reload the bytecode into the instance
+					//MARK: TODO Hot Reload
 				}
 			}
 		}
@@ -1576,13 +1634,11 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
     
     Error err = OK;
     
-    // Stage 1: Compile the script
+    // Compile
     if (p_load_stage >= LOAD_COMPILE) {
-        // Convert Godot String to std::string for Luau
         CharString utf8 = source.utf8();
         std::string source_str(utf8.get_data(), utf8.length());
 		
-        // Set up compile options
         Luau::CompileOptions compile_opts;
         compile_opts.optimizationLevel = 2; // Full optimization
         compile_opts.debugLevel = 2; // Full debug info
@@ -1596,41 +1652,39 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
             memcpy(bytecode.ptrw(), compiled.data(), compiled.size());
             
             load_stage = LOAD_COMPILE;
+
         } catch (const Luau::CompileError &e) {
             ERR_FAIL_V_MSG(ERR_COMPILATION_FAILED, 
                 vformat("Luau compilation failed at line %d: %s", 
                     e.getLocation().begin.line + 1, e.what()));
+
         } catch (...) {
             ERR_FAIL_V_MSG(ERR_COMPILATION_FAILED, "Unknown compilation error");
+
         }
     }
     
-    // Stage 2: Parse and analyze the script for metadata
+    // Parse and analyse
     if (p_load_stage >= LOAD_ANALYSIS) {
-        // Parse the source to extract metadata
         CharString utf8 = source.utf8();
         std::string source_str(utf8.get_data(), utf8.length());
         
-        // Create allocator and name table for AST
         Luau::Allocator allocator;
         Luau::AstNameTable names(allocator);
         
-        // Parse the source
         Luau::ParseOptions parse_opts;
         Luau::ParseResult parse_result = Luau::Parser::parse(
             source_str.c_str(), source_str.size(), names, allocator, parse_opts);
         
         if (!parse_result.errors.empty()) {
-            // Report first parse error
             const auto &error = parse_result.errors[0];
             ERR_FAIL_V_MSG(ERR_PARSE_ERROR,
                 vformat("Parse error at line %d: %s",
                     error.getLocation().begin.line + 1, error.getMessage().c_str()));
         }
         
-        // Extract metadata from AST
+        // Extract from AST
         if (parse_result.root) {
-            // Clear existing metadata
             definition.methods.clear();
             definition.properties.clear();
             definition.property_indices.clear();
@@ -1640,182 +1694,209 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
             definition.constants.clear();
             constants.clear();
             
+            if (definition.name.is_empty()) {
+                String path = get_path();
+                if (!path.is_empty()) {
+                    definition.name = path.get_file().get_basename();
+                }
+            }
+            
+            if (definition.extends.is_empty()) {
+                definition.extends = "RefCounted";
+            }
+
             {
-                // parse line by line for annotations
+                // MARK: Config annotations
                 PackedStringArray lines_packed = source.split("\n");
                 for (int i = 0; i < lines_packed.size(); i++) {
                     String line = lines_packed[i];
                     String trimmed = line.strip_edges();
                     
                     if (trimmed.begins_with("---") || trimmed.begins_with("--")) {
-                        // Remove comment prefix
                         String comment = trimmed.substr(trimmed.begins_with("---") ? 3 : 2).strip_edges();
                         
-                        // MARK: @extends annotation
+                        // @extends annotation
                         if (comment.begins_with("@extends ")) {
                             String base_class = comment.substr(9).strip_edges();
                             if (!base_class.is_empty()) {
                                 definition.extends = base_class;
                             }
                         }
-                        // MARK: @class annotation
+                        // @class annotation
                         else if (comment.begins_with("@class ")) {
                             String class_name = comment.substr(7).strip_edges();
                             if (!class_name.is_empty()) {
                                 definition.name = class_name; //MARK: TODO custom class
                             }
                         }
-                        // MARK: @tool annotation
+                        // @tool annotation
                         else if (comment == "@tool") {
                             definition.is_tool = true;
                         }
-                    }
-                    // optimization
-                    else if (!trimmed.is_empty() && !trimmed.begins_with("--")) {
-                        // code now, no more defining annotations
+
+                    } else if (!trimmed.is_empty() && !trimmed.begins_with("--")) {
                         break;
                     }
                 }
             }
-            
-            // Walk through the AST to extract additional metadata (functions, constants, etc.)
+
+            // Ast for metadata
             for (Luau::AstStat* stat : parse_result.root->body) {
-                // Check for global variable assignments (e.g., ACONST = 123)
+				// Global vars (e.g., ACONST = 123)
                 if (auto* assign = stat->as<Luau::AstStatAssign>()) {
-                    // Process global assignments
                     for (size_t i = 0; i < assign->vars.size; i++) {
-                        if (i < assign->values.size && assign->values.data[i]) {
-                            // Check if it's a simple global variable (not a table access)
-                            if (auto* global = assign->vars.data[i]->as<Luau::AstExprGlobal>()) {
-                                Luau::AstExpr* value = assign->values.data[i];
-                                
-                                // Get the variable name
-                                String var_name = String(global->name.value);
-                                bool is_constant = true;
+						if (i >= assign->values.size || !assign->values.data[i]) continue;
+						
+						auto* global = assign->vars.data[i]->as<Luau::AstExprGlobal>();
+						if (!global) continue;
 
-                                // Check if all alphabetic characters are uppercase (constant convention)
-                                for (int j = 0; j < var_name.length(); j++) {
-                                    char32_t c = var_name[j];
-                                    if ((c >= 'a' && c <= 'z')) {
-                                        is_constant = false;
-                                        break;
-                                    }
-                                }
-                                
-                                // Extract the value
-                                Variant var_value;
-                                bool has_value = false;
-                                String typed_array_elem_type = "";  // Track element type for typed arrays
-                                
-                                if (auto* num = value->as<Luau::AstExprConstantNumber>()) {
-                                    var_value = num->value;
-                                    has_value = true;
-                                } else if (auto* str = value->as<Luau::AstExprConstantString>()) {
-                                    var_value = String::utf8(str->value.data, str->value.size);
-                                    has_value = true;
-                                } else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
-                                    var_value = bool_val->value;
-                                    has_value = true;
-								} else if (value->as<Luau::AstExprTable>()) {
-									var_value = Dictionary();
-									has_value = true;
+						String var_name = String(global->name.value);
+						Luau::AstExpr* value = assign->values.data[i];
+						
+						//constant convention
+						bool is_constant = true;
+						for (int j = 0; j < var_name.length(); j++) {
+							char32_t c = var_name[j];
+							if ((c >= 'a' && c <= 'z')) {
+								is_constant = false;
+								break;
+							}
+						}
+						
+						//extract value
+						bool has_value = false;
+						Variant::Type var_type;
+						Variant var_value;
+						StringName native_type;
+						String typed_array_var_type = "";
+						
+						if (auto* num = value->as<Luau::AstExprConstantNumber>()) {
+							var_value = num->value;
+							var_type = Variant::FLOAT;
 
-								} else if (auto* type_assert = value->as<Luau::AstExprTypeAssertion>()) {
-									// Handle type assertions for tables ({} :: {Type} or {Name: string; Value: number})
-									if (type_assert->expr->as<Luau::AstExprTable>()) {
-										// Check if annotation is a table type
-										if (auto* table_type = type_assert->annotation->as<Luau::AstTypeTable>()) {
-											if (table_type->indexer) {
-												// Array-like table type ({} :: {Node3D})
-												// Get element type from indexer's resultType
-												if (auto* elem_type_ref = table_type->indexer->resultType->as<Luau::AstTypeReference>()) {
-													typed_array_elem_type = String(elem_type_ref->name.value);
-													Array typed_arr;
-													// Set the typed array element type
-													typed_arr.set_typed(Variant::OBJECT, StringName(typed_array_elem_type), Variant());
-													var_value = typed_arr;
-													has_value = true;
-												}
-											} else if (table_type->props.size > 0) {
-												// Dictionary-like table type with named properties ({Name: string; Value: number})
-												var_value = Dictionary();
-												has_value = true;
-											}
-										}
-										// Fallback to untyped array if we couldn't extract the type
-										if (!has_value) {
-											var_value = Array();
+						} else if (auto* str = value->as<Luau::AstExprConstantString>()) {
+							var_value = String::utf8(str->value.data, str->value.size);
+							var_type = Variant::STRING;
+
+						} else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
+							var_value = bool_val->value;
+
+						} else if (value->as<Luau::AstExprTable>()) {
+							var_value = Dictionary();
+
+						} else if (value->as<Luau::AstExprConstantNil>()) {
+							var_value = Variant();
+
+						} 
+
+						//parse type_name to Variant::Type
+						auto parse_var_type = [](const String& type_name) -> Variant::Type {
+							if (type_name == "boolean") return Variant::BOOL;
+							if (type_name == "integer") return Variant::INT;
+							if (type_name == "number") return Variant::FLOAT;
+							if (type_name == "string") return Variant::STRING;
+							if (type_name == "Vector2") return Variant::VECTOR2;
+							if (type_name == "Vector3") return Variant::VECTOR3;
+							if (type_name == "Color") return Variant::COLOR;
+							if (type_name == "Rect2") return Variant::RECT2;
+							if (type_name == "Transform2D") return Variant::TRANSFORM2D;
+							if (type_name == "Plane") return Variant::PLANE;
+							if (type_name == "Quaternion") return Variant::QUATERNION;
+							if (type_name == "AABB") return Variant::AABB;
+							if (type_name == "Basis") return Variant::BASIS;
+							if (type_name == "Transform3D") return Variant::TRANSFORM3D;
+							if (type_name == "Projection") return Variant::PROJECTION;
+							if (type_name == "StringName") return Variant::STRING_NAME;
+							if (type_name == "NodePath") return Variant::NODE_PATH;
+							if (type_name == "RID") return Variant::RID;
+							if (type_name == "Dictionary") return Variant::DICTIONARY;
+							if (type_name == "Array") return Variant::ARRAY;
+							if (type_name == "PackedByteArray") return Variant::PACKED_BYTE_ARRAY;
+							if (type_name == "PackedInt32Array") return Variant::PACKED_INT32_ARRAY;
+							if (type_name == "PackedInt64Array") return Variant::PACKED_INT64_ARRAY;
+							if (type_name == "PackedFloat32Array") return Variant::PACKED_FLOAT32_ARRAY;
+							if (type_name == "PackedFloat64Array") return Variant::PACKED_FLOAT64_ARRAY;
+							if (type_name == "PackedStringArray") return Variant::PACKED_STRING_ARRAY;
+							if (type_name == "PackedVector2Array") return Variant::PACKED_VECTOR2_ARRAY;
+							if (type_name == "PackedVector3Array") return Variant::PACKED_VECTOR3_ARRAY;
+							if (type_name == "PackedColorArray") return Variant::PACKED_COLOR_ARRAY;
+							return Variant::OBJECT;
+						};
+
+						if (auto* type_assert = value->as<Luau::AstExprTypeAssertion>()) {
+							if (type_assert->expr->as<Luau::AstExprTable>()) { // Type is a {};
+								if (auto* table_type = type_assert->annotation->as<Luau::AstTypeTable>()) { // {table_type} 
+									if (table_type->indexer) { // TypedArray
+										if (auto* var_type_ref = table_type->indexer->resultType->as<Luau::AstTypeReference>()) {
+											native_type = StringName(var_type_ref->name.value);
+											var_type = parse_var_type(native_type);
+
+											Array typed_arr;
+											typed_arr.set_typed(Variant::OBJECT, native_type, Variant());
+											
+											var_value = typed_arr;
 											has_value = true;
 										}
+									} else if (table_type->props.size > 0) { // Dictionary
+										var_value = Dictionary();
+										has_value = true;
 									}
+								}
+								// Fallback for untyped array
+								if (!has_value) {
+									var_value = Array();
+									has_value = true;
+								}
 
-								} else if (value->as<Luau::AstExprConstantNil>()) {
-                                    var_value = Variant();
-                                    has_value = true;
-                                }
-                                
-								// WARN_PRINT(vformat("Global assign %s=%s", var_name, var_value));
-                                
-                                if (has_value) {
-                                    if (is_constant) {
-                                        // ALL_CAPS variables are constants
-                                        constants[StringName(var_name)] = var_value;
-                                        definition.constants[StringName(var_name)] = var_value;
-                                    } else {
-                                        // Create the variable definition
-                                        GDClassProperty var_def;
-                                        var_def.property.name = StringName(var_name);
-                                        var_def.property.class_name = definition.name;
-                                        var_def.property.hint = PROPERTY_HINT_NONE;
-                                        var_def.property.hint_string = "";
-                                        var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
-                                        var_def.default_value = var_value;
-                                        
-                                        // Determine type from value
-                                        switch (var_value.get_type()) {
-                                            case Variant::BOOL:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
-                                                break;
-                                            case Variant::INT:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_INT;
-                                                break;
-                                            case Variant::FLOAT:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
-                                                break;
-                                            case Variant::STRING:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
-                                                break;
-											case Variant::DICTIONARY:
-												var_def.property.type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
-												break;
-											case Variant::ARRAY:
-												var_def.property.type = GDEXTENSION_VARIANT_TYPE_ARRAY;
-												if (!typed_array_elem_type.is_empty()) {
-													var_def.property.hint = PROPERTY_HINT_ARRAY_TYPE;
-													var_def.property.hint_string = typed_array_elem_type;
-												}
-												break;
-                                            default:
-                                                var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
-                                                var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE | PROPERTY_USAGE_NIL_IS_VARIANT;
-                                                break;
-                                        }
-                                        
-                                        // Global variables go to BOTH members and properties
-                                        // Add to members (all variables)
-                                        definition.members.push_back(var_def);
-                                        definition.member_indices[StringName(var_name)] = definition.members.size() - 1;
-                                        
-                                        // Also add to properties (global variables are accessible from outside)
-                                        definition.properties.push_back(var_def);
-                                        definition.property_indices[StringName(var_name)] = definition.properties.size() - 1;
-                                    }
-                                }
-                            }
-                        }
+							} else { // e.g. NodeA = nil :: Node3D
+								auto* anno_type = type_assert->annotation->as<Luau::AstTypeReference>();
+								native_type = anno_type->name.value;
+								var_type = parse_var_type(native_type);
+								
+							}
+
+							WARN_PRINT(vformat("AstExprTypeAssertion %s=%s", var_name, var_value));
+						}
+						
+						if (is_constant) {
+							constants[StringName(var_name)] = var_value;
+							definition.constants[StringName(var_name)] = var_value;
+							continue;
+						}
+
+						// Declare variable definition
+						GDClassProperty var_def;
+
+						var_def.property.name = StringName(var_name);
+						var_def.property.class_name = definition.name;
+						var_def.property.hint = PROPERTY_HINT_NONE;
+						var_def.property.hint_string = "";
+						var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
+
+						var_def.default_value = var_value;
+						
+						if (ClassDB::is_parent_class(native_type, StringName("Resource"))) {
+							var_def.property.type = GDEXTENSION_VARIANT_TYPE_OBJECT;
+							var_def.property.hint = PROPERTY_HINT_RESOURCE_TYPE;
+							var_def.property.hint_string = definition.name;
+
+						} else if (ClassDB::is_parent_class(native_type, StringName("Node"))) {
+							var_def.property.type = GDEXTENSION_VARIANT_TYPE_OBJECT;
+							var_def.property.hint = PROPERTY_HINT_NODE_TYPE;
+							var_def.property.hint_string = definition.name;
+
+						} else {
+							// Global var does not have a exportable type.
+						}
+
+						definition.members.push_back(var_def);
+						definition.member_indices[StringName(var_name)] = definition.members.size() - 1;
+						
+						definition.properties.push_back(var_def);
+						definition.property_indices[StringName(var_name)] = definition.properties.size() - 1;
                     }
                 }
-                // Check for local variable assignments
+                // Local vars (e.g. local hello = "world")
                 else if (auto* local = stat->as<Luau::AstStatLocal>()) {
                     // Process local variables
                     for (size_t i = 0; i < local->vars.size; i++) {
@@ -1844,12 +1925,52 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                             
                             // Function to map identifier to variant type
                             auto map_identifier_to_type = [](const String& identifier) -> GDExtensionVariantType {
-                                if (identifier == "Color") return GDEXTENSION_VARIANT_TYPE_COLOR;
+                                // Atomic types
+                                if (identifier == "bool" || identifier == "boolean") return GDEXTENSION_VARIANT_TYPE_BOOL;
+                                if (identifier == "int" || identifier == "integer") return GDEXTENSION_VARIANT_TYPE_INT;
+                                if (identifier == "float" || identifier == "number") return GDEXTENSION_VARIANT_TYPE_FLOAT;
+                                if (identifier == "string") return GDEXTENSION_VARIANT_TYPE_STRING;
+                                
+                                // Math types
                                 if (identifier == "Vector2") return GDEXTENSION_VARIANT_TYPE_VECTOR2;
-                                if (identifier == "Vector3") return GDEXTENSION_VARIANT_TYPE_VECTOR3;
-                                if (identifier == "Transform2D") return GDEXTENSION_VARIANT_TYPE_TRANSFORM2D;
-                                if (identifier == "Transform3D") return GDEXTENSION_VARIANT_TYPE_TRANSFORM3D;
+                                if (identifier == "Vector2i" || identifier == "Vector2I") return GDEXTENSION_VARIANT_TYPE_VECTOR2I;
                                 if (identifier == "Rect2") return GDEXTENSION_VARIANT_TYPE_RECT2;
+                                if (identifier == "Rect2i" || identifier == "Rect2I") return GDEXTENSION_VARIANT_TYPE_RECT2I;
+                                if (identifier == "Vector3") return GDEXTENSION_VARIANT_TYPE_VECTOR3;
+                                if (identifier == "Vector3i" || identifier == "Vector3I") return GDEXTENSION_VARIANT_TYPE_VECTOR3I;
+                                if (identifier == "Transform2D") return GDEXTENSION_VARIANT_TYPE_TRANSFORM2D;
+                                if (identifier == "Vector4") return GDEXTENSION_VARIANT_TYPE_VECTOR4;
+                                if (identifier == "Vector4i" || identifier == "Vector4I") return GDEXTENSION_VARIANT_TYPE_VECTOR4I;
+                                if (identifier == "Plane") return GDEXTENSION_VARIANT_TYPE_PLANE;
+                                if (identifier == "Quaternion" || identifier == "Quat") return GDEXTENSION_VARIANT_TYPE_QUATERNION;
+                                if (identifier == "AABB") return GDEXTENSION_VARIANT_TYPE_AABB;
+                                if (identifier == "Basis") return GDEXTENSION_VARIANT_TYPE_BASIS;
+                                if (identifier == "Transform3D") return GDEXTENSION_VARIANT_TYPE_TRANSFORM3D;
+                                if (identifier == "Projection") return GDEXTENSION_VARIANT_TYPE_PROJECTION;
+                                
+                                // Misc types
+                                if (identifier == "Color") return GDEXTENSION_VARIANT_TYPE_COLOR;
+                                if (identifier == "StringName") return GDEXTENSION_VARIANT_TYPE_STRING_NAME;
+                                if (identifier == "NodePath") return GDEXTENSION_VARIANT_TYPE_NODE_PATH;
+                                if (identifier == "RID") return GDEXTENSION_VARIANT_TYPE_RID;
+                                if (identifier == "Object") return GDEXTENSION_VARIANT_TYPE_OBJECT;
+                                if (identifier == "Callable") return GDEXTENSION_VARIANT_TYPE_CALLABLE;
+                                if (identifier == "Signal") return GDEXTENSION_VARIANT_TYPE_SIGNAL;
+                                if (identifier == "Dictionary" || identifier == "dict") return GDEXTENSION_VARIANT_TYPE_DICTIONARY;
+                                if (identifier == "Array" || identifier == "array") return GDEXTENSION_VARIANT_TYPE_ARRAY;
+                                
+                                // Packed arrays
+                                if (identifier == "PackedByteArray") return GDEXTENSION_VARIANT_TYPE_PACKED_BYTE_ARRAY;
+                                if (identifier == "PackedInt32Array") return GDEXTENSION_VARIANT_TYPE_PACKED_INT32_ARRAY;
+                                if (identifier == "PackedInt64Array") return GDEXTENSION_VARIANT_TYPE_PACKED_INT64_ARRAY;
+                                if (identifier == "PackedFloat32Array") return GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT32_ARRAY;
+                                if (identifier == "PackedFloat64Array") return GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT64_ARRAY;
+                                if (identifier == "PackedStringArray") return GDEXTENSION_VARIANT_TYPE_PACKED_STRING_ARRAY;
+                                if (identifier == "PackedVector2Array") return GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR2_ARRAY;
+                                if (identifier == "PackedVector3Array") return GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR3_ARRAY;
+                                if (identifier == "PackedColorArray") return GDEXTENSION_VARIANT_TYPE_PACKED_COLOR_ARRAY;
+                                if (identifier == "PackedVector4Array") return GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR4_ARRAY;
+                                
                                 return GDEXTENSION_VARIANT_TYPE_NIL;
                             };
 
@@ -1859,33 +1980,9 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                 if (auto* ref = var->annotation->as<Luau::AstTypeReference>()) {
                                     String type_name = String(ref->name.value);
                                     
-                                    // Map common Godot types
-                                    if (type_name == "Color") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_COLOR;
-                                        has_type_annotation = true;
-                                    } else if (type_name == "Vector2") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_VECTOR2;
-                                        has_type_annotation = true;
-                                    } else if (type_name == "Vector3") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_VECTOR3;
-                                        has_type_annotation = true;
-                                    } else if (type_name == "Transform2D") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_TRANSFORM2D;
-                                        has_type_annotation = true;
-                                    } else if (type_name == "Transform3D") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_TRANSFORM3D;
-                                        has_type_annotation = true;
-                                    } else if (type_name == "Rect2") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_RECT2;
-                                        has_type_annotation = true;
-                                    } else if (type_name == "string") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_STRING;
-                                        has_type_annotation = true;
-                                    } else if (type_name == "number") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_FLOAT;
-                                        has_type_annotation = true;
-                                    } else if (type_name == "boolean") {
-                                        var_type = GDEXTENSION_VARIANT_TYPE_BOOL;
+                                    // Map Godot types using the lambda
+                                    var_type = map_identifier_to_type(type_name);
+                                    if (var_type != GDEXTENSION_VARIANT_TYPE_NIL) {
                                         has_type_annotation = true;
                                     }
                                 }
@@ -1934,24 +2031,125 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                                 has_value = true;
                                 // Set a default value based on type
                                 switch (var_type) {
-                                    case GDEXTENSION_VARIANT_TYPE_COLOR:
-                                        var_value = Color();
+                                    // Atomic types
+                                    case GDEXTENSION_VARIANT_TYPE_BOOL:
+                                        var_value = false;
                                         break;
+                                    case GDEXTENSION_VARIANT_TYPE_INT:
+                                        var_value = 0;
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_FLOAT:
+                                        var_value = 0.0f;
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_STRING:
+                                        var_value = String();
+                                        break;
+                                    
+                                    // Math types
                                     case GDEXTENSION_VARIANT_TYPE_VECTOR2:
                                         var_value = Vector2();
                                         break;
-                                    case GDEXTENSION_VARIANT_TYPE_VECTOR3:
-                                        var_value = Vector3();
-                                        break;
-                                    case GDEXTENSION_VARIANT_TYPE_TRANSFORM2D:
-                                        var_value = Transform2D();
-                                        break;
-                                    case GDEXTENSION_VARIANT_TYPE_TRANSFORM3D:
-                                        var_value = Transform3D();
+                                    case GDEXTENSION_VARIANT_TYPE_VECTOR2I:
+                                        var_value = Vector2i();
                                         break;
                                     case GDEXTENSION_VARIANT_TYPE_RECT2:
                                         var_value = Rect2();
                                         break;
+                                    case GDEXTENSION_VARIANT_TYPE_RECT2I:
+                                        var_value = Rect2i();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_VECTOR3:
+                                        var_value = Vector3();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_VECTOR3I:
+                                        var_value = Vector3i();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_TRANSFORM2D:
+                                        var_value = Transform2D();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_VECTOR4:
+                                        var_value = Vector4();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_VECTOR4I:
+                                        var_value = Vector4i();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PLANE:
+                                        var_value = Plane();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_QUATERNION:
+                                        var_value = Quaternion();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_AABB:
+                                        var_value = AABB();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_BASIS:
+                                        var_value = Basis();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_TRANSFORM3D:
+                                        var_value = Transform3D();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PROJECTION:
+                                        var_value = Projection();
+                                        break;
+                                    
+                                    // Misc types
+                                    case GDEXTENSION_VARIANT_TYPE_COLOR:
+                                        var_value = Color();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_STRING_NAME:
+                                        var_value = StringName();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_NODE_PATH:
+                                        var_value = NodePath();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_RID:
+                                        var_value = RID();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_CALLABLE:
+                                        var_value = Callable();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_SIGNAL:
+                                        var_value = Signal();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_DICTIONARY:
+                                        var_value = Dictionary();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_ARRAY:
+                                        var_value = Array();
+                                        break;
+                                    
+                                    // Packed arrays
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_BYTE_ARRAY:
+                                        var_value = PackedByteArray();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_INT32_ARRAY:
+                                        var_value = PackedInt32Array();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_INT64_ARRAY:
+                                        var_value = PackedInt64Array();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT32_ARRAY:
+                                        var_value = PackedFloat32Array();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT64_ARRAY:
+                                        var_value = PackedFloat64Array();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_STRING_ARRAY:
+                                        var_value = PackedStringArray();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR2_ARRAY:
+                                        var_value = PackedVector2Array();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR3_ARRAY:
+                                        var_value = PackedVector3Array();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_COLOR_ARRAY:
+                                        var_value = PackedColorArray();
+                                        break;
+                                    case GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR4_ARRAY:
+                                        var_value = PackedVector4Array();
+                                        break;
+                                    
                                     default:
                                         var_value = Variant();
                                         break;
@@ -2030,8 +2228,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                         }
                     }
                 }
-                
-                // Check for function definitions
+                // functions 
                 if (auto* func = stat->as<Luau::AstStatFunction>()) {
                     // Extract function name
                     if (func->name) {
@@ -2099,31 +2296,12 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                 }
             }
             
-            // Look for special comments/annotations at the top of the file
-            // In a full implementation, we would parse comments for:
-            // --- @class ClassName
-            // --- @extends BaseClass
-            // --- @tool
-            // etc.
-            
-            // For now, set some defaults
-            if (definition.name.is_empty()) {
-                // Try to extract name from path
-                String path = get_path();
-                if (!path.is_empty()) {
-                    definition.name = path.get_file().get_basename();
-                }
-            }
-            
-            if (definition.extends.is_empty()) {
-                definition.extends = "RefCounted"; // Default base class
-            }
         }
         
         load_stage = LOAD_ANALYSIS;
     }
     
-    // Stage 3: Full loading (link base scripts, validate, etc.)
+    // Link and validate
     if (p_load_stage >= LOAD_FULL) {
         // Resolve base script references if extends another Luau script
         if (!definition.extends.is_empty()) {
@@ -2165,7 +2343,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
         load_stage = LOAD_FULL;
         
 #ifdef TOOLS_ENABLED
-        // Debug print loaded information
+        //MARK: debug print loaded information
         if (Engine::get_singleton()->is_editor_hint()) {
             int method_count = definition.methods.size();
             int property_count = definition.properties.size();
@@ -2173,12 +2351,14 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
             int constant_count = definition.constants.size();
 			int member_count = definition.members.size();
             
-            if (method_count > 0 || property_count > 0 || signal_count > 0) {
-                print_verbose(vformat("LuauScript loaded: %s (extends %s) - %d methods, %d properties, %d signals, %d constants, %d members",
-                    definition.name.is_empty() ? get_path() : definition.name,
-                    definition.extends.is_empty() ? "RefCounted" : definition.extends,
-                    method_count, property_count, signal_count, constant_count, member_count));
-            }
+			print_verbose(
+				vformat(
+					"LuauScript loaded: %s (extends %s) - %d methods, %d properties, %d signals, %d constants, %d members",
+					definition.name.is_empty() ? get_path() : definition.name,
+					definition.extends.is_empty() ? "RefCounted" : definition.extends,
+					method_count, property_count, signal_count, constant_count, member_count
+				)
+			);
 			// //WARN_PRINT members
 			// for (const GDClassProperty &member : definition.members) {
 			// 	WARN_PRINT(vformat("Member: %s", member.property.name));
@@ -2771,6 +2951,30 @@ bool LuauScript::_instance_has(Object *p_object) const {
 	return instance_has(p_object->get_instance_id());
 }
 
+ScriptInstance* LuauScript::get_instance(uint16_t p_obj_id) const {
+	#ifdef TOOLS_ENABLED
+		for (const KeyValue<uint64_t, PlaceHolderScriptInstance *> &E : placeholders) {
+			if (E.key != p_obj_id) continue;
+
+			PlaceHolderScriptInstance *placeholder = E.value;
+			if (placeholder == nullptr) continue;
+
+			return placeholder;
+		}
+	#else
+		for (const KeyValue<uint64_t, LuauScriptInstance *> &E : instances) {
+			if (E.key != p_obj_id) continue;
+
+			LuauScriptInstance *instance = E.value;
+			if (instance == nullptr) continue;
+
+			return instance;
+		}
+	#endif
+
+	return nullptr;
+}
+
 bool LuauScript::_editor_can_reload_from_file() {
 	return true;
 }
@@ -2787,6 +2991,11 @@ bool LuauScript::can_instantiate() const {
 #else
 	return _is_valid();
 #endif
+}
+
+void LuauScript::update_exports_internal(PlaceHolderScriptInstance *placeholder) const {
+	if (!_is_valid()) return;
+	placeholder->update(definition.properties);
 }
 
 bool LuauScript::_can_instantiate() const {
@@ -3048,21 +3257,61 @@ void LuauLanguage::_reload_scripts(const Array &p_scripts, bool p_soft_reload) {
 	}
 	
 	for (KeyValue<Ref<LuauScript>, HashMap<ObjectID, List<Pair<StringName, Variant>>>> &E : to_reload) {
-		Ref<LuauScript> script = E.key;
+		Ref<LuauScript> scr = E.key;
 		
-		WARN_PRINT(vformat("Reload: %s", script->get_path()));
+		WARN_PRINT(vformat("Reload: %s", scr->get_path()));
 
 		// Clear cached bytecode to force recompilation
-		script->load_stage = LuauScript::LOAD_NONE;
-		script->bytecode.clear();
+		scr->load_stage = LuauScript::LOAD_NONE;
+		scr->bytecode.clear();
 
 		// Reload source from file
-		String path = script->get_path();
+		String path = scr->get_path();
 		if (!path.is_empty()) {
-			script->load_source_code(path);
+			scr->load_source_code(path);
 		}
 
-		script->reload();
+		scr->reload();
+
+		//restore state if saved
+		for (KeyValue<ObjectID, List<Pair<StringName, Variant>>> &F : E.value) {
+			List<Pair<StringName, Variant>> &saved_state = F.value;
+
+			Object *obj = ObjectDB::get_instance(F.key);
+			if (!obj) {
+				continue;
+			}
+
+			if (!p_soft_reload) {
+				//clear it just in case (may be a pending reload state)
+				obj->set_script(Variant());
+			}
+			obj->set_script(scr);
+
+			ScriptInstance *script_inst = scr->get_instance(obj->get_instance_id());
+
+			if (!script_inst) {
+				if (!scr->pending_reload_state.has(obj->get_instance_id())) {
+					scr->pending_reload_state[obj->get_instance_id()] = saved_state;
+				}
+				continue;
+			}
+
+			if (scr->is_placeholder_fallback_enabled()) {
+				PlaceHolderScriptInstance *placeholder = static_cast<PlaceHolderScriptInstance *>(script_inst);
+				for (List<Pair<StringName, Variant>>::Element *G = saved_state.front(); G; G = G->next()) {
+					placeholder->property_set_fallback(G->get().first, G->get().second);
+				}
+
+			} else {
+				for (List<Pair<StringName, Variant>>::Element *G = saved_state.front(); G; G = G->next()) {
+					script_inst->set(G->get().first, G->get().second);
+				}
+
+			}
+
+			scr->pending_reload_state.erase(obj->get_instance_id()); //as it reloaded, remove pending state
+		}
 	}
 
 #endif // TOOLS_ENABLED
@@ -3502,3 +3751,4 @@ LuauLanguage::LuauLanguage() {
 LuauLanguage::~LuauLanguage() {
 	singleton = nullptr;
 }
+

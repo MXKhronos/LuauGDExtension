@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://ddcejlr5hw3ve" path="res://player/player.luau" id="1_oul6g"]
 [ext_resource type="Script" uid="uid://cjuuf4bnxtuq" path="res://common/managers/weapons_manager.luau" id="2_qjkh3"]
 [ext_resource type="PackedScene" uid="uid://c5cmenins5u2w" path="res://weapons/knife.tscn" id="3_rgyib"]
+[ext_resource type="Script" uid="uid://ddh8l4bn2oguo" path="res://common/weapon/weapon.luau" id="4_8t03j"]
 [ext_resource type="PackedScene" uid="uid://dw2hcpsqkygc2" path="res://weapons/pistol.tscn" id="4_hg6s5"]
 [ext_resource type="PackedScene" uid="uid://5r64a43lxupx" path="res://weapons/assualt_rifle.tscn" id="5_8t03j"]
 [ext_resource type="AudioStream" uid="uid://tohbwu7jgoab" path="res://player/sfx/footstep_ground.ogg" id="19_bjvpn"]
@@ -29,10 +30,10 @@ transform = Transform3D(0.9999999, 0, -1.4210853e-14, 0, 1, 0, 1.4210854e-14, 0,
 unique_name_in_owner = true
 cull_mask = 1048573
 
-[node name="WeaponsManager" type="Node3D" parent="." unique_id=1444023138]
+[node name="WeaponsManager" type="Node3D" parent="." unique_id=1444023138 node_paths=PackedStringArray("WeaponsArray")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
 script = ExtResource("2_qjkh3")
-WeaponsArray = Array[Node3D]([null, null, null])
+WeaponsArray = [NodePath("Knife"), NodePath("Pistol"), NodePath("AssualtRifle")]
 
 [node name="RayCastOrigin" type="Node3D" parent="WeaponsManager" unique_id=964028775]
 
@@ -41,11 +42,13 @@ target_position = Vector3(0, 0, -10)
 collision_mask = 6
 
 [node name="Knife" parent="WeaponsManager" unique_id=1058031305 instance=ExtResource("3_rgyib")]
+script = ExtResource("4_8t03j")
 
 [node name="Pistol" parent="WeaponsManager" unique_id=594164260 instance=ExtResource("4_hg6s5")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.7, 0)
+script = ExtResource("4_8t03j")
 
 [node name="AssualtRifle" parent="WeaponsManager" unique_id=1187477528 instance=ExtResource("5_8t03j")]
+script = ExtResource("4_8t03j")
 
 [node name="WeaponSubViewport" type="SubViewportContainer" parent="." unique_id=884807026]
 anchors_preset = 15

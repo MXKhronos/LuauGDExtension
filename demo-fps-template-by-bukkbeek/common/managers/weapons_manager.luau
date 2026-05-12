@@ -1,6 +1,10 @@
 --- @extends Node3D
 
+Number = 123456 :: number;
+Word = "HelloWorld" :: string;
+WeaponsNode = nil :: Node3D;
 WeaponsArray = {} :: {Node3D};
+WeaponsDb = {} :: {Name: string; Config: {Index: number; Obj: Node3D}};
 
 local currentWeaponIndex: number = 0;
 local currentWeapon: Node3D = nil;

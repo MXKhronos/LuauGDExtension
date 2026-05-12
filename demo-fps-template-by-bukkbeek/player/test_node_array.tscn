@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://nf3e0uug5e5o"]
+
+[ext_resource type="Script" uid="uid://i4lpxskigegd" path="res://common/managers/test_node_array.gd" id="1_peyk1"]
+
+[node name="Node3D" type="Node3D" unique_id=1888767724 node_paths=PackedStringArray("WeaponsArrayTest")]
+script = ExtResource("1_peyk1")
+WeaponsArrayTest = [NodePath("Knife"), NodePath("Test2"), null]
+
+[node name="Knife" type="Node3D" parent="." unique_id=803364214]
+
+[node name="Test2" type="Node3D" parent="." unique_id=1381528498]
