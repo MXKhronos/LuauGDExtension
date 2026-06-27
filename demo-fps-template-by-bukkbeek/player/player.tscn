@@ -9,6 +9,7 @@
 [ext_resource type="AudioStream" uid="uid://tohbwu7jgoab" path="res://player/sfx/footstep_ground.ogg" id="19_bjvpn"]
 [ext_resource type="AudioStream" uid="uid://drpdbxpt2fu6u" path="res://player/sfx/footstep_jump.wav" id="20_s7qer"]
 [ext_resource type="AudioStream" uid="uid://ol7ybyeu817g" path="res://player/sfx/footstep_metal.ogg" id="21_g4c7l"]
+[ext_resource type="PackedScene" uid="uid://nf3e0uug5e5o" path="res://player/test_node_array.tscn" id="2_8t03j"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_rkbax"]
 radius = 0.2
@@ -34,6 +35,8 @@ cull_mask = 1048573
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
 script = ExtResource("2_qjkh3")
 WeaponsArray = [NodePath("Knife"), NodePath("Pistol"), NodePath("AssualtRifle")]
+
+[node name="Node3D" parent="." unique_id=1888767724 instance=ExtResource("2_8t03j")]
 
 [node name="RayCastOrigin" type="Node3D" parent="WeaponsManager" unique_id=964028775]
 

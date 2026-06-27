@@ -172,6 +172,213 @@ static StringName *stringname_alloc(const String &p_str) {
 	return ptr;
 }
 
+//MARK: AST Helper Functions
+Variant::Type LuauScript::parse_type_name(const String& type_name) {
+	if (type_name == "boolean") return Variant::BOOL;
+	if (type_name == "number") return Variant::FLOAT;
+	if (type_name == "string") return Variant::STRING;
+	if (type_name == "Vector2") return Variant::VECTOR2;
+	if (type_name == "Vector3") return Variant::VECTOR3;
+	if (type_name == "Color") return Variant::COLOR;
+	if (type_name == "Rect2") return Variant::RECT2;
+	if (type_name == "Transform2D") return Variant::TRANSFORM2D;
+	if (type_name == "Plane") return Variant::PLANE;
+	if (type_name == "Quaternion") return Variant::QUATERNION;
+	if (type_name == "AABB") return Variant::AABB;
+	if (type_name == "Basis") return Variant::BASIS;
+	if (type_name == "Transform3D") return Variant::TRANSFORM3D;
+	if (type_name == "Projection") return Variant::PROJECTION;
+	if (type_name == "StringName") return Variant::STRING_NAME;
+	if (type_name == "NodePath") return Variant::NODE_PATH;
+	if (type_name == "RID") return Variant::RID;
+	if (type_name == "Dictionary") return Variant::DICTIONARY;
+	if (type_name == "Array") return Variant::ARRAY;
+	if (type_name == "PackedByteArray") return Variant::PACKED_BYTE_ARRAY;
+	if (type_name == "PackedInt32Array") return Variant::PACKED_INT32_ARRAY;
+	if (type_name == "PackedInt64Array") return Variant::PACKED_INT64_ARRAY;
+	if (type_name == "PackedFloat32Array") return Variant::PACKED_FLOAT32_ARRAY;
+	if (type_name == "PackedFloat64Array") return Variant::PACKED_FLOAT64_ARRAY;
+	if (type_name == "PackedStringArray") return Variant::PACKED_STRING_ARRAY;
+	if (type_name == "PackedVector2Array") return Variant::PACKED_VECTOR2_ARRAY;
+	if (type_name == "PackedVector3Array") return Variant::PACKED_VECTOR3_ARRAY;
+	if (type_name == "PackedColorArray") return Variant::PACKED_COLOR_ARRAY;
+	return Variant::OBJECT;
+}
+
+AstExprResult LuauScript::extract_ast_expr_value(
+	Luau::AstExpr* expr,
+	Luau::AstType* annotation,
+	int recursion_depth
+) {
+	AstExprResult result;
+	
+	if (recursion_depth > 10) {
+		return result;
+	}
+	
+	if (!expr) {
+		return result;
+	}
+	
+	if (auto* num = expr->as<Luau::AstExprConstantNumber>()) {
+		result.value = num->value;
+		
+		double int_part;
+		if (modf(num->value, &int_part) == 0.0) {
+			result.value = (int64_t)num->value;
+			result.type = Variant::INT;
+		} else {
+			result.type = Variant::FLOAT;
+		}
+		result.success = true;
+		return result;
+	}
+	
+	if (auto* str = expr->as<Luau::AstExprConstantString>()) {
+		result.value = String::utf8(str->value.data, str->value.size);
+		result.type = Variant::STRING;
+		result.success = true;
+		return result;
+	}
+	
+	if (auto* bool_val = expr->as<Luau::AstExprConstantBool>()) {
+		result.value = bool_val->value;
+		result.type = Variant::BOOL;
+		result.success = true;
+		return result;
+	}
+	
+	if (auto* table = expr->as<Luau::AstExprTable>()) {
+		if (annotation) {
+			if (auto* table_type = annotation->as<Luau::AstTypeTable>()) {
+				// Typed array with indexer
+				if (table_type->indexer) {
+					if (auto* var_type_ref = table_type->indexer->resultType->as<Luau::AstTypeReference>()) {
+						
+						result.native_type = StringName(var_type_ref->name.value);
+						
+						result.type = Variant::ARRAY;
+						Array typed_arr;
+
+						Variant::Type typed_var = parse_type_name(result.native_type);
+						if (typed_var == Variant::OBJECT) {
+							typed_arr.set_typed(Variant::OBJECT, result.native_type, Variant());
+						} else {
+							typed_arr.set_typed(typed_var, StringName(), Variant());
+						}
+
+						// Recursively extract table elements
+						for (size_t i = 0; i < table->items.size; i++) {
+							const Luau::AstExprTable::Item& item = table->items.data[i];
+							if (item.value) {
+								AstExprResult elem_result = extract_ast_expr_value(item.value, table_type->indexer->resultType, recursion_depth + 1);
+								if (elem_result.success) {
+									typed_arr.push_back(elem_result.value);
+								}
+							}
+						}
+
+						result.value = typed_arr;
+						result.success = true;
+						return result;
+					}
+
+				} else if (table_type->props.size > 0) {
+					// Dictionary
+					Dictionary dict;
+					
+					// Recursively extract dictionary values
+					for (size_t i = 0; i < table->items.size; i++) {
+						const Luau::AstExprTable::Item& item = table->items.data[i];
+						if (item.key && item.value) {
+							// Extract key
+							String key_str;
+							if (auto* key_str_expr = item.key->as<Luau::AstExprConstantString>()) {
+								key_str = String::utf8(key_str_expr->value.data, key_str_expr->value.size);
+							} else if (auto* key_global = item.key->as<Luau::AstExprGlobal>()) {
+								key_str = String(key_global->name.value);
+							}
+							
+							if (!key_str.is_empty()) {
+								AstExprResult val_result = extract_ast_expr_value(item.value, nullptr, recursion_depth + 1);
+								if (val_result.success) {
+									dict[key_str] = val_result.value;
+								}
+							}
+						}
+					}
+					
+					result.value = dict;
+					result.type = Variant::DICTIONARY;
+					result.success = true;
+					return result;
+
+				}
+			}
+		}
+		
+		// Untyped table - extract as array or dictionary based on keys
+		Array untyped_arr;
+		Dictionary untyped_dict;
+		bool has_string_keys = false;
+		
+		for (size_t i = 0; i < table->items.size; i++) {
+			const Luau::AstExprTable::Item& item = table->items.data[i];
+			if (item.value) {
+				AstExprResult elem_result = extract_ast_expr_value(item.value, nullptr, recursion_depth + 1);
+				
+				if (item.key) {
+					// Has key - treat as dictionary
+					has_string_keys = true;
+					String key_str;
+					if (auto* key_str_expr = item.key->as<Luau::AstExprConstantString>()) {
+						key_str = String::utf8(key_str_expr->value.data, key_str_expr->value.size);
+					} else if (auto* key_global = item.key->as<Luau::AstExprGlobal>()) {
+						key_str = String(key_global->name.value);
+					}
+					
+					if (!key_str.is_empty() && elem_result.success) {
+						untyped_dict[key_str] = elem_result.value;
+					}
+				} else {
+					// No key - treat as array element
+					if (elem_result.success) {
+						untyped_arr.push_back(elem_result.value);
+					}
+				}
+			}
+		}
+		
+		if (has_string_keys && untyped_dict.size() > 0) {
+			result.value = untyped_dict;
+			result.type = Variant::DICTIONARY;
+		} else {
+			result.value = untyped_arr;
+			result.type = Variant::ARRAY;
+		}
+		result.success = true;
+		return result;
+	}
+	
+	if (expr->as<Luau::AstExprConstantNil>()) {
+		result.value = Variant();
+		
+		if (annotation) {
+			if (auto* anno_type = annotation->as<Luau::AstTypeReference>()) {
+				result.native_type = StringName(anno_type->name.value);
+				result.type = parse_type_name(result.native_type);
+				result.success = true;
+				return result;
+			}
+		}
+		
+		result.success = false;
+		return result;
+	}
+	
+	return result;
+}
+
 void ScriptInstance::copy_prop(const GDProperty &p_src, GDExtensionPropertyInfo &p_dst) {
 	p_dst.type = p_src.type;
 	p_dst.name = stringname_alloc(p_src.name);
@@ -1759,7 +1966,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 							}
 						}
 						
-						//extract value
+						//extract value from ast expression
 						Variant::Type var_type;
 						Variant var_value;
 						StringName native_type;
@@ -1767,95 +1974,15 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 						auto* type_assert = value->as<Luau::AstExprTypeAssertion>();
 						if (!type_assert) continue; //untyped assignment;
 
-						//parse type_name to Variant::Type
-						auto parse_var_type = [](const String& type_name) -> Variant::Type {
-							if (type_name == "boolean") return Variant::BOOL;
-							if (type_name == "number") return Variant::FLOAT;
-							if (type_name == "string") return Variant::STRING;
-							if (type_name == "Vector2") return Variant::VECTOR2;
-							if (type_name == "Vector3") return Variant::VECTOR3;
-							if (type_name == "Color") return Variant::COLOR;
-							if (type_name == "Rect2") return Variant::RECT2;
-							if (type_name == "Transform2D") return Variant::TRANSFORM2D;
-							if (type_name == "Plane") return Variant::PLANE;
-							if (type_name == "Quaternion") return Variant::QUATERNION;
-							if (type_name == "AABB") return Variant::AABB;
-							if (type_name == "Basis") return Variant::BASIS;
-							if (type_name == "Transform3D") return Variant::TRANSFORM3D;
-							if (type_name == "Projection") return Variant::PROJECTION;
-							if (type_name == "StringName") return Variant::STRING_NAME;
-							if (type_name == "NodePath") return Variant::NODE_PATH;
-							if (type_name == "RID") return Variant::RID;
-							if (type_name == "Dictionary") return Variant::DICTIONARY;
-							if (type_name == "Array") return Variant::ARRAY;
-							if (type_name == "PackedByteArray") return Variant::PACKED_BYTE_ARRAY;
-							if (type_name == "PackedInt32Array") return Variant::PACKED_INT32_ARRAY;
-							if (type_name == "PackedInt64Array") return Variant::PACKED_INT64_ARRAY;
-							if (type_name == "PackedFloat32Array") return Variant::PACKED_FLOAT32_ARRAY;
-							if (type_name == "PackedFloat64Array") return Variant::PACKED_FLOAT64_ARRAY;
-							if (type_name == "PackedStringArray") return Variant::PACKED_STRING_ARRAY;
-							if (type_name == "PackedVector2Array") return Variant::PACKED_VECTOR2_ARRAY;
-							if (type_name == "PackedVector3Array") return Variant::PACKED_VECTOR3_ARRAY;
-							if (type_name == "PackedColorArray") return Variant::PACKED_COLOR_ARRAY;
-							return Variant::OBJECT;
-						};
+						AstExprResult expr_result = extract_ast_expr_value(type_assert->expr, type_assert->annotation);
+						
+						if (expr_result.success) {
+							var_value = expr_result.value;
+							var_type = expr_result.type;
+							native_type = expr_result.native_type;
 
-						Luau::AstExpr* inner_expr = type_assert->expr;
-						if (auto* num = inner_expr->as<Luau::AstExprConstantNumber>()) {
-							var_value = num->value;
-							
-							double int_part;
-							if (modf(num->value, &int_part) == 0.0) {
-								var_value = (int64_t)num->value;
-								var_type = Variant::INT;
-							} else {
-								var_type = Variant::FLOAT;
-							}
-
-						} else if (auto* str = inner_expr->as<Luau::AstExprConstantString>()) {
-							var_value = String::utf8(str->value.data, str->value.size);
-							var_type = Variant::STRING;
-
-						} else if (auto* bool_val = inner_expr->as<Luau::AstExprConstantBool>()) {
-							var_value = bool_val->value;
-							var_type = Variant::BOOL;
-
-						} else if (inner_expr->as<Luau::AstExprTable>()) {
-							if (auto* table_type = type_assert->annotation->as<Luau::AstTypeTable>()) { // {table_type} 
-								if (table_type->indexer) { // TypedArray
-									if (auto* var_type_ref = table_type->indexer->resultType->as<Luau::AstTypeReference>()) {
-										
-										native_type = StringName(var_type_ref->name.value);
-										if (native_type == StringName("string")) {
-											native_type = StringName("String");
-										}
-
-										var_type = Variant::ARRAY;
-
-										Array typed_arr;
-										typed_arr.set_typed(Variant::OBJECT, native_type, Variant());
-										
-										// typed_arr is empty
-
-										var_value = typed_arr;
-									}
-								} else if (table_type->props.size > 0) { // Dictionary
-									var_value = Dictionary();
-									var_type = Variant::DICTIONARY;
-								}
-							} else { //untyped table
-								var_value = Array();
-								var_type = Variant::ARRAY;
-							}
-
-						} else if (inner_expr->as<Luau::AstExprConstantNil>()) {
-							var_value = Variant();
-
-							// e.g. NodeA = nil :: Node3D
-							auto* anno_type = type_assert->annotation->as<Luau::AstTypeReference>();
-
-							native_type = StringName(anno_type->name.value);
-							var_type = parse_var_type(native_type);
+						} else {
+							// failed to extract
 						}
 
 						if (is_constant) {
@@ -1892,7 +2019,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 						} else if (var_type == Variant::ARRAY && !native_type.is_empty()) {
 							var_def.property.type = GDEXTENSION_VARIANT_TYPE_ARRAY;
 							var_def.property.hint = PROPERTY_HINT_ARRAY_TYPE;
-
+		
 							if (ClassDB::is_parent_class(native_type, StringName("Resource"))) {
 								Array hint_values;
 								hint_values.resize(3);
@@ -1900,20 +2027,40 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 								hint_values[1] = PROPERTY_HINT_RESOURCE_TYPE;
 								hint_values[2] = native_type;
 								var_def.property.hint_string = String("{0}/{1}:{2}").format(hint_values);
+	
+							// } else if (ClassDB::is_parent_class(native_type, StringName("Node"))) {
+							// 	Array hint_values;
+							// 	hint_values.resize(3);
+							// 	hint_values[0] = Variant::OBJECT;
+							// 	hint_values[1] = PROPERTY_HINT_NODE_TYPE;
+							// 	hint_values[2] = native_type;
+							// 	var_def.property.hint_string = String("{0}/{1}:{2}").format(hint_values);
+	
+							} else {
+								Variant::Type typed_var = parse_type_name(native_type);
 
-							} else if (ClassDB::is_parent_class(native_type, StringName("Node"))) {
 								Array hint_values;
 								hint_values.resize(3);
-								hint_values[0] = Variant::OBJECT;
-								hint_values[1] = PROPERTY_HINT_NODE_TYPE;
-								hint_values[2] = native_type;
+								hint_values[0] = typed_var;
+
+								if (typed_var == Variant::OBJECT) {
+									hint_values[1] = PROPERTY_HINT_NODE_TYPE;
+									hint_values[2] = native_type;
+
+								} else if (typed_var == Variant::STRING) {
+									hint_values[1] = PROPERTY_HINT_TYPE_STRING;
+									hint_values[2] = native_type;
+
+								} else {
+									hint_values[1] = PROPERTY_HINT_NONE;
+									hint_values[2] = "";
+
+								}
+
 								var_def.property.hint_string = String("{0}/{1}:{2}").format(hint_values);
-
-							} else {
-								var_def.property.hint_string = native_type;
-
+	
 							}
-
+	
 						} else {
 							switch(var_type) {
 								case Variant::BOOL:

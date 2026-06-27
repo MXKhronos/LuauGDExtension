@@ -15,6 +15,12 @@
 #include "luau_constants.h"
 #include "luauscript/luau_engine.h"
 
+// Forward declarations for Luau AST types
+namespace Luau {
+	struct AstExpr;
+	struct AstType;
+}
+
 namespace godot {
     class LuauScript;
     class LuauCache;
@@ -80,6 +86,14 @@ namespace godot {
         bool is_method_vararg() const { return true; }
     };
     
+    //MARK: AstExprResult
+    struct AstExprResult {
+        Variant value;
+        Variant::Type type = Variant::NIL;
+        StringName native_type;
+        bool success = false;
+    };
+
     // ! Reference: modules/multiplayer/scene_rpc_interface.cpp _parse_rpc_config
     struct GDRpc {
         String name;
@@ -292,6 +306,14 @@ namespace godot {
     public:
         Error load_source_code(const String &p_path);
         Error load(LoadStage p_load_stage, bool p_force = false);
+
+        // AST value extraction helpers
+        static Variant::Type parse_type_name(const String& type_name);
+        static AstExprResult extract_ast_expr_value(
+            Luau::AstExpr* expr,
+            Luau::AstType* annotation = nullptr,
+            int recursion_depth = 0
+        );
 
         const GDClassDefinition &get_definition() const { return definition; }
         Ref<LuauScript> get_base() const { return base; }

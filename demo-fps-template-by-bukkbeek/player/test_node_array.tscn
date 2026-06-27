@@ -1,10 +1,13 @@
 [gd_scene format=3 uid="uid://nf3e0uug5e5o"]
 
 [ext_resource type="Script" uid="uid://i4lpxskigegd" path="res://common/managers/test_node_array.gd" id="1_peyk1"]
+[ext_resource type="PackedScene" uid="uid://5r64a43lxupx" path="res://weapons/assualt_rifle.tscn" id="2_64avy"]
 
 [node name="Node3D" type="Node3D" unique_id=1888767724 node_paths=PackedStringArray("WeaponsArrayTest")]
 script = ExtResource("1_peyk1")
-WeaponsArrayTest = [NodePath("Knife"), NodePath("Test2"), null]
+WeaponsArrayTest = [NodePath("AssualtRifle"), NodePath("Knife"), NodePath("Test2")]
+
+[node name="AssualtRifle" parent="." unique_id=1058031305 instance=ExtResource("2_64avy")]
 
 [node name="Knife" type="Node3D" parent="." unique_id=803364214]
 
