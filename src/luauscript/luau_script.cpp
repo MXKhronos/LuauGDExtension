@@ -1045,8 +1045,7 @@ static GDExtensionScriptInstanceInfo3 init_placeholder_instance_info() {
 const GDExtensionScriptInstanceInfo3 PlaceHolderScriptInstance::INSTANCE_INFO = init_placeholder_instance_info();
 
 bool PlaceHolderScriptInstance::set(const StringName &p_name, const Variant &p_value, PropertySetGetError *r_err) {
-	WARN_PRINT(vformat("LuauScript PlaceHolderScriptInstance::set %s", p_name));
-	if (script->_is_placeholder_fallback_enabled()) {
+	if (!script->_is_placeholder_fallback_enabled()) {
 		if (r_err)
 			*r_err = PROP_NOT_FOUND;
 
@@ -1062,13 +1061,16 @@ bool PlaceHolderScriptInstance::set(const StringName &p_name, const Variant &p_v
 			Variant::evaluate(Variant::OP_EQUAL, defval, p_value, op_result, op_valid);
 
 			if (op_valid && op_result.operator bool()) {
-				values.erase(p_name);
+				values.erase(p_name); //erase if it's default
 				return true;
 			}
 		}
 
 		values[p_name] = p_value;
+		WARN_PRINT(vformat("LuauScript PlaceHolderScriptInstance::set %s=%s", p_name, p_value));
+
 		return true;
+
 	} else {
 		if (script->_has_property_default_value(p_name)) {
 			Variant defval = script->get_property_default_value(p_name);
@@ -1077,8 +1079,10 @@ bool PlaceHolderScriptInstance::set(const StringName &p_name, const Variant &p_v
 			bool op_valid = false;
 			Variant::evaluate(Variant::OP_NOT_EQUAL, defval, p_value, op_result, op_valid);
 
-			if (op_valid && op_result.operator bool())
+			if (op_valid && op_result.operator bool()){
 				values[p_name] = p_value;
+				WARN_PRINT(vformat("LuauScript PlaceHolderScriptInstance::set override %s=%s", p_name, p_value));
+			}
 
 			return true;
 		}
@@ -1093,6 +1097,7 @@ bool PlaceHolderScriptInstance::set(const StringName &p_name, const Variant &p_v
 bool PlaceHolderScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err) {
 	if (values.has(p_name)) {
 		r_ret = values[p_name];
+		WARN_PRINT(vformat("LuauScript PlaceHolderScriptInstance::get %s=%s", p_name, r_ret));
 		return true;
 	}
 
@@ -1101,8 +1106,9 @@ bool PlaceHolderScriptInstance::get(const StringName &p_name, Variant &r_ret, Pr
 		return true;
 	}
 
-	if (!script->_is_placeholder_fallback_enabled() && script->_has_property_default_value(p_name)) {
+	if (script->_is_placeholder_fallback_enabled() && script->_has_property_default_value(p_name)) {
 		r_ret = script->_get_property_default_value(p_name);
+		WARN_PRINT(vformat("LuauScript PlaceHolderScriptInstance::get default %s=%s", p_name, r_ret));
 		return true;
 	}
 
@@ -1116,34 +1122,22 @@ void PlaceHolderScriptInstance::update(const Vector<GDClassProperty> &p_properti
 	HashSet<StringName> new_values;
 	HashMap<StringName, GDClassProperty> prop_map;
 	
-	const HashMap<StringName, Variant> &old_values = values;
-
 	properties.clear();
-	for (const GDClassProperty &prop : p_properties) {
+	for (GDClassProperty prop : p_properties) {
 		GDProperty property = prop.property;
 
 		if (property.usage & (PROPERTY_USAGE_GROUP | PROPERTY_USAGE_SUBGROUP | PROPERTY_USAGE_CATEGORY)) {
 			continue;
 		}
 
-		StringName n = property.name;
-		new_values.insert(n);
-
-		if (!values.has(n) || (property.type != Variant::NIL && values[n].get_type() != property.type)) {
-			// if (old_values.has(n)) {
-			// 	values[n] = old_values[n];
-			// }
-			values[n] = prop.default_value;
-		}
-
+		StringName p_name = property.name;
+		new_values.insert(p_name);
+	
 		properties.push_back(prop.property);
-
-		prop_map[n] = prop;
+		prop_map[p_name] = prop;
 	}
 
 	List<StringName> to_remove;
-
-	ScriptInstance *script_instance = script->get_instance(script->get_instance_id());
 
 	for (KeyValue<StringName, Variant> &E : values) {
 		if (!new_values.has(E.key)) {
@@ -1740,6 +1734,8 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                 }
             }
 
+			String class_name = definition.name;
+
             // Ast for metadata
             for (Luau::AstStat* stat : parse_result.root->body) {
 				// Global vars (e.g., ACONST = 123)
@@ -1764,35 +1760,16 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 						}
 						
 						//extract value
-						bool has_value = false;
 						Variant::Type var_type;
 						Variant var_value;
 						StringName native_type;
-						String typed_array_var_type = "";
 						
-						if (auto* num = value->as<Luau::AstExprConstantNumber>()) {
-							var_value = num->value;
-							var_type = Variant::FLOAT;
-
-						} else if (auto* str = value->as<Luau::AstExprConstantString>()) {
-							var_value = String::utf8(str->value.data, str->value.size);
-							var_type = Variant::STRING;
-
-						} else if (auto* bool_val = value->as<Luau::AstExprConstantBool>()) {
-							var_value = bool_val->value;
-
-						} else if (value->as<Luau::AstExprTable>()) {
-							var_value = Dictionary();
-
-						} else if (value->as<Luau::AstExprConstantNil>()) {
-							var_value = Variant();
-
-						} 
+						auto* type_assert = value->as<Luau::AstExprTypeAssertion>();
+						if (!type_assert) continue; //untyped assignment;
 
 						//parse type_name to Variant::Type
 						auto parse_var_type = [](const String& type_name) -> Variant::Type {
 							if (type_name == "boolean") return Variant::BOOL;
-							if (type_name == "integer") return Variant::INT;
 							if (type_name == "number") return Variant::FLOAT;
 							if (type_name == "string") return Variant::STRING;
 							if (type_name == "Vector2") return Variant::VECTOR2;
@@ -1823,71 +1800,219 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 							return Variant::OBJECT;
 						};
 
-						if (auto* type_assert = value->as<Luau::AstExprTypeAssertion>()) {
-							if (type_assert->expr->as<Luau::AstExprTable>()) { // Type is a {};
-								if (auto* table_type = type_assert->annotation->as<Luau::AstTypeTable>()) { // {table_type} 
-									if (table_type->indexer) { // TypedArray
-										if (auto* var_type_ref = table_type->indexer->resultType->as<Luau::AstTypeReference>()) {
-											native_type = StringName(var_type_ref->name.value);
-											var_type = parse_var_type(native_type);
-
-											Array typed_arr;
-											typed_arr.set_typed(Variant::OBJECT, native_type, Variant());
-											
-											var_value = typed_arr;
-											has_value = true;
-										}
-									} else if (table_type->props.size > 0) { // Dictionary
-										var_value = Dictionary();
-										has_value = true;
-									}
-								}
-								// Fallback for untyped array
-								if (!has_value) {
-									var_value = Array();
-									has_value = true;
-								}
-
-							} else { // e.g. NodeA = nil :: Node3D
-								auto* anno_type = type_assert->annotation->as<Luau::AstTypeReference>();
-								native_type = anno_type->name.value;
-								var_type = parse_var_type(native_type);
-								
+						Luau::AstExpr* inner_expr = type_assert->expr;
+						if (auto* num = inner_expr->as<Luau::AstExprConstantNumber>()) {
+							var_value = num->value;
+							
+							double int_part;
+							if (modf(num->value, &int_part) == 0.0) {
+								var_value = (int64_t)num->value;
+								var_type = Variant::INT;
+							} else {
+								var_type = Variant::FLOAT;
 							}
 
-							WARN_PRINT(vformat("AstExprTypeAssertion %s=%s", var_name, var_value));
+						} else if (auto* str = inner_expr->as<Luau::AstExprConstantString>()) {
+							var_value = String::utf8(str->value.data, str->value.size);
+							var_type = Variant::STRING;
+
+						} else if (auto* bool_val = inner_expr->as<Luau::AstExprConstantBool>()) {
+							var_value = bool_val->value;
+							var_type = Variant::BOOL;
+
+						} else if (inner_expr->as<Luau::AstExprTable>()) {
+							if (auto* table_type = type_assert->annotation->as<Luau::AstTypeTable>()) { // {table_type} 
+								if (table_type->indexer) { // TypedArray
+									if (auto* var_type_ref = table_type->indexer->resultType->as<Luau::AstTypeReference>()) {
+										
+										native_type = StringName(var_type_ref->name.value);
+										if (native_type == StringName("string")) {
+											native_type = StringName("String");
+										}
+
+										var_type = Variant::ARRAY;
+
+										Array typed_arr;
+										typed_arr.set_typed(Variant::OBJECT, native_type, Variant());
+										
+										// typed_arr is empty
+
+										var_value = typed_arr;
+									}
+								} else if (table_type->props.size > 0) { // Dictionary
+									var_value = Dictionary();
+									var_type = Variant::DICTIONARY;
+								}
+							} else { //untyped table
+								var_value = Array();
+								var_type = Variant::ARRAY;
+							}
+
+						} else if (inner_expr->as<Luau::AstExprConstantNil>()) {
+							var_value = Variant();
+
+							// e.g. NodeA = nil :: Node3D
+							auto* anno_type = type_assert->annotation->as<Luau::AstTypeReference>();
+
+							native_type = StringName(anno_type->name.value);
+							var_type = parse_var_type(native_type);
 						}
-						
+
 						if (is_constant) {
 							constants[StringName(var_name)] = var_value;
 							definition.constants[StringName(var_name)] = var_value;
 							continue;
 						}
 
+						String var_type_name = Variant::get_type_name(var_type);
 						// Declare variable definition
 						GDClassProperty var_def;
 
 						var_def.property.name = StringName(var_name);
-						var_def.property.class_name = definition.name;
+						var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+						var_def.property.class_name = class_name;
 						var_def.property.hint = PROPERTY_HINT_NONE;
 						var_def.property.hint_string = "";
 						var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
 
 						var_def.default_value = var_value;
 						
-						if (ClassDB::is_parent_class(native_type, StringName("Resource"))) {
+						WARN_PRINT(vformat(">> Type(%s) %s=%s (%s) native_type=%s",Variant::get_type_name(var_type), var_name, var_value, var_value.get_type_name(var_value.get_type()), native_type));
+						
+						if (var_type == Variant::OBJECT) {
 							var_def.property.type = GDEXTENSION_VARIANT_TYPE_OBJECT;
-							var_def.property.hint = PROPERTY_HINT_RESOURCE_TYPE;
-							var_def.property.hint_string = definition.name;
+							var_def.property.hint_string = native_type;
 
-						} else if (ClassDB::is_parent_class(native_type, StringName("Node"))) {
-							var_def.property.type = GDEXTENSION_VARIANT_TYPE_OBJECT;
-							var_def.property.hint = PROPERTY_HINT_NODE_TYPE;
-							var_def.property.hint_string = definition.name;
+							if (ClassDB::is_parent_class(native_type, StringName("Resource"))) {
+								var_def.property.hint = PROPERTY_HINT_RESOURCE_TYPE;
+							} else if (ClassDB::is_parent_class(native_type, StringName("Node"))) {
+								var_def.property.hint = PROPERTY_HINT_NODE_TYPE;
+							}
+
+						} else if (var_type == Variant::ARRAY && !native_type.is_empty()) {
+							var_def.property.type = GDEXTENSION_VARIANT_TYPE_ARRAY;
+							var_def.property.hint = PROPERTY_HINT_ARRAY_TYPE;
+
+							if (ClassDB::is_parent_class(native_type, StringName("Resource"))) {
+								Array hint_values;
+								hint_values.resize(3);
+								hint_values[0] = Variant::OBJECT;
+								hint_values[1] = PROPERTY_HINT_RESOURCE_TYPE;
+								hint_values[2] = native_type;
+								var_def.property.hint_string = String("{0}/{1}:{2}").format(hint_values);
+
+							} else if (ClassDB::is_parent_class(native_type, StringName("Node"))) {
+								Array hint_values;
+								hint_values.resize(3);
+								hint_values[0] = Variant::OBJECT;
+								hint_values[1] = PROPERTY_HINT_NODE_TYPE;
+								hint_values[2] = native_type;
+								var_def.property.hint_string = String("{0}/{1}:{2}").format(hint_values);
+
+							} else {
+								var_def.property.hint_string = native_type;
+
+							}
 
 						} else {
-							// Global var does not have a exportable type.
+							switch(var_type) {
+								case Variant::BOOL:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_BOOL;
+									break;
+								case Variant::INT:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_INT;
+									break;
+								case Variant::FLOAT:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_FLOAT;
+									break;
+								case Variant::STRING:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING;
+									break;
+								case Variant::VECTOR2:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_VECTOR2;
+									break;
+								case Variant::VECTOR3:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_VECTOR3;
+									break;
+								case Variant::COLOR:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_COLOR;
+									break;
+								case Variant::RECT2:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_RECT2;
+									break;
+								case Variant::TRANSFORM2D:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_TRANSFORM2D;
+									break;
+								case Variant::PLANE:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PLANE;
+									break;
+								case Variant::QUATERNION:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_QUATERNION;
+									break;
+								case Variant::AABB:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_AABB;
+									break;
+								case Variant::BASIS:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_BASIS;
+									break;
+								case Variant::TRANSFORM3D:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_TRANSFORM3D;
+									break;
+								case Variant::PROJECTION:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PROJECTION;
+									break;
+								case Variant::STRING_NAME:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_STRING_NAME;
+									break;
+								case Variant::NODE_PATH:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_NODE_PATH;
+									break;
+								case Variant::RID:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_RID;
+									break;
+								case Variant::DICTIONARY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_DICTIONARY;
+									break;
+								case Variant::ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_ARRAY;
+									break;
+								case Variant::PACKED_BYTE_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_BYTE_ARRAY;
+									break;
+								case Variant::PACKED_INT32_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_INT32_ARRAY;
+									break;
+								case Variant::PACKED_INT64_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_INT64_ARRAY;
+									break;
+								case Variant::PACKED_FLOAT32_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT32_ARRAY;
+									break;
+								case Variant::PACKED_FLOAT64_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT64_ARRAY;
+									break;
+								case Variant::PACKED_STRING_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_STRING_ARRAY;
+									break;
+								case Variant::PACKED_VECTOR2_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR2_ARRAY;
+									break;
+								case Variant::PACKED_VECTOR3_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR3_ARRAY;
+									break;
+								case Variant::PACKED_COLOR_ARRAY:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_PACKED_COLOR_ARRAY;
+									break;
+								default:
+									var_def.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+									break;
+							}
+
+							var_def.property.usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_NIL_IS_VARIANT;
+							var_def.property.hint_string = "";
 						}
+
+						WARN_PRINT(vformat("%s hint_string=%s class_name=%s", var_name, var_def.property.hint_string, var_def.property.class_name));
 
 						definition.members.push_back(var_def);
 						definition.member_indices[StringName(var_name)] = definition.members.size() - 1;

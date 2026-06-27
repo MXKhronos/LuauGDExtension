@@ -2,9 +2,9 @@
 
 
 --MARK: properties
-DebugMode = false;
-EnemiesKilled = 0;
-IsInVehicle = false;
+DebugMode = false :: boolean;
+EnemiesKilled = 0 :: number;
+IsInVehicle = false :: boolean;
 
 Player = nil :: CharacterBody3D;
 

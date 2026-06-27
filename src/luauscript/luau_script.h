@@ -49,47 +49,6 @@ namespace godot {
         operator Dictionary() const;
         operator Variant() const;
     
-        void set_variant_type() {
-            type = GDEXTENSION_VARIANT_TYPE_NIL;
-            usage = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_NIL_IS_VARIANT;
-        }
-    
-        void set_object_type(const String &p_type, const String &p_base_type = "") {
-            type = GDEXTENSION_VARIANT_TYPE_OBJECT;
-            class_name = p_type; // For non-property usage
-    
-            const String &godot_type = p_base_type.is_empty() ? p_type : p_base_type;
-    
-            if (nobind::ClassDB::get_singleton()->is_parent_class(godot_type, "Resource")) {
-                hint = PROPERTY_HINT_RESOURCE_TYPE;
-                hint_string = p_type;
-            } else if (nobind::ClassDB::get_singleton()->is_parent_class(godot_type, "Node")) {
-                hint = PROPERTY_HINT_NODE_TYPE;
-                hint_string = p_type;
-            }
-        }
-    
-        void set_typed_array_type(const GDProperty &p_type) {
-            type = GDEXTENSION_VARIANT_TYPE_ARRAY;
-            hint = PROPERTY_HINT_ARRAY_TYPE;
-    
-            if (p_type.type == GDEXTENSION_VARIANT_TYPE_OBJECT) {
-                if (p_type.hint == PROPERTY_HINT_RESOURCE_TYPE) {
-                    // see core/object/object.h
-                    Array hint_values;
-                    hint_values.resize(3);
-                    hint_values[0] = Variant::OBJECT;
-                    hint_values[1] = PROPERTY_HINT_RESOURCE_TYPE;
-                    hint_values[2] = p_type.hint_string;
-                    hint_string = String("{0}/{1}:{2}").format(hint_values);
-                } else {
-                    hint_string = p_type.class_name;
-                }
-            } else {
-                hint_string = Variant::get_type_name(Variant::Type(p_type.type));
-            }
-        }
-    
         GDExtensionVariantType get_arg_type() const { return type; }
         const StringName &get_arg_type_name() const { return class_name; }
     };

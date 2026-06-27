@@ -2,8 +2,8 @@
 
 [ext_resource type="Script" uid="uid://ddcejlr5hw3ve" path="res://player/player.luau" id="1_oul6g"]
 [ext_resource type="Script" uid="uid://cjuuf4bnxtuq" path="res://common/managers/weapons_manager.luau" id="2_qjkh3"]
-[ext_resource type="PackedScene" uid="uid://c5cmenins5u2w" path="res://weapons/knife.tscn" id="3_rgyib"]
 [ext_resource type="Script" uid="uid://ddh8l4bn2oguo" path="res://common/weapon/weapon.luau" id="4_8t03j"]
+[ext_resource type="PackedScene" uid="uid://c5cmenins5u2w" path="res://weapons/knife.tscn" id="3_rgyib"]
 [ext_resource type="PackedScene" uid="uid://dw2hcpsqkygc2" path="res://weapons/pistol.tscn" id="4_hg6s5"]
 [ext_resource type="PackedScene" uid="uid://5r64a43lxupx" path="res://weapons/assualt_rifle.tscn" id="5_8t03j"]
 [ext_resource type="AudioStream" uid="uid://tohbwu7jgoab" path="res://player/sfx/footstep_ground.ogg" id="19_bjvpn"]

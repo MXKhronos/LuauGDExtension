@@ -1,8 +1,9 @@
 --- @extends Node3D
 
-Number = 123456 :: number;
+Number = 123.456 :: number;
 Word = "HelloWorld" :: string;
-WeaponsNode = nil :: Node3D;
+Words = {"A"; "B"; "C"} :: {string};
+RayNode = nil :: Node3D;
 WeaponsArray = {} :: {Node3D};
 WeaponsDb = {} :: {Name: string; Config: {Index: number; Obj: Node3D}};
 
