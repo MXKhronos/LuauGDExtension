@@ -7,7 +7,7 @@ acount = 1;
 local bcount: number = 0;
 
 function _init()
-	print("[luau] init!", self, self.name, typeof(self.name));
+	print("[luau] init!", self, self.Name, typeof(self.Name));
 	print("[luau] init ACONST=", ACONST);
 	print("[luau] init BCONST=", BCONST);
 	print("[luau] init acount=", acount);
@@ -16,7 +16,7 @@ function _init()
 end
 
 function _ready()
-	print("[luau] ready!", self, self.name, typeof(self.name));
+	print("[luau] ready!", self, self.Name, typeof(self.Name));
 	while true do
 		print("[luau] hello world!");
 		bcount = bcount +1;

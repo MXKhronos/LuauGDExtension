@@ -1,4 +1,5 @@
 #include "luau_engine.h"
+#include "luau_bridge.h"
 #include "luau_script.h"
 
 #include <lua.h>
@@ -113,7 +114,7 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
                 const char* key = lua_tostring(L, -2);
                 Variant val = LuauBridge::get_variant(L, -1);
                 
-                obj->set(StringName(key), val);
+                obj->set(resolve_prop_name(L, key), val);
                 
                 lua_pop(L, 1); // Pop value, keep key for next lua_next
             }
@@ -132,6 +133,7 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         lua_pop(L, 1);
 
         const char* key = lua_tostring(L, 2);
+        StringName godot_key = resolve_prop_name(L, key);
 
         Object *singleton_obj = Engine::get_singleton()->get_singleton(StringName(class_name));
         if (!singleton_obj) {
@@ -139,10 +141,10 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         }
 
         //check if key is a method
-        if (singleton_obj->has_method(StringName(key))) {
+        if (singleton_obj->has_method(godot_key)) {
             // push lua function that singleton_obj->call
             lua_pushlightuserdata(L, singleton_obj); //pass to lamda without capture
-            lua_pushstring(L, key);
+            lua_pushstring(L, String(godot_key).utf8().get_data());
             
             lua_pushcclosure(L, [](lua_State *L) -> int {
                 Object* singleton_obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
@@ -162,7 +164,7 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
             return 1;
         }
 
-        Variant val = singleton_obj->get(StringName(key));
+        Variant val = singleton_obj->get(godot_key);
         //WARN_PRINT(vformat("Getting singleton property: %s = %s", key, String(val)));
         LuauBridge::push_variant(L, val);
 

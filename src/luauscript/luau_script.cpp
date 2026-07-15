@@ -2864,7 +2864,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						
 						// Try to access Godot owner properties and methods
 						if (owner_obj) {
-							StringName prop_name(key);
+							StringName prop_name = godot::resolve_prop_name(L, key);
 
 							// Check if it's a method first
 							bool is_method = nobind::ClassDB::get_singleton()->class_has_method(
@@ -2875,7 +2875,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 							if (is_method) {
 								// Push upvalues
 								lua_pushlightuserdata(L, owner_obj);
-								lua_pushstring(L, key);
+								lua_pushstring(L, String(prop_name).utf8().get_data());
 								lua_pushlightuserdata(L, instance);
 
 								if (!instance->is_ready) {
@@ -3050,7 +3050,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 							
 							//WARN_PRINT(vformat("A instance set %s.%s = %s", String(owner->get_class()), key, String(value)));
 
-							Error err = nobind::ClassDB::get_singleton()->class_set_property(owner, StringName(key), value);
+							Error err = nobind::ClassDB::get_singleton()->class_set_property(owner, godot::resolve_prop_name(L, key), value);
 							if (err == OK) {
 								return 0;
 							}

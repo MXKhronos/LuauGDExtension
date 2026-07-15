@@ -6,8 +6,8 @@ print("red", red);
 local blue: Color = Color.BLUE;
 print("blue", blue);
 green = Color.GREEN;
-print("green", green, "rgba", green.r, green.g, green.b, green.a);
-green.r = 0.5;
+print("green", green, "rgba", green.R, green.G, green.B, green.A);
+green.R = 0.5;
 print("new green", green, Color.GREEN);
 local newColor = Color(0.1, 0.2, 0.3);
 print("newColor", newColor);
@@ -31,7 +31,7 @@ print("Vector2i", Vector2i(4, 8)); -- (4, 8)
 
 function _init()
 	print("init", helloTable);
-	print("[luau] init!", self, self.name, typeof(self.name));
+	print("[luau] init!", self, self.Name, typeof(self.Name));
 	print("PackedStringArray", PackedStringArray{
 		"Hello";
 		"World!";
@@ -39,18 +39,18 @@ function _init()
 end
 
 function _ready()
-	print("testNode2D Ready self:", self, `type: {type(self)} typeof: {typeof(self)}`, name, global_position);
+	print("testNode2D Ready self:", self, `type: {type(self)} typeof: {typeof(self)}`, self.Name, self.GlobalPosition);
 	local s = 0.5;
-	print(`[info{i}]`, `red`, red, "lerp", red.lerp, "blue", blue, "s", s); i +=1;
+	print(`[info{i}]`, `red`, red, "lerp", red.Lerp, "blue", blue, "s", s); i +=1;
 
-	print(`[info{i}]`, "assigning red.lerp", red.lerp); i +=1;
-	local redlerp = red.lerp;
+	print(`[info{i}]`, "assigning red.lerp", red.Lerp); i +=1;
+	local redlerp = red.Lerp;
 	print(`[info{i}]`, "assigned red.lerp", redlerp); i +=1;
 
 	print(`[info{i}]`, "red.lerp", redlerp); i +=1;
 	print(`[info{i}]`, "red.lerp type", type(redlerp)); i +=1;
 	print(`[info{i}]`, "red.lerp typeof", typeof(redlerp)); i +=1;
-	print(`[info{i}]`, "red.lerp call", red:lerp(blue, s)); i +=1;
+	print(`[info{i}]`, "red.lerp call", red:Lerp(blue, s)); i +=1;
 
 	local colorlerp = Color.lerp;
 	print(`[info{i}]`, "color.lerp", colorlerp); i +=1;
@@ -62,12 +62,12 @@ function _ready()
 end
 
 function _process(delta: number)
-	rotate(0.02);
+	self:Rotate(0.02);
 
 	totalDelta = totalDelta + delta;
 
 	local s = (sin(totalDelta)+1)/2;
-	modulate = red:lerp(blue, s);
+	self.Modulate = red:Lerp(blue, s);
 end
 
 function test()
@@ -82,12 +82,12 @@ function testObject()
 	print(`[info{i}]`, `get metatable`, getmetatable(Sprite2D));
 	
 	local newSprite2D = Sprite2D{
-		name = "NewSprite2D";
-		offset = Vector2(0, 100);
+		Name = "NewSprite2D";
+		Offset = Vector2(0, 100);
 	};
-	newSprite2D.texture = self.texture;
+	newSprite2D.Texture = self.Texture;
 	
-	print(`[info{i}]`, "newSprite2D", newSprite2D, "self.add_child", add_child);
-	add_child(newSprite2D);
+	print(`[info{i}]`, "newSprite2D", newSprite2D, "self.AddChild", self.AddChild);
+	self:AddChild(newSprite2D);
 	print(`[info{i}]`, "testObject end");
 end

@@ -2,21 +2,21 @@
 
 local speed: number = 300;
 
-local camera: Camera = get_node("Camera2D");
+local camera: Camera = self:GetNode("Camera2D");
 
 function _ready(): nil
 end
 
 function _physics_process(delta: number): nil
-	local moveDir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down");
+	local moveDir: Vector2 = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
 	
-	if not moveDir:is_zero_approx() then
-		velocity = moveDir * speed;
+	if not moveDir:IsZeroApprox() then
+		self.Velocity = moveDir * speed;
 
 	else
-		velocity = velocity:move_toward(Vector2.ZERO, speed);
+		self.Velocity = self.Velocity:MoveToward(Vector2.ZERO, speed);
 
 	end
 	
-	move_and_slide();
+	self:MoveAndSlide();
 end

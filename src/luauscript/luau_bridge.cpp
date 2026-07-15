@@ -3,6 +3,7 @@
 
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/callable.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
 #include "variant/builtin_types.h"
 
 using namespace godot;
@@ -467,6 +468,76 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
 void LuauBridge::protect_metatable(lua_State* L, int index) {
 	lua_pushstring(L, "The metatable is locked");
 	lua_setfield(L, index-1, "__metatable");
+}
+
+//MARK: Property name remapping (PascalCase -> snake_case, "On" prefix for signals)
+using RemapCache = godot::HashMap<String, StringName>;
+static const char* kRemapCacheKey = "LuauRemapCache";
+
+static RemapCache& get_remap_cache(lua_State* L) {
+    lua_pushlightuserdata(L, (void*)kRemapCacheKey);
+    lua_rawget(L, LUA_REGISTRYINDEX);
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        RemapCache* cache = memnew(RemapCache);
+        lua_pushlightuserdata(L, (void*)kRemapCacheKey);
+        lua_pushlightuserdata(L, cache);
+        lua_rawset(L, LUA_REGISTRYINDEX);
+        return *cache;
+    }
+    RemapCache* cache = (RemapCache*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return *cache;
+}
+
+StringName godot::resolve_prop_name(lua_State* L, const char* p_key) {
+    String key(p_key);
+
+    bool needs_remap = false;
+    if (key.begins_with("On") && key.length() > 2) {
+        needs_remap = true;
+    } else {
+        for (int i = 0; p_key[i] != '\0'; i++) {
+            if (p_key[i] >= 'A' && p_key[i] <= 'Z') {
+                needs_remap = true;
+                break;
+            }
+        }
+    }
+
+    if (!needs_remap) {
+        return StringName(key);
+    }
+
+    RemapCache& cache = get_remap_cache(L);
+    if (cache.has(key)) {
+        return cache[key];
+    }
+
+    String remapped = key;
+    if (remapped.begins_with("On") && remapped.length() > 2 &&
+            p_key[2] >= 'A' && p_key[2] <= 'Z') {
+        remapped = remapped.substr(2);
+    }
+
+    String godot_key;
+    for (int i = 0; p_key[i] != '\0'; i++) {
+        char c = p_key[i];
+        if (c >= 'A' && c <= 'Z') {
+            if (i > 0) {
+                godot_key += '_';
+            }
+            char lower[2] = { (char)(c - 'A' + 'a'), '\0' };
+            godot_key += lower;
+        } else {
+            char ch[2] = { c, '\0' };
+            godot_key += ch;
+        }
+    }
+
+    StringName result(godot_key);
+    cache[key] = result;
+    return result;
 }
 
 

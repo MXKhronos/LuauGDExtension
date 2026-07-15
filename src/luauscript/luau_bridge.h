@@ -28,6 +28,9 @@ class LuauBridge {
         static void protect_metatable(lua_State* thread, int index);
 };
 
+//MARK: Property name remapping
+StringName resolve_prop_name(lua_State* L, const char* p_key);
+
 
 //MARK: VariantBridge
 template<class GDV, bool __eq = true>
@@ -87,7 +90,7 @@ public:
         Variant obj = get_object(L, 1);
 
 		const char* key = lua_tostring(L, 2);
-        StringName prop_name(key);
+        StringName prop_name = resolve_prop_name(L, key);
 
         bool valid;
         Variant value = obj.get(prop_name, &valid); //Get Variant GDV property
@@ -95,7 +98,7 @@ public:
         // WARN_PRINT(vformat("value (%s) is: %s (%s) valid: %s", prop_name, value, value.get_type_name(value.get_type()), (valid? "true" : "false")));
         if (!valid) {
             lua_getglobal(L, variant_name);
-            lua_pushstring(L, key);
+            lua_pushstring(L, String(prop_name).utf8().get_data());
             lua_rawget(L, -2);
             if (!lua_isnil(L, -1)) {
                 // Pop global table
@@ -112,7 +115,7 @@ public:
         if (value.get_type() == Variant::CALLABLE) {
             // obj.prop_name is a method
 
-            lua_pushstring(L, key);
+            lua_pushstring(L, String(prop_name).utf8().get_data());
             lua_pushcclosure(L, [](lua_State *L) -> int {
                 const char* key = lua_tostring(L, lua_upvalueindex(1));
                 Variant obj = get_object(L, 1);
@@ -196,7 +199,7 @@ public:
 		const char* key = lua_tostring(L, 2);
         Variant value = LuauBridge::get_variant(L, 3);
 
-        StringName prop_name(key);
+        StringName prop_name = resolve_prop_name(L, key);
 
         // Try to set the property
         bool valid;

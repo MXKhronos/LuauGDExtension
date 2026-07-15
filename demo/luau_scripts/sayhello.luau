@@ -2,5 +2,5 @@
 
 function _init()
 	print("Hello!");
-	quit();
+	self:Quit();
 end
