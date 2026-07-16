@@ -632,15 +632,18 @@ bool LuauScriptInstance::property_get_revert(const StringName &p_name, Variant *
 //MARK: engine script invokation
 void LuauScriptInstance::call(
     const StringName &p_method,
-    const Variant *const *p_args, 
+    const Variant *const *p_args,
 	const GDExtensionInt p_argument_count,
-    Variant *r_return, 
+    Variant *r_return,
 	GDExtensionCallError *r_error
 ) {
     if (!L || !T || self_ref == LUA_NOREF) {
         r_error->error = GDEXTENSION_CALL_ERROR_INSTANCE_IS_NULL;
         return;
     }
+
+    LuauScriptInstance *prev_current = s_current;
+    s_current = this;
 
 	if (!script->definition.is_tool && Engine::get_singleton()->is_editor_hint()) {
 		r_error->error = GDEXTENSION_CALL_OK;
@@ -708,12 +711,14 @@ void LuauScriptInstance::call(
             }
             
             lua_pop(T, 1); // Remove thread
+            s_current = prev_current;
             return;
         }
         
         s = s->base.ptr();
     }
     
+    s_current = prev_current;
     r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
 }
 
@@ -723,8 +728,12 @@ void LuauScriptInstance::notification(int32_t p_what) {
         WARN_PRINT(vformat("Notification %d skipped - invalid Lua state", p_what));
         return;
     }
-    
+
+    LuauScriptInstance *prev_current = s_current;
+    s_current = this;
+
 	if (!script->definition.is_tool && Engine::get_singleton()->is_editor_hint()) {
+		s_current = prev_current;
 		return;
 	}
 
@@ -844,6 +853,7 @@ void LuauScriptInstance::notification(int32_t p_what) {
 	}
 	
 	lua_pop(T, 1); // Remove thread
+	   s_current = prev_current;
 }
 
 void LuauScriptInstance::to_string(GDExtensionBool *r_is_valid, String *r_out) {
@@ -2808,13 +2818,22 @@ void LuauScriptInstance::initialize_lua_state(lua_State *p_L, lua_State *p_threa
 }
 
 bool is_variant_type(const String &type_name) {
-	for (int i = 0; i < Variant::VARIANT_MAX; i++) {
+    for (int i = 0; i < Variant::VARIANT_MAX; i++) {
         if (Variant::get_type_name(Variant::Type(i)) == type_name) {
             return true;
         }
     }
 
-	return false;
+    return false;
+}
+
+LuauScriptInstance *LuauScriptInstance::s_current = nullptr;
+
+void LuauScriptInstance::register_signal(const StringName &p_name) {
+    Ref<LuauScript> s = get_script();
+    if (s.is_valid()) {
+        s->definition.signals[p_name] = GDMethod();
+    }
 }
 
 void *LuauScript::_instance_create(Object *obj_ptr) const {
@@ -2958,6 +2977,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 							return 1;
 
 						} else if (is_variant_type(key)) {
+
 							// Check if key is registered variant type
 							lua_getglobal(L, key);
 							if (!lua_isnil(L, -1)) {
@@ -3208,7 +3228,10 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 					
 
 					// Execute the script with no arguments
+					LuauScriptInstance *prev_current = LuauScriptInstance::s_current;
+					LuauScriptInstance::s_current = script_instance;
 					int call_result = lua_pcall(thread, 0, 0, 0);
+					LuauScriptInstance::s_current = prev_current;
 					
 					if (call_result != 0) {
 						WARN_PRINT(vformat("Script execution failed for: %s", script_name));
@@ -3839,208 +3862,1012 @@ bool LuauLanguage::_overrides_external_editor() {
     return false;
 }
 
+//MARK: Code completion helpers
+
+// Completion option kinds, matching Godot's ScriptLanguage::CodeCompletionKind
+// (see core/object/script_language.h). The numeric values MUST stay in sync with
+// that enum, otherwise the editor renders options with the wrong icon or drops them.
+enum LuauCompletionKind {
+	LUAU_KIND_CLASS = 0, // CODE_COMPLETION_KIND_CLASS
+	LUAU_KIND_FUNCTION = 1, // CODE_COMPLETION_KIND_FUNCTION
+	LUAU_KIND_SIGNAL = 2, // CODE_COMPLETION_KIND_SIGNAL
+	LUAU_KIND_VARIABLE = 3, // CODE_COMPLETION_KIND_VARIABLE (properties)
+	LUAU_KIND_MEMBER = 4, // CODE_COMPLETION_KIND_MEMBER
+	LUAU_KIND_ENUM = 5, // CODE_COMPLETION_KIND_ENUM
+	LUAU_KIND_CONSTANT = 6, // CODE_COMPLETION_KIND_CONSTANT
+	LUAU_KIND_PLAIN_TEXT = 9, // CODE_COMPLETION_KIND_PLAIN_TEXT (keywords/builtins)
+};
+
+static void luau_complete_add(Array &p_result, const String &p_name, int p_kind, const String &p_insert = String(), const String &p_description = String()) {
+	Dictionary opt;
+	opt["display"] = p_name;
+	opt["insert_text"] = p_insert.is_empty() ? p_name : p_insert;
+	opt["kind"] = p_kind;
+	opt["location"] = 0;
+
+	// engine required
+	opt["font_color"] = Color(1, 1, 1);
+	opt["icon"] = Variant();
+	opt["default_value"] = Variant();
+
+	// Optional detail shown by the editor (e.g. the snake_case remap of a
+	// PascalCase method). Not read by the wrapper, so safe to include.
+	if (!p_description.is_empty()) {
+		opt["description"] = p_description;
+	}
+	p_result.push_back(opt);
+}
+
+static String luau_to_pascal(const String &p_snake) {
+	String out;
+	bool upper = true;
+	for (int i = 0; i < p_snake.length(); i++) {
+		char32_t c = p_snake[i];
+		if (c == '_') {
+			upper = true;
+			continue;
+		}
+		if (upper && c >= 'a' && c <= 'z') {
+			out += String::chr(c - 'a' + 'A');
+			upper = false;
+		} else {
+			out += String::chr(c);
+			upper = false;
+		}
+	}
+	return out;
+}
+
+static void luau_complete_class(nobind::ClassDB *p_class_db, const String &p_class, bool p_pascal, Array &r_out, bool p_methods_only = false) {
+	// methods
+	TypedArray<Dictionary> methods = p_class_db->class_get_method_list(p_class, false);
+	for (int i = 0; i < methods.size(); i++) {
+		Dictionary m = methods[i];
+		if (!m.has("name")) {
+			continue;
+		}
+		String name = m["name"];
+		if (name.begins_with("_")) {
+			continue;
+		}
+		if (p_pascal) {
+			luau_complete_add(r_out, luau_to_pascal(name), 1 /*KIND_FUNCTION*/, String(), name);
+		} else {
+			luau_complete_add(r_out, name, 1 /*KIND_FUNCTION*/);
+		}
+	}
+	// properties (skipped for `:` member access, where only methods apply)
+	if (!p_methods_only) {
+	TypedArray<Dictionary> props = p_class_db->class_get_property_list(p_class, false);
+	for (int i = 0; i < props.size(); i++) {
+		Dictionary p = props[i];
+		if (!p.has("name")) {
+			continue;
+		}
+		String name = p["name"];
+		if (name.begins_with("_")) {
+			continue;
+		}
+		if (p_pascal) {
+			luau_complete_add(r_out, luau_to_pascal(name), LUAU_KIND_VARIABLE /*KIND_PROPERTY*/, String(), name);
+		} else {
+			luau_complete_add(r_out, name, LUAU_KIND_VARIABLE /*KIND_PROPERTY*/);
+		}
+	}
+	}
+	// constants
+	PackedStringArray consts = p_class_db->class_get_integer_constant_list(p_class, false);
+	for (int i = 0; i < consts.size(); i++) {
+		luau_complete_add(r_out, consts[i], LUAU_KIND_CONSTANT /*KIND_CONSTANT*/);
+	}
+	// enums
+	PackedStringArray enums = p_class_db->class_get_enum_list(p_class, false);
+	for (int i = 0; i < enums.size(); i++) {
+		luau_complete_add(r_out, enums[i], LUAU_KIND_ENUM /*KIND_ENUM*/);
+	}
+	// signals
+	TypedArray<Dictionary> sigs = p_class_db->class_get_signal_list(p_class, false);
+	for (int i = 0; i < sigs.size(); i++) {
+		Dictionary s = sigs[i];
+		if (!s.has("name")) {
+			continue;
+		}
+		String name = s["name"];
+		if (p_pascal) {
+			luau_complete_add(r_out, "On" + luau_to_pascal(name), 2 /*KIND_SIGNAL*/, String(), "on_" + name);
+		} else {
+			luau_complete_add(r_out, name, 2 /*KIND_SIGNAL*/);
+		}
+	}
+}
+
+// Collect a LuauScript's own definitions (and its base scripts).
+static void luau_complete_script(Ref<LuauScript> p_script, Array &r_out) {
+	LuauScript *s = p_script.ptr();
+	while (s != nullptr) {
+		Dictionary consts = s->_get_constants();
+		Array keys = consts.keys();
+		for (int i = 0; i < keys.size(); i++) {
+			luau_complete_add(r_out, keys[i], LUAU_KIND_CONSTANT /*KIND_CONSTANT*/);
+		}
+		for (const GDClassProperty &p : s->get_definition().properties) {
+			luau_complete_add(r_out, p.property.name, LUAU_KIND_VARIABLE /*KIND_PROPERTY*/);
+		}
+		for (const KeyValue<StringName, GDMethod> &E : s->get_definition().methods) {
+			luau_complete_add(r_out, E.key, 1 /*KIND_FUNCTION*/);
+		}
+		s = s->get_base().ptr();
+	}
+}
+
+
+namespace {
+class LuauJsonParser {
+	String src;
+	int pos = 0;
+
+	void skip_ws() {
+		while (pos < src.length()) {
+			char32_t c = src[pos];
+			if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+				pos++;
+			} else {
+				break;
+			}
+		}
+	}
+
+	char32_t peek() {
+		return pos < src.length() ? src[pos] : 0;
+	}
+
+	Variant parse_value() {
+		skip_ws();
+		char32_t c = peek();
+		if (c == '{') {
+			return parse_object();
+		}
+		if (c == '[') {
+			return parse_array();
+		}
+		if (c == '"') {
+			return Variant(parse_string());
+		}
+		if (c == 't' || c == 'f') {
+			return parse_bool();
+		}
+		if (c == 'n') {
+			parse_null();
+			return Variant();
+		}
+		return Variant(parse_number());
+	}
+
+	String parse_string() {
+		// Assumes current char is '"'.
+		pos++; // consume opening quote
+		String out;
+		while (pos < src.length() && src[pos] != '"') {
+			char32_t c = src[pos++];
+			if (c == '\\') {
+				char32_t e = src[pos++];
+				switch (e) {
+					case '"': out += '"'; break;
+					case '\\': out += '\\'; break;
+					case '/': out += '/'; break;
+					case 'n': out += '\n'; break;
+					case 't': out += '\t'; break;
+					case 'r': out += '\r'; break;
+					case 'b': out += '\b'; break;
+					case 'f': out += '\f'; break;
+					case 'u': {
+						// Parse 4 hex digits into a codepoint.
+						int cp = 0;
+						for (int i = 0; i < 4 && pos < src.length(); i++) {
+							char32_t h = src[pos++];
+							cp <<= 4;
+							if (h >= '0' && h <= '9') {
+								cp |= (h - '0');
+							} else if (h >= 'a' && h <= 'f') {
+								cp |= (h - 'a' + 10);
+							} else if (h >= 'A' && h <= 'F') {
+								cp |= (h - 'A' + 10);
+							}
+						}
+						out += String::chr(cp);
+					} break;
+					default: out += e; break;
+				}
+			} else {
+				out += c;
+			}
+		}
+		if (pos < src.length()) {
+			pos++; // consume closing quote
+		}
+		return out;
+	}
+
+	Dictionary parse_object() {
+		pos++; // consume '{'
+		Dictionary d;
+		skip_ws();
+		if (peek() == '}') {
+			pos++;
+			return d;
+		}
+		while (true) {
+			skip_ws();
+			String key = parse_string();
+			skip_ws();
+			if (peek() == ':') {
+				pos++;
+			}
+			Variant val = parse_value();
+			d[key] = val;
+			skip_ws();
+			char32_t c = peek();
+			if (c == ',') {
+				pos++;
+			} else if (c == '}') {
+				pos++;
+				break;
+			} else {
+				break;
+			}
+		}
+		return d;
+	}
+
+	Array parse_array() {
+		pos++; // consume '['
+		Array a;
+		skip_ws();
+		if (peek() == ']') {
+			pos++;
+			return a;
+		}
+		while (true) {
+			a.push_back(parse_value());
+			skip_ws();
+			char32_t c = peek();
+			if (c == ',') {
+				pos++;
+			} else if (c == ']') {
+				pos++;
+				break;
+			} else {
+				break;
+			}
+		}
+		return a;
+	}
+
+	double parse_number() {
+		int start = pos;
+		while (pos < src.length()) {
+			char32_t c = src[pos];
+			if ((c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E') {
+				pos++;
+			} else {
+				break;
+			}
+		}
+		String num = src.substr(start, pos - start);
+		return num.to_float();
+	}
+
+	bool parse_bool() {
+		if (src.substr(pos, 4) == "true") {
+			pos += 4;
+			return true;
+		}
+		pos += 5; // "false"
+		return false;
+	}
+
+	void parse_null() {
+		pos += 4; // "null"
+	}
+
+public:
+	static Variant parse(const String &p_src) {
+		LuauJsonParser p;
+		p.src = p_src;
+		p.skip_ws();
+		return p.parse_value();
+	}
+};
+
+// Cached map: built-in type name -> its parsed variant record (Dictionary).
+static HashMap<String, Dictionary> *g_builtin_variants = nullptr;
+
+const HashMap<String, Dictionary> &luau_get_builtin_variants() {
+	if (g_builtin_variants == nullptr) {
+		g_builtin_variants = new HashMap<String, Dictionary>();
+		Ref<FileAccess> file = FileAccess::open("res://bin/LuauGDExt/variants.json", FileAccess::ModeFlags::READ);
+		if (file.is_valid()) {
+			String text = file->get_as_text();
+			Variant root = LuauJsonParser::parse(text);
+			if (root.get_type() == Variant::DICTIONARY) {
+				Dictionary top = root;
+				if (top.has("variants")) {
+					Array variants = top["variants"];
+					for (int i = 0; i < variants.size(); i++) {
+						Dictionary v = variants[i];
+						if (v.has("name")) {
+							(*g_builtin_variants)[String(v["name"])] = v;
+						}
+					}
+				}
+			}
+		}
+	}
+	return *g_builtin_variants;
+}
+
+} // namespace
+
+static void luau_complete_builtin_type(const String &p_type, bool p_pascal, Array &r_out, bool p_methods_only = false, bool p_show_constants = true) {
+	const HashMap<String, Dictionary> &variants = luau_get_builtin_variants();
+	const Dictionary *v = variants.getptr(p_type);
+	if (v == nullptr) {
+		return;
+	}
+
+	// methods
+	if ((*v).has("methods")) {
+		Array methods = (*v)["methods"];
+		for (int i = 0; i < methods.size(); i++) {
+			Dictionary m = methods[i];
+			if (!m.has("name")) {
+				continue;
+			}
+			String name = m["name"];
+			if (name.begins_with("_")) {
+				continue;
+			}
+			if (p_pascal) {
+				luau_complete_add(r_out, luau_to_pascal(name), 1 /*KIND_FUNCTION*/, String(), name);
+			} else {
+				luau_complete_add(r_out, name, 1 /*KIND_FUNCTION*/);
+			}
+		}
+	}
+	// properties (skipped for `:` member access, where only methods apply)
+	if (!p_methods_only && (*v).has("properties")) {
+		Array props = (*v)["properties"];
+		for (int i = 0; i < props.size(); i++) {
+			Dictionary p = props[i];
+			if (!p.has("name")) {
+				continue;
+			}
+			String name = p["name"];
+			if (name.begins_with("_")) {
+				continue;
+			}
+			if (p_pascal) {
+				luau_complete_add(r_out, luau_to_pascal(name), LUAU_KIND_VARIABLE /*KIND_PROPERTY*/, String(), name);
+			} else {
+				luau_complete_add(r_out, name, LUAU_KIND_VARIABLE /*KIND_PROPERTY*/);
+			}
+		}
+	}
+	// constants (only when accessing the type directly, e.g. Vector3.UP;
+	// not on an instance such as moveDir: or moveDir.X)
+	if (p_show_constants && (*v).has("constants")) {
+		Array consts = (*v)["constants"];
+		for (int i = 0; i < consts.size(); i++) {
+			Dictionary c = consts[i];
+			if (!c.has("name")) {
+				continue;
+			}
+			luau_complete_add(r_out, c["name"], LUAU_KIND_CONSTANT /*KIND_CONSTANT*/);
+		}
+	}
+}
+
+static HashMap<String, String> luau_collect_local_types(const String &p_code, int p_caret) {
+	HashMap<String, String> locals;
+
+	String scope = p_code.substr(0, p_caret);
+	// Split into lines, keeping it simple: scan each line for `name: Type`.
+	int line_start = 0;
+	for (int i = 0; i <= scope.length(); i++) {
+		if (i == scope.length() || scope[i] == '\n') {
+			String line = scope.substr(line_start, i - line_start);
+			line_start = i + 1;
+
+			// Strip a leading `local `/`local` keyword if present.
+			String l = line.strip_edges();
+			if (l.begins_with("local ")) {
+				l = l.substr(6).strip_edges();
+			}
+
+			int colon = l.find(":");
+			if (colon <= 0) {
+				continue;
+			}
+			String name = l.substr(0, colon).strip_edges();
+			// Name must be a valid identifier (no spaces, no operators).
+			bool name_ok = !name.is_empty();
+			for (int k = 0; name_ok && k < name.length(); k++) {
+				char32_t c = name[k];
+				if (!(c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
+					name_ok = false;
+				}
+			}
+			if (!name_ok) {
+				continue;
+			}
+
+			String rest = l.substr(colon + 1).strip_edges();
+			// Type is the first identifier in `rest` (stop at '=', whitespace,
+			// '(', etc.).
+			int type_end = 0;
+			while (type_end < rest.length()) {
+				char32_t c = rest[type_end];
+				if (c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+					type_end++;
+				} else {
+					break;
+				}
+			}
+			if (type_end == 0) {
+				continue;
+			}
+			String type_name = rest.substr(0, type_end);
+			locals[name] = type_name;
+		}
+	}
+
+	return locals;
+}
+
 Dictionary LuauLanguage::_complete_code(const String &p_code, const String &p_path, Object *p_owner) const {
-	return Dictionary();
+	Dictionary ret;
+	Array result;
+
+	nobind::ClassDB *class_db = nobind::ClassDB::get_singleton();
+
+	// Resolve the script for context (owner or path).
+	Ref<LuauScript> luau_script;
+	if (p_owner != nullptr) {
+		Ref<Script> script = p_owner->get_script();
+		if (script.is_valid()) {
+			luau_script = script;
+		}
+	}
+	if (luau_script.is_null() && !p_path.is_empty()) {
+		Ref<Script> script = ResourceLoader::get_singleton()->load(p_path);
+		if (script.is_valid()) {
+			luau_script = script;
+		}
+	}
+
+	String extends = "RefCounted";
+	if (luau_script.is_valid()) {
+		extends = luau_script->get_definition().extends;
+	}
+
+	// cursor = 0xFFFF caret marker
+	String code = p_code;
+	if (code.is_empty() && luau_script.is_valid()) {
+		code = luau_script->_get_source_code();
+	}
+
+	String current_line = code;
+	int caret = code.find(String::chr(0xFFFF));
+	if (caret != -1) {
+		// Text from the start of the caret's line up to the caret.
+		int line_start = code.rfind("\n", caret);
+		line_start = (line_start == -1) ? 0 : line_start + 1;
+		current_line = code.substr(line_start, caret - line_start);
+	} else {
+		int last_nl = code.rfind("\n");
+		if (last_nl != -1) {
+			current_line = code.substr(last_nl + 1);
+		}
+	}
+
+	String trimmed = current_line.strip_edges();
+
+	// @extends / @class context: suggest class names.
+	if (trimmed.begins_with("@extends") || trimmed.begins_with("@class")) {
+		PackedStringArray classes = class_db->get_class_list();
+		for (int i = 0; i < classes.size(); i++) {
+			luau_complete_add(result, classes[i], 0 /*KIND_CLASS*/);
+		}
+		ret["options"] = result;
+		ret["force"] = false;
+		ret["call_hint"] = String();
+		ret["result"] = OK;
+		return ret;
+	}
+
+
+	String prefix;
+	String receiver;
+	bool dot = false;
+	bool colon = false;
+
+	
+	int prefix_end = current_line.length();
+	while (prefix_end > 0) {
+		char32_t c = current_line[prefix_end - 1];
+		if (c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+			prefix_end--;
+		} else {
+			break;
+		}
+	}
+	prefix = current_line.substr(prefix_end);
+
+	
+	if (prefix_end > 0) {
+		char32_t sep = current_line[prefix_end - 1];
+		if (sep == '.' || sep == ':') {
+			colon = (sep == ':');
+			int recv_end = prefix_end - 1;
+			int recv_start = recv_end;
+			while (recv_start > 0) {
+				char32_t c = current_line[recv_start - 1];
+				if (c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+					recv_start--;
+				} else {
+					break;
+				}
+			}
+			if (recv_start < recv_end) {
+				dot = true;
+				receiver = current_line.substr(recv_start, recv_end - recv_start);
+			}
+		}
+	}
+
+
+	bool want_pascal = false;
+	for (int i = 0; i < prefix.length(); i++) {
+		if (prefix[i] >= 'A' && prefix[i] <= 'Z') {
+			want_pascal = true;
+			break;
+		}
+	}
+
+	bool receiver_is_class = class_db->class_exists(receiver) || class_db->class_get_method_list(receiver, false).size() > 0;
+	bool known_receiver = (receiver == "self" || receiver == "this" || receiver_is_class);
+
+	HashMap<String, String> local_types = luau_collect_local_types(code, caret);
+	String receiver_type;
+	if (!known_receiver && local_types.has(receiver)) {
+		receiver_type = local_types[receiver];
+		bool type_is_class = !receiver_type.is_empty() &&
+				(luau_get_builtin_variants().has(receiver_type) ||
+						class_db->class_exists(receiver_type) ||
+						class_db->class_get_method_list(receiver_type, false).size() > 0);
+		if (type_is_class) {
+			known_receiver = true;
+			receiver_is_class = true;
+		}
+	}
+
+	if (dot && known_receiver && receiver_is_class) {
+		want_pascal = true;
+	}
+
+	if (dot && known_receiver) {
+		if (receiver == "self" || receiver == "this") {
+			if (luau_script.is_valid()) {
+				luau_complete_script(luau_script, result);
+			}
+			if (!extends.begins_with("res://") && class_db->class_exists(extends)) {
+				luau_complete_class(class_db, extends, want_pascal, result, colon);
+			}
+		} else if (!receiver_type.is_empty()) {
+			if (class_db->class_exists(receiver_type)) {
+				luau_complete_class(class_db, receiver_type, want_pascal, result, colon);
+			} else {
+				// Constants are type-level (Vector3.UP), not instance-level
+				// (moveDir: / moveDir.X), so only show them when the receiver
+				// is the type name itself.
+				bool show_constants = luau_get_builtin_variants().has(receiver);
+				luau_complete_builtin_type(receiver_type, want_pascal, result, colon, show_constants);
+			}
+		} else {
+			luau_complete_class(class_db, receiver, want_pascal, result, colon);
+		}
+	}
+
+	if (!dot) {
+		PackedStringArray keywords = _get_reserved_words();
+		for (int i = 0; i < keywords.size(); i++) {
+			luau_complete_add(result, keywords[i], LUAU_KIND_PLAIN_TEXT /*KIND_PLAIN_TEXT*/);
+		}
+
+		if (luau_script.is_valid()) {
+			luau_complete_script(luau_script, result);
+		}
+
+		for (const KeyValue<StringName, Variant> &E : global_constants) {
+			luau_complete_add(result, E.key, LUAU_KIND_CONSTANT /*KIND_CONSTANT*/);
+		}
+
+		static const char *builtins[] = {
+			"type", "tostring", "tonumber", "pairs", "ipairs", "next", "select",
+			"unpack", "rawequal", "rawget", "rawset", "rawlen", "setmetatable",
+			"getmetatable", "pcall", "xpcall", "error", "assert", "warn", "print",
+			"string", "table", "math", "task", "coroutine", "vector", "buffer",
+			"os", "utf8", "bit32", "debug", "typeof", "wait", nullptr
+		};
+		for (int i = 0; builtins[i] != nullptr; i++) {
+			luau_complete_add(result, String(builtins[i]), LUAU_KIND_PLAIN_TEXT /*KIND_GLOBAL*/);
+		}
+
+		if (!extends.begins_with("res://") && class_db->class_exists(extends)) {
+			// Luau uses PascalCase for methods/properties, so complete the
+			// base class members in PascalCase (e.g. MoveAndSlide, not
+			// move_and_slide) even when the typed prefix is lowercase.
+			luau_complete_class(class_db, extends, true, result);
+		}
+	}
+
+	// Deduplicate by display name.
+	{
+		Array deduped;
+		HashSet<String> seen;
+		for (int i = 0; i < result.size(); i++) {
+			Dictionary opt = result[i];
+			String name = opt["display"];
+			if (seen.has(name)) {
+				continue;
+			}
+			seen.insert(name);
+			deduped.push_back(opt);
+		}
+		result = deduped;
+	}
+
+	// Filter by the typed prefix (case-insensitive).
+	if (!prefix.is_empty()) {
+		Array filtered;
+		String lp = prefix.to_lower();
+		for (int i = 0; i < result.size(); i++) {
+			Dictionary opt = result[i];
+			String name = opt["display"];
+			if (name.to_lower().begins_with(lp)) {
+				filtered.push_back(opt);
+			}
+		}
+		result = filtered;
+		}
+	
+		ret["options"] = result;
+		ret["force"] = false;
+		ret["call_hint"] = String();
+		ret["result"] = OK;
+		return ret;
+	}
+	
+//MARK: Code lookup helpers
+static StringName luau_remap_symbol(const String &p_symbol) {
+	String remapped = p_symbol;
+	if (remapped.begins_with("On") && remapped.length() > 2) {
+		char32_t c = remapped[2];
+		if (c >= 'A' && c <= 'Z') {
+			remapped = remapped.substr(2);
+		}
+	}
+
+	String godot_key;
+	for (int i = 0; i < remapped.length(); i++) {
+		char32_t c = remapped[i];
+		if (c >= 'A' && c <= 'Z') {
+			if (i > 0) {
+				godot_key += "_";
+			}
+			char lower[2] = { (char)(c - 'A' + 'a'), '\0' };
+			godot_key += lower;
+		} else {
+			char ch[2] = { (char)c, '\0' };
+			godot_key += ch;
+		}
+	}
+	return StringName(godot_key);
+}
+
+static String luau_function_name(Luau::AstStat *p_stat) {
+	if (auto *func = p_stat->as<Luau::AstStatFunction>()) {
+		if (!func->name) {
+			return String();
+		}
+		if (auto *index = func->name->as<Luau::AstExprIndexName>()) {
+			return String(index->index.value);
+		} else if (auto *local = func->name->as<Luau::AstExprLocal>()) {
+			return String(local->local->name.value);
+		} else if (auto *global = func->name->as<Luau::AstExprGlobal>()) {
+			return String(global->name.value);
+		}
+	} else if (auto *local_func = p_stat->as<Luau::AstStatLocalFunction>()) {
+		if (local_func->name) {
+			return String(local_func->name->name.value);
+		}
+	}
+	return String();
+}
+
+
+struct LuauSymbolDef {
+	int line = -1; // 1-based line, or -1 if not found
+	int type = 1;  // CodeCompletionType: 1 TYPE_FUNCTION, 2 TYPE_MEMBER, 3 TYPE_CONSTANT
+};
+
+static LuauSymbolDef luau_find_symbol(const String &p_source, const String &p_name) {
+	LuauSymbolDef result;
+	if (p_source.is_empty() || p_name.is_empty()) {
+		return result;
+	}
+
+	CharString utf8 = p_source.utf8();
+	std::string source_str(utf8.get_data(), utf8.length());
+
+	Luau::Allocator allocator;
+	Luau::AstNameTable names(allocator);
+	Luau::ParseOptions parse_opts;
+	Luau::ParseResult parse_result = Luau::Parser::parse(
+			source_str.c_str(), source_str.size(), names, allocator, parse_opts);
+
+	if (!parse_result.root) {
+		return result;
+	}
+
+	for (Luau::AstStat *stat : parse_result.root->body) {
+		if (auto *func = stat->as<Luau::AstStatFunction>()) {
+			String name = luau_function_name(stat);
+			if (!name.is_empty() && name == p_name) {
+				result.line = stat->location.begin.line + 1;
+				result.type = 1; // TYPE_FUNCTION
+				return result;
+			}
+		} else if (auto *local_func = stat->as<Luau::AstStatLocalFunction>()) {
+			String name = luau_function_name(stat);
+			if (!name.is_empty() && name == p_name) {
+				result.line = stat->location.begin.line + 1;
+				result.type = 1; // TYPE_FUNCTION
+				return result;
+			}
+		} else if (auto *assign = stat->as<Luau::AstStatAssign>()) {
+			for (size_t i = 0; i < assign->vars.size; i++) {
+				auto *global = assign->vars.data[i]->as<Luau::AstExprGlobal>();
+				if (!global) {
+					continue;
+				}
+				String var_name = String(global->name.value);
+				if (var_name == p_name) {
+					result.line = stat->location.begin.line + 1;
+					bool is_constant = true;
+					for (int j = 0; j < var_name.length(); j++) {
+						char32_t c = var_name[j];
+						if (c >= 'a' && c <= 'z') {
+							is_constant = false;
+							break;
+						}
+					}
+					result.type = is_constant ? 3 : 2; // TYPE_CONSTANT : TYPE_MEMBER
+					return result;
+				}
+			}
+		}
+	}
+
+	return result;
 }
 
 Dictionary LuauLanguage::_lookup_code(const String &p_code, const String &p_symbol, const String &p_path, Object *p_owner) const {
 	Dictionary ret;
-	
-	// Default to no result
-	ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION = 0, LOOKUP_RESULT_CLASS = 1, LOOKUP_RESULT_CLASS_CONSTANT = 2, etc.
-	
-	// Try to find information about the symbol
+
+	// ScriptLanguage::LookupResultType
+	//   0 SCRIPT_LOCATION, 1 CLASS, 2 CLASS_CONSTANT, 3 CLASS_ENUM,
+	//   4 CLASS_METHOD, 5 CLASS_SIGNAL, 6 CLASS_PROPERTY, 7 CLASS_ANNOTATION
+	// ScriptLanguage::CodeCompletionType
+	//   0 TYPE_CLASS, 1 TYPE_FUNCTION, 2 TYPE_MEMBER, 3 TYPE_CONSTANT,
+	//   4 TYPE_ENUM, 5 TYPE_SIGNAL, 6 TYPE_ANNOTATION
+	ret["result"] = 0; // default: no result
+	ret["type"] = 0;
+	ret["is_deprecated"] = false;
+
 	String symbol = p_symbol.strip_edges();
-	
-	if (nobind::ClassDB::get_singleton()->class_exists(symbol)) {
-		ret["result"] = 1; // LOOKUP_RESULT_CLASS
-		ret["type"] = 0; // TYPE_CLASS
-		ret["class_name"] = symbol;
-		ret["class_path"] = String(); // Built-in class, no path
-		
-		// Get class documentation if available
-		String class_doc = String("Godot built-in class: ") + symbol;
-		ret["description"] = class_doc;
-		ret["is_deprecated"] = false;
-		
+	if (symbol.is_empty()) {
+		ret["result"] = FAILED;
 		return ret;
 	}
-	
-	// Check if it's a method of a known class (format: ClassName.method_name)
+
+	nobind::ClassDB *class_db = nobind::ClassDB::get_singleton();
+
 	if (symbol.contains(".")) {
 		PackedStringArray parts = symbol.split(".");
 		if (parts.size() == 2) {
 			String class_name = parts[0];
 			String member_name = parts[1];
-			
-				if (nobind::ClassDB::get_singleton()->class_exists(class_name)) {
-					// Check if it's a method
-					if (nobind::ClassDB::get_singleton()->class_has_method(class_name, member_name, false)) {
-						ret["result"] = 3; // LOOKUP_RESULT_CLASS_METHOD
-						ret["type"] = 2; // TYPE_FUNCTION
-						ret["class_name"] = class_name;
-						ret["class_member"] = member_name;
-						ret["description"] = String("Method of class ") + class_name;
-						ret["is_deprecated"] = false;
-						
-						return ret;
-					}
-					
-					// Check if it's a property
-					TypedArray<Dictionary> property_list = nobind::ClassDB::get_singleton()->class_get_property_list(class_name, false);
-					for (int i = 0; i < property_list.size(); i++) {
-						Dictionary prop = property_list[i];
-						if (prop.has("name") && String(prop["name"]) == member_name) {
-							ret["result"] = 5; // LOOKUP_RESULT_CLASS_PROPERTY
-							ret["type"] = 1; // TYPE_MEMBER
+			StringName remapped_member = luau_remap_symbol(member_name);
+
+			if (class_db->class_exists(class_name)) {
+				if (class_db->class_has_method(class_name, member_name, false) ||
+						class_db->class_has_method(class_name, remapped_member, false)) {
+					ret["result"] = OK;
+					ret["type"] = 4;   // LOOKUP_RESULT_CLASS_METHOD
+					ret["class_name"] = class_name;
+					ret["class_member"] = member_name;
+					ret["description"] = String("Method of class ") + class_name;
+					return ret;
+				}
+
+				TypedArray<Dictionary> property_list = class_db->class_get_property_list(class_name, false);
+				for (int i = 0; i < property_list.size(); i++) {
+					Dictionary prop = property_list[i];
+					if (prop.has("name")) {
+						String pname = prop["name"];
+						if (pname == member_name || pname == remapped_member) {
+							ret["result"] = OK;
+							ret["type"] = 3;   // LOOKUP_RESULT_CLASS_PROPERTY
 							ret["class_name"] = class_name;
 							ret["class_member"] = member_name;
 							ret["description"] = String("Property of class ") + class_name;
-							ret["is_deprecated"] = false;
-							
 							return ret;
 						}
 					}
-					
-					// Check if it's a constant
-					if (nobind::ClassDB::get_singleton()->class_has_integer_constant(class_name, member_name)) {
-						ret["result"] = 2; // LOOKUP_RESULT_CLASS_CONSTANT
-						ret["type"] = 3; // TYPE_CONSTANT
-						ret["class_name"] = class_name;
-						ret["class_member"] = member_name;
-						ret["description"] = String("Constant of class ") + class_name;
-						ret["is_deprecated"] = false;
-						
-						return ret;
-					}
-					
-					// Check if it's an enum
-					if (nobind::ClassDB::get_singleton()->class_has_enum(class_name, member_name, false)) {
-						ret["result"] = 4; // LOOKUP_RESULT_CLASS_ENUM
-						ret["type"] = 4; // TYPE_ENUM
-						ret["class_name"] = class_name;
-						ret["class_member"] = member_name;
-						ret["description"] = String("Enum of class ") + class_name;
-						ret["is_deprecated"] = false;
-						
-						return ret;
-					}
+				}
+
+				if (class_db->class_has_integer_constant(class_name, member_name) ||
+						class_db->class_has_integer_constant(class_name, remapped_member)) {
+					ret["result"] = OK;
+					ret["type"] = 2;   // LOOKUP_RESULT_CLASS_CONSTANT
+					ret["class_name"] = class_name;
+					ret["class_member"] = member_name;
+					ret["description"] = String("Constant of class ") + class_name;
+					return ret;
+				}
+
+				if (class_db->class_has_enum(class_name, member_name, false) ||
+						class_db->class_has_enum(class_name, remapped_member, false)) {
+					ret["result"] = OK;
+					ret["type"] = 6;   // LOOKUP_RESULT_CLASS_ENUM
+					ret["class_name"] = class_name;
+					ret["class_member"] = member_name;
+					ret["description"] = String("Enum of class ") + class_name;
+					return ret;
+				}
 			}
 		}
+		// Not a resolvable qualified name; fall through to bare-symbol handling.
 	}
-	
-	// Check if it's a Luau script in the project
+
+	Ref<LuauScript> luau_script;
 	if (p_owner != nullptr) {
-		// Try to get the script from the owner
 		Ref<Script> script = p_owner->get_script();
 		if (script.is_valid()) {
-			Ref<LuauScript> luau_script = script;
-			if (luau_script.is_valid()) {
-				// Check if the symbol is a method in this script
-				if (luau_script->definition.methods.has(symbol)) {
-					const GDMethod &method = luau_script->definition.methods[symbol];
-					
-					ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
-					ret["type"] = 2; // TYPE_FUNCTION
-					ret["class_name"] = luau_script->definition.name;
-					ret["class_member"] = symbol;
-					ret["class_path"] = luau_script->get_path();
-					ret["location"] = 0; // Would need to parse to find actual line number
-					ret["description"] = String("Method in script: ") + symbol;
-					ret["is_deprecated"] = false;
-					
-					return ret;
-				}
-				
-				// Check if the symbol is a constant in this script
-				if (luau_script->constants.has(symbol)) {
-					Variant value = luau_script->constants[symbol];
-					
-					ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
-					ret["type"] = 3; // TYPE_CONSTANT
-					ret["class_name"] = luau_script->definition.name;
-					ret["class_member"] = symbol;
-					ret["class_path"] = luau_script->get_path();
-					ret["location"] = 0; // Would need to parse to find actual line number
-					ret["description"] = String("Constant in script: ") + symbol + " = " + String(value);
-					ret["is_deprecated"] = false;
-					
-					return ret;
-				}
-				
-				// Check base scripts recursively
-				LuauScript *base = luau_script->base.ptr();
-				while (base) {
-					if (base->definition.methods.has(symbol)) {
-						const GDMethod &method = base->definition.methods[symbol];
-						
-						ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
-						ret["type"] = 2; // TYPE_FUNCTION
-						ret["class_name"] = base->definition.name;
+			luau_script = script;
+		}
+	}
+	if (luau_script.is_null() && !p_path.is_empty()) {
+		Ref<Script> script = ResourceLoader::get_singleton()->load(p_path);
+		if (script.is_valid()) {
+			luau_script = script;
+		}
+	}
+
+	if (luau_script.is_valid()) {
+		LuauSymbolDef def = luau_find_symbol(p_code, symbol);
+		if (def.line > 0) {
+			ret["result"] = OK;
+			ret["type"] = 0;   // LOOKUP_RESULT_SCRIPT_LOCATION
+			ret["class_name"] = luau_script->get_definition().name;
+			ret["class_member"] = symbol;
+			ret["class_path"] = luau_script->get_path();
+			ret["location"] = def.line;
+			ret["description"] = String("Definition in script: ") + symbol;
+			return ret;
+		}
+
+		LuauScript *base = luau_script->get_base().ptr();
+		while (base != nullptr) {
+			LuauSymbolDef bdef = luau_find_symbol(base->_get_source_code(), symbol);
+			if (bdef.line > 0) {
+				ret["result"] = OK;
+				ret["type"] = 0;   // LOOKUP_RESULT_SCRIPT_LOCATION
+				ret["class_name"] = base->get_definition().name;
+				ret["class_member"] = symbol;
+				ret["class_path"] = base->get_path();
+				ret["location"] = bdef.line;
+				ret["description"] = String("Inherited definition from: ") + base->get_definition().name;
+				return ret;
+			}
+			base = base->get_base().ptr();
+		}
+
+		String extends = luau_script->get_definition().extends;
+		if (!extends.begins_with("res://") && class_db->class_exists(extends)) {
+			StringName remapped = luau_remap_symbol(symbol);
+
+			if (class_db->class_has_method(extends, symbol, false) ||
+					class_db->class_has_method(extends, remapped, false)) {
+				ret["result"] = OK;
+				ret["type"] = 4;   // LOOKUP_RESULT_CLASS_METHOD
+				ret["class_name"] = extends;
+				ret["class_member"] = symbol;
+				ret["description"] = String("Method of class ") + extends;
+				return ret;
+			}
+
+			TypedArray<Dictionary> property_list = class_db->class_get_property_list(extends, false);
+			for (int i = 0; i < property_list.size(); i++) {
+				Dictionary prop = property_list[i];
+				if (prop.has("name")) {
+					String pname = prop["name"];
+					if (pname == symbol || pname == remapped) {
+						ret["result"] = OK;
+						ret["type"] = 3;   // LOOKUP_RESULT_CLASS_PROPERTY
+						ret["class_name"] = extends;
 						ret["class_member"] = symbol;
-						ret["class_path"] = base->get_path();
-						ret["location"] = 0;
-						ret["description"] = String("Inherited method from: ") + base->definition.name;
-						ret["is_deprecated"] = false;
-						
+						ret["description"] = String("Property of class ") + extends;
 						return ret;
 					}
-					
-					if (base->constants.has(symbol)) {
-						Variant value = base->constants[symbol];
-						
-						ret["result"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
-						ret["type"] = 3; // TYPE_CONSTANT
-						ret["class_name"] = base->definition.name;
-						ret["class_member"] = symbol;
-						ret["class_path"] = base->get_path();
-						ret["location"] = 0;
-						ret["description"] = String("Inherited constant from: ") + base->definition.name + " = " + String(value);
-						ret["is_deprecated"] = false;
-						
-						return ret;
-					}
-					
-					base = base->base.ptr();
 				}
+			}
+
+			if (class_db->class_has_integer_constant(extends, symbol) ||
+					class_db->class_has_integer_constant(extends, remapped)) {
+				ret["result"] = OK;
+				ret["type"] = 2;   // LOOKUP_RESULT_CLASS_CONSTANT
+				ret["class_name"] = extends;
+				ret["class_member"] = symbol;
+				ret["description"] = String("Constant of class ") + extends;
+				return ret;
+			}
+
+			if (class_db->class_has_enum(extends, symbol, false) ||
+					class_db->class_has_enum(extends, remapped, false)) {
+				ret["result"] = OK;
+				ret["type"] = 6;   // LOOKUP_RESULT_CLASS_ENUM
+				ret["class_name"] = extends;
+				ret["class_member"] = symbol;
+				ret["description"] = String("Enum of class ") + extends;
+				return ret;
 			}
 		}
 	}
-	
-	// Check global constants registered with the language
+
+	if (class_db->class_exists(symbol)) {
+		ret["result"] = OK;
+		ret["type"] = 1;   // LOOKUP_RESULT_CLASS
+		ret["class_name"] = symbol;
+		ret["class_path"] = String(); // built-in class, no path
+		ret["description"] = String("Godot built-in class: ") + symbol;
+		return ret;
+	}
+
 	if (global_constants.has(symbol)) {
-		WARN_PRINT(vformat("global_constants.has(%s)", symbol));
 		Variant value = global_constants[symbol];
-		
-		ret["result"] = 2; // LOOKUP_RESULT_CLASS_CONSTANT
-		ret["type"] = 3; // TYPE_CONSTANT
+		ret["result"] = OK;
+		ret["type"] = 2;   // LOOKUP_RESULT_CLASS_CONSTANT
 		ret["class_name"] = "@GlobalScope";
 		ret["class_member"] = symbol;
 		ret["description"] = String("Global constant: ") + symbol + " = " + String(value);
-		ret["is_deprecated"] = false;
-		
 		return ret;
 	}
-	
-	// Check if it's a Luau keyword
+
 	PackedStringArray keywords = _get_reserved_words();
 	if (keywords.has(symbol)) {
-		ret["result"] = 7; // LOOKUP_RESULT_CLASS_ANNOTATION (using for keywords)
-		ret["type"] = 5; // TYPE_SIGNAL (repurposing for keyword)
+		ret["result"] = OK;
+		ret["type"] = 8;   // LOOKUP_RESULT_CLASS_ANNOTATION
 		ret["class_name"] = "Luau";
 		ret["class_member"] = symbol;
 		ret["description"] = String("Luau keyword: ") + symbol;
-		ret["is_deprecated"] = false;
-		
 		return ret;
 	}
-	
-	// No information found
-	ret["result"] = 0;
-	ret["type"] = 0;
+
+	ret["result"] = FAILED;
+	ret["type"] = 0;   // LOOKUP_RESULT_SCRIPT_LOCATION (unused on failure)
 	ret["description"] = String("Unknown symbol: ") + symbol;
-	ret["is_deprecated"] = false;
-	
 	return ret;
 }
 
@@ -4159,5 +4986,8 @@ LuauLanguage::LuauLanguage() {
 LuauLanguage::~LuauLanguage() {
 	singleton = nullptr;
 }
+
+
+
 
 

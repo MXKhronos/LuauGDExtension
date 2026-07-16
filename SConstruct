@@ -80,9 +80,48 @@ library = env.SharedLibrary(
     LIBS = [godot_cpp_file, luau_codegen, luau_compiler, luau_vm, luau_ast]
 )
 
+# Add a build task that extracts Godot's built-in Variant types, enums and
+# classes from extension_api.json into focused JSON files under
+# src/luauscript/generated/. This is the non-hardcoded source of truth used
+# for editor autocompletion (e.g. Vector3 members/methods).
+extract_api_script = env.File("tools/extract_api.py")
+extract_api_targets = [
+    "src/luauscript/generated/variants.json",
+    "src/luauscript/generated/enums.json",
+    "src/luauscript/generated/classes.json",
+]
+extract_api_cmd = env.Command(
+    extract_api_targets,
+    [extract_api_script, "extern/godot-cpp/gdextension/extension_api.json"],
+    "python $SOURCE",
+)
+env.AlwaysBuild(extract_api_cmd)
+env.Alias("extract_api", extract_api_cmd)
+
+# Copy the generated JSON files next to the compiled library so the editor
+# extension can load them at runtime via res://bin/LuauGDExt/<file>.json.
+generated_json = [
+    "src/luauscript/generated/variants.json",
+    "src/luauscript/generated/enums.json",
+    "src/luauscript/generated/classes.json",
+]
+json_dest_dirs = [
+    "./bin/LuauGDExt/",
+    "./demo/bin/LuauGDExt/",
+    "./demo-fps-template-by-bukkbeek/bin/LuauGDExt/",
+]
+for j in generated_json:
+    for d in json_dest_dirs:
+        copy_cmd = env.Command(
+            d + os.path.basename(j),
+            j,
+            Copy("$TARGET", "$SOURCE"),
+        )
+        env.Alias("extract_api", copy_cmd)
+
 demo_dirs = [
     "./demo/bin/LuauGDExt/",
-    "./demo-fps-template-by-bukkbeek/bin/LuauGDExt/"
+    "./demo-fps-template-by-bukkbeek/bin/LuauGDExt/",
 ]
 extra_files = ["LuauGDExt.gdextension", "LuauScript.svg"]
 

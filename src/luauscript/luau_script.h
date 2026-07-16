@@ -191,7 +191,11 @@ namespace godot {
         mutable bool getting_property = false;
         mutable bool is_ready = false;
         godot::TypedArray<godot::Callable> on_ready_funcs;
-        
+
+        static LuauScriptInstance *s_current;
+        static LuauScriptInstance *get_current() { return s_current; }
+        static void set_current(LuauScriptInstance *p_inst) { s_current = p_inst; }
+
     public:
         static const GDExtensionScriptInstanceInfo3 INSTANCE_INFO;
 
@@ -214,6 +218,8 @@ namespace godot {
     // Initialize the Lua state for this instance
     void initialize_lua_state(lua_State *p_L, lua_State *p_thread, int p_thread_ref, int p_self_ref);
     int get_self_ref() const { return self_ref; }
+
+    void register_signal(const StringName &p_name);
     
     LuauScriptInstance(const Ref<LuauScript> &p_script, Object *p_owner, LuauEngine::VMType p_vmtype);
     ~LuauScriptInstance();
@@ -528,3 +534,4 @@ namespace godot {
 }
 
 #endif
+

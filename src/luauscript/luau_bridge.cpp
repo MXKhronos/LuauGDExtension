@@ -493,6 +493,10 @@ static RemapCache& get_remap_cache(lua_State* L) {
 StringName godot::resolve_prop_name(lua_State* L, const char* p_key) {
     String key(p_key);
 
+    if (key.contains("_")) {
+        return StringName(key);
+    }
+
     bool needs_remap = false;
     if (key.begins_with("On") && key.length() > 2) {
         needs_remap = true;

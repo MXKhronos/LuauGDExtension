@@ -275,7 +275,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     }, "print");
     lua_setglobal(L, "print");
     
-    // Add print_error function
+    // Add printError function
     lua_pushcfunction(L, [](lua_State *L) -> int {
         int n = lua_gettop(L);
         String output;
@@ -301,10 +301,10 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         UtilityFunctions::printerr(output);
         
         return 0;
-    }, "print_error");
-    lua_setglobal(L, "print_error");
+    }, "printError");
+    lua_setglobal(L, "printError");
     
-    // Add print_warning function (using push_warning)
+    // Add printWarning function (using push_warning)
     lua_pushcfunction(L, [](lua_State *L) -> int {
         int n = lua_gettop(L);
         String output;
@@ -330,8 +330,8 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         UtilityFunctions::push_warning(output);
         
         return 0;
-    }, "print_warning");
-    lua_setglobal(L, "print_warning");
+    }, "printWarning");
+    lua_setglobal(L, "printWarning");
     
     // ===== MATH FUNCTIONS =====
     
@@ -597,15 +597,15 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         double deg = luaL_checknumber(L, 1);
         lua_pushnumber(L, UtilityFunctions::deg_to_rad(deg));
         return 1;
-    }, "deg_to_rad");
-    lua_setglobal(L, "deg_to_rad");
+    }, "degToRad");
+    lua_setglobal(L, "degToRad");
     
     lua_pushcfunction(L, [](lua_State *L) -> int {
         double rad = luaL_checknumber(L, 1);
         lua_pushnumber(L, UtilityFunctions::rad_to_deg(rad));
         return 1;
-    }, "rad_to_deg");
-    lua_setglobal(L, "rad_to_deg");
+    }, "radToDeg");
+    lua_setglobal(L, "radToDeg");
     
     // Random functions
     lua_pushcfunction(L, [](lua_State *L) -> int {
@@ -631,31 +631,31 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         int64_t to = luaL_checkinteger(L, 2);
         lua_pushinteger(L, UtilityFunctions::randi_range(from, to));
         return 1;
-    }, "randi_range");
-    lua_setglobal(L, "randi_range");
+    }, "randiRange");
+    lua_setglobal(L, "randiRange");
     
     lua_pushcfunction(L, [](lua_State *L) -> int {
         double from = luaL_checknumber(L, 1);
         double to = luaL_checknumber(L, 2);
         lua_pushnumber(L, UtilityFunctions::randf_range(from, to));
         return 1;
-    }, "randf_range");
-    lua_setglobal(L, "randf_range");
+    }, "randfRange");
+    lua_setglobal(L, "randfRange");
     
     // Type checking functions
     lua_pushcfunction(L, [](lua_State *L) -> int {
         double x = luaL_checknumber(L, 1);
         lua_pushboolean(L, UtilityFunctions::is_nan(x));
         return 1;
-    }, "is_nan");
-    lua_setglobal(L, "is_nan");
+    }, "isNan");
+    lua_setglobal(L, "isNan");
     
     lua_pushcfunction(L, [](lua_State *L) -> int {
         double x = luaL_checknumber(L, 1);
         lua_pushboolean(L, UtilityFunctions::is_inf(x));
         return 1;
-    }, "is_inf");
-    lua_setglobal(L, "is_inf");
+    }, "isInf");
+    lua_setglobal(L, "isInf");
     
     // Type conversion
     lua_pushcfunction(L, [](lua_State *L) -> int {
@@ -707,8 +707,8 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             lua_pushnil(L);
         }
         return 1;
-    }, "instance_from_id");
-    lua_setglobal(L, "instance_from_id");
+    }, "instanceFromId");
+    lua_setglobal(L, "instanceFromId");
     
     // Hash function
     lua_pushcfunction(L, [](lua_State *L) -> int {
@@ -724,16 +724,16 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         Variant v = UtilityFunctions::str_to_var(str);
         LuauBridge::push_variant(L, v);
         return 1;
-    }, "str_to_var");
-    lua_setglobal(L, "str_to_var");
+    }, "strToVar");
+    lua_setglobal(L, "strToVar");
     
     lua_pushcfunction(L, [](lua_State *L) -> int {
         Variant v = LuauBridge::get_variant(L, 1);
         String str = UtilityFunctions::var_to_str(v);
         LuauBridge::push_variant(L, str);
         return 1;
-    }, "var_to_str");
-    lua_setglobal(L, "var_to_str");
+    }, "varToStr");
+    lua_setglobal(L, "varToStr");
 
     //MARK: Custom global functions
     lua_pushcfunction(L, [](lua_State *L) -> int {
@@ -743,6 +743,43 @@ void LuauEngine::register_godot_functions(lua_State *L) {
         return 1;
     }, "tick");
     lua_setglobal(L, "tick");
+
+    //MARK: signal(name)
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        if (lua_gettop(L) < 1) {
+            luaL_error(L, "signal() requires a signal name argument");
+            return 0;
+        }
+
+        Variant arg1 = LuauBridge::get_variant(L, 1);
+        if (arg1.get_type() != Variant::STRING && arg1.get_type() != Variant::STRING_NAME) {
+            luaL_error(L, vformat("signal() requires a String or StringName argument, got %s.", arg1.get_type_name(arg1.get_type())).utf8().get_data());
+            return 0;
+        }
+
+        LuauScriptInstance *inst = LuauScriptInstance::get_current();
+        if (!inst) {
+            luaL_error(L, "signal() can only be called from within a script instance");
+            return 0;
+        }
+
+        Object *owner = inst->get_owner();
+        if (!owner) {
+            luaL_error(L, "signal() called on an instance without an owner");
+            return 0;
+        }
+
+        StringName sig_name = StringName(String(arg1));
+
+        // Register to script definition
+        inst->register_signal(sig_name);
+
+        Signal sig(owner, sig_name);
+        LuauBridge::push_variant(L, sig);
+
+        return 1;
+    }, "signal");
+    lua_setglobal(L, "signal");
 }
 
 
@@ -848,7 +885,7 @@ void LuauEngine::register_godot_globals(lua_State *L) {
 
         const char* key = lua_tostring(L, 2);
 
-        String prop_name = String(key);
+        String prop_name = String(godot::resolve_prop_name(L, key));
         bool valid_get;
 
         Variant result = variant.get(prop_name, &valid_get);
@@ -864,7 +901,7 @@ void LuauEngine::register_godot_globals(lua_State *L) {
                     const char* key = lua_tostring(L, lua_upvalueindex(2));
                     Variant obj = LuauBridge::get_variant(L, 1);
 
-                    StringName method_name(key);
+                    StringName method_name(godot::resolve_prop_name(L, key));
 
                     if (!obj.has_method(method_name)) {
                         luaL_error(L, vformat("Object does not have method: %s", method_name).utf8().get_data());

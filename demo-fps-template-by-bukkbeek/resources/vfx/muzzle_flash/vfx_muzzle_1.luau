@@ -1,9 +1,9 @@
 --- @extends Node3D
 
-local mesh: MeshInstance3D = get_node("MuzzleFlashFPS");
-local omniLight: OmniLight3D = get_node("OmniLight3D");
-local smoke: GPUParticles3D = get_node("Smoke");
-local sparks: GPUParticles3D = get_node("Sparks");
+local mesh: MeshInstance3D = GetNode("MuzzleFlashFPS");
+local omniLight: OmniLight3D = GetNode("OmniLight3D");
+local smoke: GPUParticles3D = GetNode("Smoke");
+local sparks: GPUParticles3D = GetNode("Sparks");
 
 FlashDuration = 0.05;
 
@@ -14,19 +14,19 @@ end
 function activate(): nil
 	showEffects();
 	
-	local muzzleTimer: Timer = get_tree().create_timer(flash_duration);
-	muzzleTimer.timeout:connect(hideEffects);
+	local muzzleTimer: Timer = GetTree():CreateTimer(flash_duration);
+	muzzleTimer.OnTimeout:Connect(hideEffects);
 end
 
 function showEffects(): nil
-	mesh.visible = true;
-	omniLight.visible = true;
-	smoke:restart();
-	sparks:restart();
+	mesh.Visible = true;
+	omniLight.Visible = true;
+	smoke:Restart();
+	sparks:Restart();
 end
 
 function hideEffects(): nil
-	mesh.visible = false;
-	omniLight.visible = false;
+	mesh.Visible = false;
+	omniLight.Visible = false;
 	
 end

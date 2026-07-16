@@ -16,6 +16,10 @@ namespace godot {
         Ref<LuauSyntaxHighlighter> syntax_highlighter;
 
         void _enter_tree() override;
+        void _exit_tree() override;
+
+    private:
+        void _ensure_luau_completion_prefixes(class Script *p_script);
     };
 }
 

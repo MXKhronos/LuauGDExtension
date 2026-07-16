@@ -17,10 +17,10 @@ function _ready(): nil
 	currentWeaponIndex = 0;
 	setupCurrentWeapon();
 
-	Global.OnFireInput:connect(OnFireInput);
-	Global.OnReloadInput:connect(OnReloadInput);
-	Global.OnWeaponSwitchInput:connect(OnWeaponSwitchInput);
-	Global.OnAimModeChanged:connect(OnAimModeChanged);
+	Global.OnFireInput:Connect(OnFireInput);
+	Global.OnReloadInput:Connect(OnReloadInput);
+	Global.OnWeaponSwitchInput:Connect(OnWeaponSwitchInput);
+	Global.OnAimModeChanged:Connect(OnAimModeChanged);
 end
 
 function setupCurrentWeapon(): nil
@@ -58,11 +58,11 @@ function OnAimModeChanged(aimMode: boolean): nil
 end
 
 function SwitchWeapon(index: number): nil
-	if index < 0 or index >= WeaponsArray.size() then return end;
+	if index < 0 or index >= WeaponsArray:Size() then return end;
 	if index == currentWeaponIndex and not isSwitching then return end;
 	
 	if switchTween then
-		switchTween:kill();
+		switchTween:Kill();
 	end
 	
 	for _, weapon in pairs(WeaponsArray) do
@@ -73,21 +73,21 @@ function SwitchWeapon(index: number): nil
 	currentWeapon = WeaponsArray[currentWeaponIndex];
 	isSwitching = true;
 	
-	switchTween = create_tween();
-	switchTween:set_ease(Tween.EASE_IN_OUT);
-	switchTween:set_trans(Tween.TRANS_SINE);
+	switchTween = createTween();
+	switchTween:SetEase(Tween.EASE_IN_OUT);
+	switchTween:SetTrans(Tween.TRANS_SINE);
 	
-	switchTween:tween_property(self, "rotation_degrees:x", -30.0, 0.2);
+	switchTween:TweenProperty(self, "rotation_degrees:x", -30.0, 0.2);
 	
-	switchTween:tween_callback(function()
+	switchTween:TweenCallback(function()
 		currentWeapon.activate(currentAimMode)
 	end)
 	
-	switchTween:tween_property(self, "rotation_degrees:x", 10.0, 0.2);
+	switchTween:TweenProperty(self, "rotation_degrees:x", 10.0, 0.2);
 	
-	switchTween:tween_property(self, "rotation_degrees:x", 0.0, 0.2);
+	switchTween:TweenProperty(self, "rotation_degrees:x", 0.0, 0.2);
 	
-	switchTween:tween_callback(function()
+	switchTween:TweenCallback(function()
 		isSwitching = false;
 	end)
 	
