@@ -59,7 +59,7 @@ jobs:
 
       - name: Execute Tests
         shell: bash
-        run: godot --headless --path ./demo -e -v --run-extension-tests --quit
+        run: godot --headless --path ./demo -v --run-extension-tests --quit
 
       - name: LuauGDExt Artifact
         uses: actions/upload-artifact@v4

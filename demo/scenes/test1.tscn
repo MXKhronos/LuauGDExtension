@@ -2,6 +2,7 @@
 
 [ext_resource type="Texture2D" uid="uid://yqlw5w3emnoe" path="res://icon.svg" id="1_h46hq"]
 [ext_resource type="Script" uid="uid://c627n27rn8jon" path="res://luau_scripts/test_node_2d.luau" id="1_oydga"]
+[ext_resource type="Script" uid="uid://d2mxqmmmfdeu3" path="res://luau_scripts/test_export.luau" id="3_ip444"]
 
 [node name="Test1" type="Node2D" unique_id=2104928393]
 
@@ -12,3 +13,6 @@ rotation = 512.3575
 texture = ExtResource("1_h46hq")
 script = ExtResource("1_oydga")
 green = Color(0.5, 1, 0, 1)
+
+[node name="ExportTest" type="Node2D" parent="." unique_id=1599168111]
+script = ExtResource("3_ip444")

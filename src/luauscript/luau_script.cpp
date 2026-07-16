@@ -1315,7 +1315,6 @@ bool PlaceHolderScriptInstance::get(const StringName &p_name, Variant &r_ret, Pr
 
 	if (script->_is_placeholder_fallback_enabled() && script->_has_property_default_value(p_name)) {
 		r_ret = script->_get_property_default_value(p_name);
-		WARN_PRINT(vformat("LuauScript PlaceHolderScriptInstance::get default %s=%s", p_name, r_ret));
 		return true;
 	}
 
@@ -1824,6 +1823,113 @@ Error LuauScript::load_source_code(const String &p_path) {
     return err;
 }
 
+//MARK: Annotation helpers
+static String parse_annotation(const String &p_trimmed_line) {
+    String trimmed = p_trimmed_line.strip_edges();
+    int pre = trimmed.begins_with("---") ? 3 : (trimmed.begins_with("--") ? 2 : -1);
+    if (pre < 0) {
+        return String();
+    }
+    String raw_body = trimmed.substr(pre);
+    if (raw_body.begins_with("@")) {
+        static bool warned = false;
+        if (!warned) {
+            WARN_PRINT("Luau: spaceless annotation form (e.g. '---@extends') is deprecated; use '--- @extends' (space after ---).");
+            warned = true;
+        }
+    }
+    return raw_body.strip_edges();
+}
+
+// extract anno args
+static String extract_paren_args(const String &p_anno) {
+    int open = p_anno.find("(");
+    if (open < 0) {
+        return String();
+    }
+    int close = p_anno.find(")", open);
+    if (close < 0) {
+        return String();
+    }
+    return p_anno.substr(open + 1, close - open - 1).strip_edges();
+}
+
+static String normalize_csv(const String &p_csv) {
+    PackedStringArray parts = p_csv.split(",");
+    String result;
+    for (int i = 0; i < parts.size(); i++) {
+        String p = parts[i].strip_edges().replace("\"", "").replace("'", "");
+        if (i > 0) {
+            result += ",";
+        }
+        result += p;
+    }
+    return result;
+}
+
+static Vector<String> collect_leading_annotations(const PackedStringArray &p_lines, int p_ast_line) {
+    Vector<String> out;
+    int i = p_ast_line - 1;
+    while (i >= 0) {
+        String line = p_lines[i];
+        String trimmed = line.strip_edges();
+        if (trimmed.is_empty()) {
+            break;
+        }
+        if (!trimmed.begins_with("---") && !trimmed.begins_with("--")) {
+            break;
+        }
+        String anno = parse_annotation(trimmed);
+        if (!anno.is_empty()) {
+            out.push_back(anno);
+        }
+        i--;
+    }
+    return out;
+}
+
+static void parse_export_annotation(const String &p_anno, GDClassProperty &p_prop, Variant::Type p_type) {
+    if (p_anno == "@export") {
+        p_prop.property.usage = p_prop.property.usage | PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
+        return;
+    }
+    if (p_anno.begins_with("@export_range")) {
+        p_prop.property.hint = PROPERTY_HINT_RANGE;
+        p_prop.property.hint_string = normalize_csv(extract_paren_args(p_anno));
+        p_prop.property.usage = p_prop.property.usage | PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
+        return;
+    }
+    if (p_anno.begins_with("@export_enum")) {
+        p_prop.property.hint = PROPERTY_HINT_ENUM;
+        p_prop.property.hint_string = normalize_csv(extract_paren_args(p_anno));
+        p_prop.property.usage = p_prop.property.usage | PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
+        return;
+    }
+    if (p_anno.begins_with("@export_flags")) {
+        p_prop.property.hint = PROPERTY_HINT_FLAGS;
+        p_prop.property.hint_string = normalize_csv(extract_paren_args(p_anno));
+        p_prop.property.usage = p_prop.property.usage | PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
+        return;
+    }
+    if (p_anno.begins_with("@export_file")) {
+        p_prop.property.hint = PROPERTY_HINT_FILE;
+        p_prop.property.hint_string = extract_paren_args(p_anno).replace("\"", "").replace("'", "").strip_edges();
+        p_prop.property.usage = p_prop.property.usage | PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
+        return;
+    }
+    if (p_anno == "@export_node_path") {
+        // ?
+        p_prop.property.hint = PROPERTY_HINT_NONE;
+        p_prop.property.usage = p_prop.property.usage | PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
+        return;
+    }
+    if (p_anno == "@export_multiline") {
+        p_prop.property.hint = PROPERTY_HINT_MULTILINE_TEXT;
+        p_prop.property.usage = p_prop.property.usage | PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
+        return;
+    }
+}
+
 Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
     if (!p_force && load_stage >= p_load_stage) {
         return OK;
@@ -1906,15 +2012,16 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                 definition.extends = "RefCounted";
             }
 
+            PackedStringArray lines_packed = source.split("\n");
+
             {
                 // MARK: Config annotations
-                PackedStringArray lines_packed = source.split("\n");
                 for (int i = 0; i < lines_packed.size(); i++) {
                     String line = lines_packed[i];
                     String trimmed = line.strip_edges();
                     
                     if (trimmed.begins_with("---") || trimmed.begins_with("--")) {
-                        String comment = trimmed.substr(trimmed.begins_with("---") ? 3 : 2).strip_edges();
+                        String comment = parse_annotation(trimmed);
                         
                         // @extends annotation
                         if (comment.begins_with("@extends ")) {
@@ -1940,7 +2047,6 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
                     }
                 }
             }
-
 			String class_name = definition.name;
 
             // Ast for metadata
@@ -2159,7 +2265,37 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 							var_def.property.hint_string = "";
 						}
 
-						WARN_PRINT(vformat("%s hint_string=%s class_name=%s", var_name, var_def.property.hint_string, var_def.property.class_name));
+						{
+							Vector<String> annos = collect_leading_annotations(lines_packed, stat->location.begin.line);
+							String pending_group;
+							String pending_subgroup;
+							for (const String &anno : annos) {
+								if (anno.begins_with("@export_group")) {
+									pending_group = extract_paren_args(anno).replace("\"", "").replace("'", "").strip_edges();
+								} else if (anno.begins_with("@export_subgroup")) {
+									pending_subgroup = extract_paren_args(anno).replace("\"", "").replace("'", "").strip_edges();
+								} else if (anno.begins_with("@export")) {
+									parse_export_annotation(anno, var_def, var_type);
+								}
+							}
+
+							if (!pending_group.is_empty()) {
+								GDClassProperty grp;
+								grp.property.name = StringName(pending_group);
+								grp.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+								grp.property.usage = PROPERTY_USAGE_GROUP;
+								definition.properties.push_back(grp);
+								definition.property_indices[StringName(pending_group)] = definition.properties.size() - 1;
+							}
+							if (!pending_subgroup.is_empty()) {
+								GDClassProperty grp;
+								grp.property.name = StringName(pending_subgroup);
+								grp.property.type = GDEXTENSION_VARIANT_TYPE_NIL;
+								grp.property.usage = PROPERTY_USAGE_SUBGROUP;
+								definition.properties.push_back(grp);
+								definition.property_indices[StringName(pending_subgroup)] = definition.properties.size() - 1;
+							}
+						}
 
 						definition.members.push_back(var_def);
 						definition.member_indices[StringName(var_name)] = definition.members.size() - 1;
@@ -4023,4 +4159,5 @@ LuauLanguage::LuauLanguage() {
 LuauLanguage::~LuauLanguage() {
 	singleton = nullptr;
 }
+
 
