@@ -1,0 +1,20 @@
+scons: Reading SConscript files ...
+WARNING: Unknown SCons variables were passed and will be ignored:
+    tests=true
+Auto-detected 16 CPU cores available for build parallelism. Using 15 cores by default. You can override it with the -j argument.
+Building for architecture x86_64 on platform windows
+target=editor
+arch=x86_64
+LIBSUFFIX=.lib
+suffix=.windows.editor.dev.x86_64
+SHLIBSUFFIX=.dll
+Building with DOCTEST enabled...
+scons: done reading SConscript files.
+scons: Building targets ...
+scons: `extern\godot-cpp\bin\libgodot-cpp.windows.editor.dev.x86_64.lib' is up to date.
+Compiling shared src\luauscript\luau_engine.cpp ...
+Linking Shared Library bin\LuauGDExt.windows.editor.dev.x86_64.dll ...
+LINK : bin\LuauGDExt.windows.editor.dev.x86_64.dll not found or not built by the last incremental link; performing full link
+Copy("demo-fps-template-by-bukkbeek\bin\LuauGDExt\LuauGDExt.windows.editor.dev.x86_64.dll", "bin\LuauGDExt.windows.editor.dev.x86_64.dll")
+Copy("demo\bin\LuauGDExt\LuauGDExt.windows.editor.dev.x86_64.dll", "bin\LuauGDExt.windows.editor.dev.x86_64.dll")
+scons: done building targets.

@@ -2996,6 +2996,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						// Get the owner pointer from the self table
 						lua_getfield(L, 1, "__godot_owner");
 						Object *owner_obj = (Object*)lua_touserdata(L, -1);
+						bool has_owner = !lua_isnil(L, -1);
 						lua_pop(L, 1);
 						
 						// Get the instance pointer from the self table
@@ -3005,19 +3006,34 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						
 						// Special handling for "self" - return the table itself
 						if (strcmp(key, "self") == 0) {
-							//lua_pushvalue(L, 1); // Push the env_table (which is self)
-							LuauBridge::push_variant(L, owner_obj);
+							if (instance && !instance->is_ready) {
+								lua_pushvalue(L, 1); // Push the env_table (which is self)
+								return 1;
+							}
+							if (owner_obj) {
+								LuauBridge::push_variant(L, owner_obj);
+							} else {
+								lua_pushnil(L);
+							}
 							return 1;
 						}
 
 						// Check if we're already getting a property to avoid recursion
 						if (instance && instance->getting_property) {
-							// We're already in a get() call from the editor/engine
-							// Don't try to access owner properties to avoid infinite recursion
 							lua_getglobal(L, key);
 							return 1;
 						}
-						
+					
+						// Check if it's a script signal and push a Signal object
+						if (instance) {
+							Ref<LuauScript> scr = instance->get_script();
+							if (scr.is_valid() && scr->_has_script_signal(StringName(key))) {
+								Signal sig(owner_obj, StringName(key));
+								LuauBridge::push_variant(L, sig);
+								return 1;
+							}
+						}
+
 						// Try to access Godot owner properties and methods
 						if (owner_obj) {
 							StringName prop_name = godot::resolve_prop_name(L, key);
@@ -3125,40 +3141,6 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 								return 1;
 							}
 
-							//MARK: self.signal
-							if (strcmp(key, "signal") == 0) {
-								lua_pushlightuserdata(L, owner_obj);
-								lua_pushlightuserdata(L, instance);
-
-								lua_pushcclosure(L, [](lua_State *L) -> int {
-									Object *obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
-									LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(2));
-									LuauScript *script = const_cast<LuauScript*>(inst->get_script().ptr());
-
-									if (lua_gettop(L) < 1) {
-										luaL_error(L, "signal() requires a signal name argument");
-										return 0;
-									}
-									
-									Variant arg1 = LuauBridge::get_variant(L, 1);
-									if (arg1.get_type() != Variant::STRING
-									 && arg1.get_type() != Variant::STRING_NAME) {
-										luaL_error(L, vformat("signal() requires a String or StringName argument, got %s.", arg1.get_type_name(arg1.get_type())).utf8().get_data() );
-										return 0;
-									}
-
-									StringName sig_name = StringName(String(arg1));
-									
-									script->definition.signals[sig_name] = GDMethod();
-
-									Signal sig(obj, sig_name);
-									LuauBridge::push_variant(L, sig);
-
-									return 1;
-								}, "create_signal", 2);
-								return 1;
-							}
-
 							// Get object member
 							Variant value = owner_obj->get(prop_name);
 							if (value.get_type() != Variant::NIL) {
@@ -3166,7 +3148,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 								return 1;
 							}
 						}
-						
+
 						if (LuauLanguage::singleton->global_constants.has(key)) {
 							Variant v = LuauLanguage::singleton->global_constants.get(key);
 							//WARN_PRINT(vformat("Found %s in global_constants=%s", key, v));

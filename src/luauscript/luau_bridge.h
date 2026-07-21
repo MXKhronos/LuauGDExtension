@@ -86,6 +86,7 @@ public:
         return 1;
 	}
 
+    // MARK: Variant __index
 	static int on_index(lua_State *L) {
         Variant obj = get_object(L, 1);
 

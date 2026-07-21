@@ -5,6 +5,9 @@ local weaponRayCast: RayCast3D;
 local rayCastOrigin: Node3D;
 
 function _ready(): nil
+	print("Global", Global, typeof(Global))
+	print("Global.OnAimModeChanged", Global.OnAimModeChanged, typeof(Global.OnAimModeChanged));
+	print("Global.aim_mode_changed", Global.aim_mode_changed, typeof(Global.aim_mode_changed));
 	Global.OnAimModeChanged:Connect(_onAimModeChanged);
 end
 
