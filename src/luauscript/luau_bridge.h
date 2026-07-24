@@ -4,22 +4,64 @@
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/core/memory.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
 
 #include <lua.h>
 #include <lualib.h>
 
+#include <luauscript/luau_script.h>
+
 namespace godot {
+
+
+const int UINT64_T_TAG = 1;
+
+class LuauObject {
+    static HashMap<uint64_t, LuauObject*> list;
+
+    uint64_t obj_id;
+    LuauScriptInstance* instance;
+
+public:
+    operator Object*() const {
+        return ObjectDB::get_instance(obj_id); 
+    }
+
+    void push_self(lua_State *p_M) {
+        lua_State* L = instance->get_main_state();
+        lua_getref(L, instance->get_self_ref());
+
+        if (lua_isnil(L, -1)) {
+            WARN_PRINT("self ref no longer exist?");
+        }
+
+        lua_xmove(L, p_M, 1);
+    }
+    static void register_object(Object* p_obj_ptr, LuauScriptInstance* p_scr_instance) {
+        uint64_t obj_id = p_obj_ptr->get_instance_id();
+        list[obj_id] = memnew(LuauObject(obj_id, p_scr_instance));
+    }
+    static LuauObject* get_luau_object(Object* p_obj_ptr) {
+        uint64_t obj_id = p_obj_ptr->get_instance_id();
+        return list[obj_id];
+    }
+
+    LuauObject(uint64_t p_obj_id, LuauScriptInstance* p_scr_instance);
+    ~LuauObject();
+};
 
 //MARK: LuauBridge
 class LuauBridge {
     public:
         static void *luaL_checkudata(lua_State *L, int p_index, const char *p_tname);
 
+        static void push_uint64_t(lua_State* L, const uint64_t &p_uint64_t);
         static void push_string(lua_State *L, const godot::String &p_str);
         static void push_dictionary(lua_State *L, const Dictionary &p_dict);
         static void push_array(lua_State *L, const Array &p_array);
         static void push_variant(lua_State *L, const Variant &p_var);
 
+        static uint64_t get_uint64_t(lua_State* L, int p_index);
         static godot::String get_string(lua_State *L, int p_index);
         static Dictionary get_dictionary(lua_State *L, int p_index);
         static Array get_array(lua_State *L, int p_index);
@@ -81,6 +123,15 @@ public:
 	}
 
 	static int on_tostring(lua_State *L) {
+        void *ud = LuauBridge::luaL_checkudata(L, 1, "Object");
+        if (ud) {
+            uint64_t obj_id = *(uint64_t*)ud;
+            Object* obj = ObjectDB::get_instance(obj_id);
+            
+            LuauBridge::push_string(L, obj->to_string());
+            return 1;
+        }
+
         Variant value = get_object(L, 1);
         LuauBridge::push_string(L, value.stringify());
         return 1;
@@ -88,17 +139,43 @@ public:
 
     // MARK: Variant __index
 	static int on_index(lua_State *L) {
-        Variant obj = get_object(L, 1);
-
 		const char* key = lua_tostring(L, 2);
+
+        if (lua_istable(L, 1)) {
+            WARN_PRINT(vformat("Variant on_index table key=%s", key));
+
+            void *p = lua_touserdata(L, 1);
+            if (p == NULL) {
+                WARN_PRINT(vformat("Raw table NULL"));
+            }
+        }
+
+        void *ud = LuauBridge::luaL_checkudata(L, 1, "Object");
+        if (ud) {
+            uint64_t obj_id = *(uint64_t*)ud;
+            Object* obj = ObjectDB::get_instance(obj_id);
+            
+            return VariantBridge<Object*>::on_index(L, obj, key); 
+        }
+
+
+        WARN_PRINT(vformat("Variant on_index key=%s", key));
+        // Variant::OBJECT should never reach here;
+
+        Variant variant = get_object(L, 1);
+
         StringName prop_name = resolve_prop_name(L, key);
 
         bool valid;
-        Variant value = obj.get(prop_name, &valid); //Get Variant GDV property
+        Variant value = variant.get(prop_name, &valid); //Get Variant GDV property
 
         // WARN_PRINT(vformat("value (%s) is: %s (%s) valid: %s", prop_name, value, value.get_type_name(value.get_type()), (valid? "true" : "false")));
         if (!valid) {
             lua_getglobal(L, variant_name);
+            if (lua_isnil(L, -1)) {
+                return 1;
+            }
+
             lua_pushstring(L, String(prop_name).utf8().get_data());
             lua_rawget(L, -2);
             if (!lua_isnil(L, -1)) {
@@ -192,14 +269,18 @@ public:
 
         }
 
-        return on_index(L, obj, key);
+        return on_index(L, variant, key);
 	}
 
 	static int on_newindex(lua_State *L) {
         Variant obj = get_object(L, 1);
 		const char* key = lua_tostring(L, 2);
-        Variant value = LuauBridge::get_variant(L, 3);
 
+        if (obj.get_type() == Variant::OBJECT) {
+            return on_newindex(L, obj, key);
+        }
+
+        Variant value = LuauBridge::get_variant(L, 3);
         StringName prop_name = resolve_prop_name(L, key);
 
         // Try to set the property
@@ -365,6 +446,8 @@ public:
             
         return 1;
     }
+
+
 };
 
 }; // namespace godot

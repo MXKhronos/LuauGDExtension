@@ -1,4 +1,4 @@
----@extends SceneTree
+--- @extends SceneTree
 
 function _init()
 	print("Hello!");

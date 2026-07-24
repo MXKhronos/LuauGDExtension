@@ -12,13 +12,13 @@
             "program": "Y:/OpenSource/godot/bin/godot.windows.editor.dev.x86_64.console.exe",
             "args": [
                 "--path", 
-                "./demo-fps-template-by-bukkbeek",
+                "./demo", //-fps-template-by-bukkbeek
                 "-e",
                 //"-v"
             ],
             "console": "integratedTerminal", 
             "cwd": "${workspaceFolder}",
-            "symbolSearchPath": "${workspaceFolder}/demo/bin/LuauGDExt/;Y:/OpenSource/godot/bin/;"
+            "symbolSearchPath": "${workspaceFolder}\\bin;Y:\\OpenSource\\godot\\bin;"
         }
     ]
 }

@@ -6,8 +6,8 @@ if 'SCONS_CACHE' in os.environ:
     env.CacheDir(os.environ['SCONS_CACHE'])
 
 if env["platform"] == "windows":
-    env.Append(CXXFLAGS=["/EHsc"])
-    env.Append(LINKFLAGS=["/ignore:4099"])
+    env.Append(CXXFLAGS=["/EHsc"]) # Exception Handling
+
 elif env["platform"] == "linux":
     env.Append(CCFLAGS=["-fexceptions"])
     
@@ -21,7 +21,6 @@ env.Append(CPPPATH=luau_includes)
 # Build Luau static libraries
 luau_env = env.Clone()
 
-luau_env.Append(CPPPATH=luau_includes)
 luau_env.Append(CPPPATH=[luau_dir + subdir + "/src" for subdir in luau_subdirs])
 
 luau_ast = luau_env.StaticLibrary(
@@ -133,6 +132,11 @@ for d in demo_dirs:
         library,
         Copy("$TARGET", "$SOURCE")
     )
+
+    pdb_name = "LuauGDExt{}.pdb".format(env["suffix"])
+    pdb_source = output_dir + pdb_name
+    pdb_copy = env.Command(d + pdb_name, pdb_source, Copy("$TARGET", "$SOURCE"))
+    env.Depends(lib_copy, pdb_copy) # Ensure the PDB moves with the library
     
     for f in extra_files:
         f_copy = env.Command(

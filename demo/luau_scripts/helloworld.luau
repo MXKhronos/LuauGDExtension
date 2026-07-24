@@ -1,6 +1,10 @@
----@extends Node2D
+--- @extends Node2D
 
 -- hello world
+print(self, typeof(self), "meta=", getmetatable(self));
+print(getfenv(), typeof(getfenv()), "meta=", getmetatable(getfenv()))
+print("ScriptName=", self.ScriptName);
+print("Node2D.Transform=", self.Transform);
 ACONST = 123;
 local BCONST = 345;
 acount = 1;

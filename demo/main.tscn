@@ -1,10 +1,12 @@
 [gd_scene format=3 uid="uid://14fbpd8umjjt"]
 
 [ext_resource type="Script" uid="uid://cg2xlu7vgu1d7" path="res://luau_scripts/helloworld.luau" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://cgi7uerv7qu48" path="res://scenes/test.gd" id="2_0xm2m"]
 
 [node name="main" type="Node3D" unique_id=281102011]
 
 [node name="HelloWorld" type="Node2D" parent="." unique_id=1960593467]
 script = ExtResource("1_ig7tw")
-acount = null
-ACONST = 123.0
+
+[node name="GDTest" type="Node2D" parent="." unique_id=184069855]
+script = ExtResource("2_0xm2m")

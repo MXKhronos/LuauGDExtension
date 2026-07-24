@@ -1,6 +1,7 @@
 #include "luau_script.h"
 
 #include <godot_cpp/core/memory.hpp>
+#include <godot_cpp/core/object.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/editor_settings.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -1191,14 +1192,8 @@ int LuauScriptInstance::call_internal(const StringName &p_method, lua_State *ET,
     return call_result;
 }
 
-LuauScriptInstance::LuauScriptInstance(
-	const Ref<LuauScript> &p_script, 
-	Object *p_owner, 
-	LuauEngine::VMType p_vmtype) 
-	: 
-	script(p_script), 
-	owner(p_owner), 
-	vm_type(p_vmtype) {
+LuauScriptInstance::LuauScriptInstance(const Ref<LuauScript> &p_script, Object *p_owner, LuauEngine::VMType p_vmtype) 
+	: script(p_script), owner(p_owner), vm_type(p_vmtype) {
 }
 
 LuauScriptInstance::~LuauScriptInstance() {
@@ -1557,13 +1552,7 @@ Error LuauScript::_reload(bool p_keep_state) {
 		// In editor mode, we allow reload with existing instances
 		// The instances will be updated after the script is reloaded
 		placeholder_fallback_enabled = true;
-		
-		// Store instance IDs for later update
-		LocalVector<uint64_t> instance_ids;
-		for (const KeyValue<uint64_t, LuauScriptInstance *> &E : instances) {
-			instance_ids.push_back(E.key);
-		}
-		
+
 		// Note: We keep the instances alive during reload
 		// They will be updated after the script is successfully reloaded
 	}
@@ -1610,12 +1599,7 @@ Error LuauScript::_reload(bool p_keep_state) {
 		if (p_keep_state) {
 			MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
 			
-			for (const KeyValue<uint64_t, LuauScriptInstance *> &E : instances) {
-				LuauScriptInstance *instance = E.value;
-				if (instance) {
-					//MARK: TODO Hot Reload
-				}
-			}
+			//MARK: TODO Hot Reload
 		}
 		
 		// Emit changed signal to notify the editor
@@ -1701,7 +1685,7 @@ void LuauScript::_update_exports() {
 	// update_exports_internal(nullptr);
 
 	// Update old dependent scripts.
-	Array scripts = LuauLanguage::get_singleton()->get_scripts();
+	// Array scripts = LuauLanguage::get_singleton()->get_scripts();
 
 	// for (Ref<LuauScript> &scr : scripts) {
 	// 	// Check dependent to avoid endless loop.
@@ -1829,7 +1813,7 @@ Error LuauScript::load_source_code(const String &p_path) {
 	src.parse_utf8(reinterpret_cast<const char *>(bytes.ptr()));
 
     _set_source_code(src);
-    
+
     return err;
 }
 
@@ -2837,6 +2821,13 @@ void LuauScriptInstance::register_signal(const StringName &p_name) {
 }
 
 void *LuauScript::_instance_create(Object *obj_ptr) const {
+	uint64_t obj_id = obj_ptr->get_instance_id();
+
+	String script_name = get_path();
+	if (script_name.is_empty()) {
+		script_name = definition.name;
+	}
+
 #ifdef TOOLS_ENABLED
 	//WARN_PRINT(vformat("Creating LuauScript instance for object: %s", obj_ptr->get_class()));
 	bool should_create_placeholder = false;
@@ -2864,6 +2855,12 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 	}
 	
 	if (should_create_placeholder) {
+		// WARN_PRINT(vformat(
+		// 	"Create Placeholder %s can_instan=%s load_stage=%s", 
+		// 	script_name, 
+		// 	!can_instantiate() ? "false" : "true",
+		// 	load_stage
+		// ));
 		const_cast<LuauScript*>(this)->placeholder_fallback_enabled = true;
 		return _placeholder_instance_create(obj_ptr);
 	}
@@ -2901,324 +2898,407 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 	// Register the instance with the script
 	{
 		MutexLock lock(*LuauLanguage::singleton->mutex.ptr());
-		const_cast<LuauScript*>(this)->instances[obj_ptr->get_instance_id()] = script_instance;
-	}
-
-	String script_name = get_path();
-	if (script_name.is_empty()) {
-		script_name = definition.name;
+		const_cast<LuauScript*>(this)->instances.insert(obj_ptr->get_instance_id()); //const_case bypass const func 
 	}
 
 	if (LuauLanguage::singleton->luau) {
-		// Get VM for this instance
 		lua_State* L = LuauLanguage::singleton->luau->get_vm(vm_type);
 		if (L) {
-			lua_State* thread = lua_newthread(L);
+			lua_State* T = lua_newthread(L);
 			
-			// Store thread reference to prevent GC
 			int thread_ref = lua_ref(L, -1);
 			
-			// Create self table for instance
-			lua_newtable(thread);
-			
-			// Store pointer to owner object directly in the self table (not in metatable)
-			// This way it survives metatable changes
-			lua_pushlightuserdata(thread, obj_ptr);
-			lua_setfield(thread, -2, "__godot_owner");
-			
-			// Store pointer to C++ instance
-			lua_pushlightuserdata(thread, script_instance);
-			lua_setfield(thread, -2, "__godot_script");
-			
-			// Store self table reference on main state, not thread
-			// Move self table from thread to main state
-			lua_xmove(thread, L, 1);
+			lua_newtable(T); //self
+
+			LuauBridge::push_string(T, script_name);
+			lua_setfield(T, -2, "ScriptName");
+
+			lua_xmove(T, L, 1);
+
 			int self_ref = lua_ref(L, -1);
 			
-			script_instance->initialize_lua_state(L, thread, thread_ref, self_ref);
+			script_instance->initialize_lua_state(L, T, thread_ref, self_ref);
+			LuauObject::register_object(obj_ptr, script_instance);
 			
 			if (bytecode.size() > 0) {
 				int load_result = luau_load(
-					thread, 
+					T, 
 					script_name.utf8().get_data(), 
 					(const char*) bytecode.ptr(), 
 					bytecode.size(), 
-					0);
+					0
+				);
 				
 				if (load_result == 0) {
 // MARK: setup script env
 					// The loaded function is now on the stack
 					// Get the self table to use as environment
-					lua_getref(L, script_instance->get_self_ref());
-					lua_xmove(L, thread, 1);
+
+					// lua_getref(L, script_instance->get_self_ref());
+					// lua_xmove(L, T, 1);
 					
-					lua_newtable(thread); // Env metatable
+					// lua_newtable(T); // Env metatable
 					
-// MARK: instance __index 
+/* MARK: instance __index 
 					// Set __index to handle both Godot property access and environment lookups
-					lua_pushcfunction(thread, [](lua_State *L) -> int {
-						// Stack: env_table (self), key
-						const char* key = lua_tostring(L, 2);
+					// lua_pushcfunction(T, [](lua_State *L) -> int {
+					// 	// Stack: env_table (self), key
+					// 	const char* key = lua_tostring(L, 2);
+					// 	if (!key) {
+					// 		lua_pushnil(L);
+					// 		return 1;
+					// 	}
+						
+					// 	// raw get first
+					// 	lua_pushvalue(L, 2); // Push key
+					// 	lua_rawget(L, 1); // Get from table
+					// 	if (!lua_isnil(L, -1)) {
+					// 		return 1; // Found in table
+					// 	}
+					// 	lua_pop(L, 1); // Remove nil
+						
+					// 	if (nobind::ClassDB::get_singleton()->class_exists(key)) {
+					// 		LuauEngine::singleton->register_and_push_godot_class(L, key);
+					// 		return 1;
+
+					// 	} else if (is_variant_type(key)) {
+
+					// 		// Check if key is registered variant type
+					// 		lua_getglobal(L, key);
+					// 		if (!lua_isnil(L, -1)) {
+					// 			// WARN_PRINT(vformat("Found variant in global: %s", key));
+					// 			lua_newtable(L);
+					// 			lua_pushvalue(L, -2); // Push global metatable
+					// 			lua_setmetatable(L, -2);
+					// 			lua_pop(L, 1); // Pop metatable
+
+					// 			lua_setreadonly(L, -1, true);
+
+					// 			return 1;
+					// 		}
+					// 	}
+						
+					// 	lua_getfield(L, 1, "__object_id"); //udata
+					// 	uint64_t obj_id = LuauBridge::get_uint64_t(L, -1);
+					// 	Object* p_owner_obj = obj_id ? ObjectDB::get_instance(obj_id) : nullptr;
+
+					// 	// Get the instance pointer from the self table
+					// 	lua_getfield(L, 1, "__godot_script");
+					// 	LuauScriptInstance *instance = (LuauScriptInstance*)lua_touserdata(L, -1);
+					// 	lua_pop(L, 1);
+						
+					// 	// Special handling for "self" - return the obj
+					// 	if (strcmp(key, "self") == 0) {
+					// 		if (instance && !instance->is_ready) {
+					// 			lua_pushvalue(L, 1); // Push the env_table (which is self)
+					// 			return 1;
+					// 		}
+					// 		if (p_owner_obj) {
+					// 			WARN_PRINT(vformat("Push self p_owner_obj as variant=%s", p_owner_obj->to_string()));
+					// 			LuauBridge::push_variant(L, p_owner_obj);
+					// 		} else {
+					// 			lua_pushnil(L);
+					// 		}
+					// 		return 1;
+					// 	}
+
+					// 	// Check if we're already getting a property to avoid recursion
+					// 	if (instance && instance->getting_property) {
+					// 		lua_getglobal(L, key);
+					// 		return 1;
+					// 	}
+					
+					// 	// Check if it's a script signal and push a Signal object
+					// 	if (instance) {
+					// 		Ref<LuauScript> scr = instance->get_script();
+					// 		if (scr.is_valid() && scr->_has_script_signal(StringName(key))) {
+					// 			Signal sig(p_owner_obj, StringName(key));
+					// 			LuauBridge::push_variant(L, sig);
+					// 			return 1;
+					// 		}
+					// 	}
+
+					// 	// Try to access Godot owner properties and methods
+					// 	if (p_owner_obj) {
+					// 		StringName prop_name = godot::resolve_prop_name(L, key);
+
+					// 		// Check if it's a method first
+					// 		bool is_method = nobind::ClassDB::get_singleton()->class_has_method(
+					// 			p_owner_obj->get_class(), 
+					// 			prop_name, 
+					// 			false
+					// 		);
+					// 		if (is_method) {
+					// 			// Push upvalues
+					// 			LuauBridge::push_uint64_t(L, p_owner_obj->get_instance_id());
+					// 			lua_pushstring(L, String(prop_name).utf8().get_data());
+					// 			lua_pushlightuserdata(L, instance);
+
+					// 			if (!instance->is_ready) {
+					// 				//WARN_PRINT(vformat("queue %s", key));
+									
+					// 				lua_pushcclosure(L, [](lua_State *L) -> int {
+					// 					uint64_t obj_id = LuauBridge::get_uint64_t(L, lua_upvalueindex(1));
+					// 					Object* obj = obj_id ? ObjectDB::get_instance(obj_id) : nullptr;
+
+					// 					const char *method_name = lua_tostring(L, lua_upvalueindex(2));
+					// 					LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(3));
+										
+					// 					if (obj == nullptr || method_name == nullptr) {
+					// 						return 0;
+					// 					}
+
+					// 					int arg_count = lua_gettop(L);
+					// 					Array args;
+										
+					// 					bool skip_first = false;
+					// 					if (arg_count > 0 && lua_istable(L, 1)) {
+					// 						lua_getfield(L, 1, "__object_id"); //udata
+					// 						if (LuauBridge::get_uint64_t(L, -1) == obj->get_instance_id()) {
+					// 							skip_first = true;
+					// 						}
+					// 						lua_pop(L, 1);
+					// 					}
+										
+					// 					int start_idx = skip_first ? 2 : 1;
+					// 					for (int i = start_idx; i <= arg_count; i++) {
+					// 						args.append(LuauBridge::get_variant(L, i));
+					// 					}
+
+					// 					void** proxy = (void**)lua_newuserdata(L, sizeof(void*));
+					// 					*proxy = nullptr;
+					// 					luaL_getmetatable(L, "OnReadyWrapper");
+					// 					lua_setmetatable(L, -2);
+
+					// 					LambdaWrapper *wrapper = memnew(LambdaWrapper);
+
+					// 					wrapper->set_function(
+					// 						[obj, method_name, args, proxy]() {
+					// 							if (!godot::UtilityFunctions::is_instance_id_valid(obj->get_instance_id())) {
+					// 								WARN_PRINT("Object is no longer valid!");
+					// 								return;
+					// 							}
+
+					// 							Variant result = obj->callv(StringName(method_name), args);
+					// 							Variant* heap_result = memnew(Variant(result));
+					// 							*proxy = (void*)heap_result;
+					// 						}
+					// 					);
+					// 					inst->on_ready_funcs.append(godot::Callable(wrapper, "execute"));
+
+					// 					return 1;
+					// 				}, "not_ready_call", 3);
+
+					// 				return 1;
+					// 			}
+
+					// 			lua_pushcclosure(L, [](lua_State *L) -> int {
+					// 				uint64_t obj_id = LuauBridge::get_uint64_t(L, lua_upvalueindex(1));
+					// 				Object *obj = ObjectDB::get_instance(obj_id);
+
+					// 				const char *method_name = lua_tostring(L, lua_upvalueindex(2));
+					// 				LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(3));
+									
+					// 				if (obj == nullptr || method_name == nullptr) {
+					// 					return 0;
+					// 				}
+									
+					// 				int arg_count = lua_gettop(L);
+					// 				Array args;
+									
+					// 				bool skip_first = false;
+					// 				if (arg_count > 0 && lua_istable(L, 1)) {
+					// 					lua_getfield(L, 1, "__object_id"); //udata
+					// 					if (LuauBridge::get_uint64_t(L, -1) == obj->get_instance_id()) {
+					// 						skip_first = true;
+					// 					}
+					// 					lua_pop(L, 1);
+					// 				}
+									
+					// 				int start_idx = skip_first ? 2 : 1;
+					// 				for (int i = start_idx; i <= arg_count; i++) {
+					// 					args.append(LuauBridge::get_variant(L, i));
+					// 				}
+									
+					// 				Variant result = obj->callv(StringName(method_name), args);
+
+					// 				LuauBridge::push_variant(L, result);
+					// 				return 1;
+					// 			}, "method_call", 3);
+								
+					// 			return 1;
+					// 		}
+
+					// 		// Get object member
+					// 		Variant value = p_owner_obj->get(prop_name);
+					// 		if (value.get_type() != Variant::NIL) {
+					// 			LuauBridge::push_variant(L, value);
+					// 			return 1;
+					// 		}
+					// 	}
+
+					// 	if (LuauLanguage::singleton->global_constants.has(key)) {
+					// 		Variant v = LuauLanguage::singleton->global_constants.get(key);
+					// 		//WARN_PRINT(vformat("Found %s in global_constants=%s", key, v));
+					// 		LuauBridge::push_variant(L, v);
+					// 		return 1;
+					// 	}
+
+					// 	// check global env for key
+					// 	lua_getglobal(L, key);
+					// 	if (lua_isnil(L, -1)) {
+					// 		// WARN_PRINT(vformat("Failed to get global: %s", key));
+					// 		lua_pop(L, 1); // Pop nil
+					// 		return 1;
+					// 	}
+
+					// 	return 1;
+					// }, "__index");
+					// lua_setfield(T, -2, "__index");
+*/
+/* MARK: instance __newindex {
+						// Set __newindex to handle both property writes and new variables
+						// lua_pushcfunction(T, [](lua_State *L) -> int {
+
+						// 	lua_getfield(L, 1, "__object_id"); //udata
+						// 	uint64_t p_object_id = LuauBridge::get_uint64_t(L, -1);
+						// 	Object* owner = p_object_id ? ObjectDB::get_instance(p_object_id) : nullptr;
+						// 	lua_pop(L, 1);
+							
+						// 	// Stack: env_table (self), key, value
+						// 	const char* key = lua_tostring(L, 2);
+						// 	if (!key) {
+						// 		return 0;
+						// 	}
+							
+						// 	//check if object has property: key
+						// 	if (owner) {
+						// 		Variant value = LuauBridge::get_variant(L, 3);
+								
+						// 		//WARN_PRINT(vformat("A instance set %s.%s = %s", String(owner->get_class()), key, String(value)));
+
+						// 		Error err = nobind::ClassDB::get_singleton()->class_set_property(owner, godot::resolve_prop_name(L, key), value);
+						// 		if (err == OK) {
+						// 			return 0;
+						// 		}
+						// 	}
+
+						// 	lua_pushvalue(L, 2); // key
+						// 	lua_pushvalue(L, 3); // value
+						// 	lua_rawset(L, 1); // Set in table
+
+						// 	return 0;
+						// }, "__newindex");
+						// lua_setfield(T, -2, "__newindex");
+						
+						// // Set the combined metatable on self
+						// lua_setmetatable(T, -2);
+// }
+*/
+
+
+//MARK: script self env
+					int func_idx = lua_gettop(T);
+
+					lua_getref(L, self_ref); // self table
+					lua_newtable(L); // meta
+
+					lua_getref(L, self_ref);
+					LuauBridge::push_uint64_t(L, obj_id);
+					lua_pushcclosure(L, [](lua_State *L) -> int {
+						int t_idx = 1;
+
+						const char* key = lua_tostring(L, 2); // t, k
 						if (!key) {
+							WARN_PRINT("key == NULL");
 							lua_pushnil(L);
 							return 1;
 						}
-						
-						// raw get first
-						lua_pushvalue(L, 2); // Push key
-						lua_rawget(L, 1); // Get from table
-						if (!lua_isnil(L, -1)) {
-							return 1; // Found in table
+
+						lua_pushvalue(L, lua_upvalueindex(1)); // t, k, ..., self
+						if (!lua_rawequal(L, -1, t_idx)) {
+							WARN_PRINT("t != self");
+							lua_pushnil(L);
+							return 1;
 						}
-						lua_pop(L, 1); // Remove nil
-						
+
+						// t, k, ..., self, obj
+						uint64_t obj_id = LuauBridge::get_uint64_t(L, lua_upvalueindex(2));
+						Object* obj = ObjectDB::get_instance(obj_id);
+						if (obj == nullptr) {
+							WARN_PRINT("obj == nullptr");
+							lua_pushnil(L);
+							return 1;
+						}
+
+						// Ref<LuauScript> scr = obj->get_script();
+						// LuauScriptInstance* instance = (LuauScriptInstance*)scr->get_instance(obj->get_instance_id());
+
+						if (strcmp(key, "self") == 0) {
+							WARN_PRINT("r self");
+							// if (instance && !instance->is_ready) {
+							// 	lua_pushvalue(L, -2); // self
+							// 	return 1;
+							// }
+
+							ObjectBridge::push_from(L, obj);
+							return 1;
+						}
+
+						if (strcmp(key, "_notification") != 0) {
+							WARN_PRINT(vformat("k=%s", key));
+						}	
+
 						if (nobind::ClassDB::get_singleton()->class_exists(key)) {
+							//key e.g. = Node
 							LuauEngine::singleton->register_and_push_godot_class(L, key);
+							
+								WARN_PRINT(vformat("Got class: %s", key));
 							return 1;
 
 						} else if (is_variant_type(key)) {
-
-							// Check if key is registered variant type
+							//key e.g. = Vector3
 							lua_getglobal(L, key);
 							if (!lua_isnil(L, -1)) {
-								// WARN_PRINT(vformat("Found variant in global: %s", key));
 								lua_newtable(L);
 								lua_pushvalue(L, -2); // Push global metatable
 								lua_setmetatable(L, -2);
 								lua_pop(L, 1); // Pop metatable
 
 								lua_setreadonly(L, -1, true);
-
-								return 1;
-							}
-						}
-						
-						// Get the owner pointer from the self table
-						lua_getfield(L, 1, "__godot_owner");
-						Object *owner_obj = (Object*)lua_touserdata(L, -1);
-						bool has_owner = !lua_isnil(L, -1);
-						lua_pop(L, 1);
-						
-						// Get the instance pointer from the self table
-						lua_getfield(L, 1, "__godot_script");
-						LuauScriptInstance *instance = (LuauScriptInstance*)lua_touserdata(L, -1);
-						lua_pop(L, 1);
-						
-						// Special handling for "self" - return the table itself
-						if (strcmp(key, "self") == 0) {
-							if (instance && !instance->is_ready) {
-								lua_pushvalue(L, 1); // Push the env_table (which is self)
-								return 1;
-							}
-							if (owner_obj) {
-								LuauBridge::push_variant(L, owner_obj);
-							} else {
-								lua_pushnil(L);
-							}
-							return 1;
-						}
-
-						// Check if we're already getting a property to avoid recursion
-						if (instance && instance->getting_property) {
-							lua_getglobal(L, key);
-							return 1;
-						}
-					
-						// Check if it's a script signal and push a Signal object
-						if (instance) {
-							Ref<LuauScript> scr = instance->get_script();
-							if (scr.is_valid() && scr->_has_script_signal(StringName(key))) {
-								Signal sig(owner_obj, StringName(key));
-								LuauBridge::push_variant(L, sig);
+									WARN_PRINT(vformat("Got variant base: %s", key));
 								return 1;
 							}
 						}
 
-						// Try to access Godot owner properties and methods
-						if (owner_obj) {
-							StringName prop_name = godot::resolve_prop_name(L, key);
-
-							// Check if it's a method first
-							bool is_method = nobind::ClassDB::get_singleton()->class_has_method(
-								owner_obj->get_class(), 
-								prop_name, 
-								false
-							);
-							if (is_method) {
-								// Push upvalues
-								lua_pushlightuserdata(L, owner_obj);
-								lua_pushstring(L, String(prop_name).utf8().get_data());
-								lua_pushlightuserdata(L, instance);
-
-								if (!instance->is_ready) {
-									//WARN_PRINT(vformat("queue %s", key));
-									
-									lua_pushcclosure(L, [](lua_State *L) -> int {
-										Object *obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
-										const char *method_name = lua_tostring(L, lua_upvalueindex(2));
-										LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(3));
-										
-										if (obj == nullptr || method_name == nullptr) {
-											return 0;
-										}
-
-										int arg_count = lua_gettop(L);
-										Array args;
-										
-										bool skip_first = false;
-										if (arg_count > 0 && lua_istable(L, 1)) {
-											lua_getfield(L, 1, "__godot_owner");
-											if (lua_touserdata(L, -1) == obj) {
-												skip_first = true;
-											}
-											lua_pop(L, 1);
-										}
-										
-										int start_idx = skip_first ? 2 : 1;
-										for (int i = start_idx; i <= arg_count; i++) {
-											args.append(LuauBridge::get_variant(L, i));
-										}
-
-										void** proxy = (void**)lua_newuserdata(L, sizeof(void*));
-										*proxy = nullptr;
-										luaL_getmetatable(L, "OnReadyWrapper");
-										lua_setmetatable(L, -2);
-
-										LambdaWrapper *wrapper = memnew(LambdaWrapper);
-
-										wrapper->set_function(
-											[obj, method_name, args, proxy]() {
-												if (!godot::UtilityFunctions::is_instance_id_valid(obj->get_instance_id())) {
-													WARN_PRINT("Object is no longer valid!");
-													return;
-												}
-
-												Variant result = obj->callv(StringName(method_name), args);
-												Variant* heap_result = memnew(Variant(result));
-												*proxy = (void*)heap_result;
-											}
-										);
-										inst->on_ready_funcs.append(godot::Callable(wrapper, "execute"));
-
-										return 1;
-									}, "not_ready_call", 3);
-
-									return 1;
-								}
-
-								lua_pushcclosure(L, [](lua_State *L) -> int {
-									Object *obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
-									const char *method_name = lua_tostring(L, lua_upvalueindex(2));
-									LuauScriptInstance *inst = (LuauScriptInstance*)lua_touserdata(L, lua_upvalueindex(3));
-									
-									if (obj == nullptr || method_name == nullptr) {
-										return 0;
-									}
-									
-									int arg_count = lua_gettop(L);
-									Array args;
-									
-									bool skip_first = false;
-									if (arg_count > 0 && lua_istable(L, 1)) {
-										lua_getfield(L, 1, "__godot_owner");
-										if (lua_touserdata(L, -1) == obj) {
-											skip_first = true;
-										}
-										lua_pop(L, 1);
-									}
-									
-									int start_idx = skip_first ? 2 : 1;
-									for (int i = start_idx; i <= arg_count; i++) {
-										args.append(LuauBridge::get_variant(L, i));
-									}
-									
-									Variant result = obj->callv(StringName(method_name), args);
-
-									LuauBridge::push_variant(L, result);
-									return 1;
-								}, "method_call", 3);
-								
-								return 1;
-							}
-
-							// Get object member
-							Variant value = owner_obj->get(prop_name);
-							if (value.get_type() != Variant::NIL) {
-								LuauBridge::push_variant(L, value);
-								return 1;
-							}
-						}
-
-						if (LuauLanguage::singleton->global_constants.has(key)) {
-							Variant v = LuauLanguage::singleton->global_constants.get(key);
-							//WARN_PRINT(vformat("Found %s in global_constants=%s", key, v));
-							LuauBridge::push_variant(L, v);
-							return 1;
-						}
-
-						// check global env for key
 						lua_getglobal(L, key);
 						if (lua_isnil(L, -1)) {
-							// WARN_PRINT(vformat("Failed to get global: %s", key));
+							//WARN_PRINT(vformat("Failed to get global: %s", key));
 							lua_pop(L, 1); // Pop nil
 							return 1;
 						}
 
 						return 1;
-					}, "__index");
-					lua_setfield(thread, -2, "__index");
-					
-// MARK: instance __newindex
-					// Set __newindex to handle both property writes and new variables
-					lua_pushcfunction(thread, [](lua_State *L) -> int {
-						// Get the owner pointer from the self table
-						lua_getfield(L, 1, "__godot_owner");
-						Object *owner = (Object*)lua_touserdata(L, -1);
-						lua_pop(L, 1);
-						
-						// Stack: env_table (self), key, value
-						const char* key = lua_tostring(L, 2);
-						if (!key) {
-							return 0;
-						}
-						
-						//check if object has property: key
-						if (owner) {
-							Variant value = LuauBridge::get_variant(L, 3);
-							
-							//WARN_PRINT(vformat("A instance set %s.%s = %s", String(owner->get_class()), key, String(value)));
+					}, "__index", 2);
+					lua_setfield(L, -2, "__index");
 
-							Error err = nobind::ClassDB::get_singleton()->class_set_property(owner, godot::resolve_prop_name(L, key), value);
-							if (err == OK) {
-								return 0;
-							}
-						}
+					lua_setmetatable(L, -2);
 
-						lua_pushvalue(L, 2); // key
-						lua_pushvalue(L, 3); // value
-						lua_rawset(L, 1); // Set in table
+					lua_getref(L, self_ref);
+					lua_xmove(L, T, 1);
 
-						return 0;
-					}, "__newindex");
-					lua_setfield(thread, -2, "__newindex");
-					
-					// Set the combined metatable on self
-					lua_setmetatable(thread, -2);
-					
-					// Set self table as the environment for the loaded function
-					lua_setfenv(thread, -2);
-					
+					lua_getref(L, self_ref);
+					lua_getmetatable(L, -1);
+					LuauBridge::protect_metatable(L, -1);
+					lua_pop(L, 2);
 
-					// Execute the script with no arguments
-					LuauScriptInstance *prev_current = LuauScriptInstance::s_current;
-					LuauScriptInstance::s_current = script_instance;
-					int call_result = lua_pcall(thread, 0, 0, 0);
-					LuauScriptInstance::s_current = prev_current;
+					lua_setfenv(T, func_idx);
 					
+					int call_result = lua_pcall(T, 0, 0, 0); //load pcall
 					if (call_result != 0) {
 						WARN_PRINT(vformat("Script execution failed for: %s", script_name));
 						// Get error message
-						const char* error_msg = lua_tostring(thread, -1);
+						const char* error_msg = lua_tostring(T, -1);
 						if (error_msg) {
 							String error_str = String(error_msg);
 							// Check for common error patterns and provide more helpful messages
@@ -3256,7 +3336,7 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 						} else {
 							ERR_PRINT(vformat("Failed to execute Luau script %s: unknown error", script_name));
 						}
-						lua_pop(thread, 1); // Remove error message
+						lua_pop(T, 1); // Remove error message
 #ifdef TOOLS_ENABLED
 						// In the editor, clean up and create a placeholder instance instead
 						// Clean up the failed instance
@@ -3285,56 +3365,57 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 					} else {
 						// Get the self table from main state
 						lua_getref(L, script_instance->get_self_ref());
-						lua_xmove(L, thread, 1);
+						lua_xmove(L, T, 1);
 						
 						// Iterate through the self table to see what was added
-						lua_pushnil(thread);
+						lua_pushnil(T);
 						int func_count = 0;
-						while (lua_next(thread, -2) != 0) {
-							int type = lua_type(thread, -1);
-							if (lua_type(thread, -2) == LUA_TSTRING) {
-								const char* key = lua_tostring(thread, -2);
+						while (lua_next(T, -2) != 0) {
+							int type = lua_type(T, -1);
+							if (lua_type(T, -2) == LUA_TSTRING) {
+								const char* key = lua_tostring(T, -2);
 								if (key) {
-									const char* type_name = lua_typename(thread, type);
+									const char* type_name = lua_typename(T, type);
 									if (type == LUA_TFUNCTION) {
 										func_count++;
 									}
 								}
 							}
-							lua_pop(thread, 1); // Remove value, keep key for next iteration
+							lua_pop(T, 1); // Remove value, keep key for next iteration
 						}
 						
                         // Now try to call _init if it exists
                         // Stack currently has: self_table
-                        lua_pushvalue(thread, -1); // Duplicate self table for later
+                        lua_pushvalue(T, -1); // Duplicate self table for later
                         // Stack: self_table, self_table_copy
-                        lua_getfield(thread, -2, "_init"); // Get _init from original self table
+                        lua_getfield(T, -2, "_init"); // Get _init from original self table
                         // Stack: self_table, self_table_copy, _init_function (or nil)
-                        int init_type = lua_type(thread, -1);
+                        int init_type = lua_type(T, -1);
                         
-                        if (lua_isfunction(thread, -1)) {
+                        if (lua_isfunction(T, -1)) {
                             // Stack: self_table, self_table_copy, _init_function
                             // Swap the function and the copy of self
-                            lua_insert(thread, -2); // Move function below self_copy
+                            lua_insert(T, -2); // Move function below self_copy
                             // Stack: self_table, _init_function, self_table_copy
                             // Now call with self_table_copy as first argument
-                            int init_result = lua_pcall(thread, 1, 0, 0); // 1 argument (self)
+                            int init_result = lua_pcall(T, 1, 0, 0); // 1 argument (self)
 							
 							if (init_result != 0) {
-								const char* error_msg = lua_tostring(thread, -1);
+								const char* error_msg = lua_tostring(T, -1);
 								ERR_PRINT(vformat("Failed to call _init for %s: %s", 
 									script_name, error_msg ? error_msg : "unknown error"));
-								lua_pop(thread, 1); // Remove error message
+								lua_pop(T, 1); // Remove error message
 							}
 						} else {
 							// _init is not a function or doesn't exist
-							lua_pop(thread, 1); // Remove non-function value
+							lua_pop(T, 1); // Remove non-function value
 						}
 						
-						lua_pop(thread, 1); // Remove self table
+						lua_pop(T, 1); // Remove self table
 					}
 				}
 			}
+		
 		}
 	}
 	
@@ -3348,7 +3429,10 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 void *LuauScript::_placeholder_instance_create(Object *obj_ptr) const {
     #ifdef TOOLS_ENABLED
 	    PlaceHolderScriptInstance *internal = memnew(PlaceHolderScriptInstance(Ref<LuauScript>(this), obj_ptr));
-		return internal::gdextension_interface_script_instance_create3(&PlaceHolderScriptInstance::INSTANCE_INFO, internal);
+		return internal::gdextension_interface_script_instance_create3(
+			&PlaceHolderScriptInstance::INSTANCE_INFO, 
+			internal
+		);
 
     #else
         return nullptr;
@@ -4959,10 +5043,11 @@ Dictionary LuauLanguage::_get_global_class_name(const String &p_path) const {
 LuauLanguage::LuauLanguage() {
 	singleton = this;
 	mutex.instantiate();
-	
+
 #ifdef TOOLS_ENABLED
 	debug.call_lock.instantiate();
 #endif // TOOLS_ENABLED
+
 }
 
 LuauLanguage::~LuauLanguage() {

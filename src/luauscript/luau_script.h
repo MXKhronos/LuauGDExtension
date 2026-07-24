@@ -10,6 +10,7 @@
 #include <godot_cpp/classes/multiplayer_peer.hpp>
 #include <godot_cpp/templates/self_list.hpp>
 #include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/templates/rb_set.hpp>
 
 #include "nobind.h"
 #include "luau_constants.h"
@@ -175,6 +176,7 @@ namespace godot {
     //MARK: LuauScriptInstance
     class LuauScriptInstance : public ScriptInstance {
         Object *owner = nullptr;
+
         Ref<LuauScript> script;
         LuauEngine::VMType vm_type;
         
@@ -195,6 +197,9 @@ namespace godot {
         static LuauScriptInstance *s_current;
         static LuauScriptInstance *get_current() { return s_current; }
         static void set_current(LuauScriptInstance *p_inst) { s_current = p_inst; }
+
+        lua_State* get_main_state() { return L; }
+        lua_State* get_thread_state() { return T; }
 
     public:
         static const GDExtensionScriptInstanceInfo3 INSTANCE_INFO;
@@ -298,8 +303,8 @@ namespace godot {
         GDClassDefinition definition;
         HashMap<StringName, Variant> constants;
 
-        HashMap<uint64_t, LuauScriptInstance *> instances;
-        
+        RBSet<uint64_t> instances;
+    
 #ifdef TOOLS_ENABLED
         HashMap<uint64_t, PlaceHolderScriptInstance *> placeholders;
         bool placeholder_fallback_enabled = false;
@@ -390,9 +395,7 @@ namespace godot {
         
         SelfList<LuauScript>::List script_list;
 
-#ifdef TOOLS_ENABLED   
-        HashMap<LuauScriptInstance *, void *> instance_to_godot;
-    
+#ifdef TOOLS_ENABLED
         struct DebugInfo {
             struct StackInfo {
                 // These are presumably unstable pointers, but they should be read

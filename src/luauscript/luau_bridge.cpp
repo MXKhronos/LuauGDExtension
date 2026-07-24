@@ -8,6 +8,15 @@
 
 using namespace godot;
 
+LuauObject::LuauObject(uint64_t p_obj_id, LuauScriptInstance* p_scr_instance):
+    obj_id(p_obj_id), instance(p_scr_instance) {
+};
+
+LuauObject::~LuauObject() {
+    list.erase(obj_id);
+}
+
+
 void *LuauBridge::luaL_checkudata(lua_State *L, int p_index, const char *p_tname) {
     void *p = lua_touserdata(L, p_index);
 
@@ -23,6 +32,26 @@ void *LuauBridge::luaL_checkudata(lua_State *L, int p_index, const char *p_tname
 
     luaL_typeerror(L, p_index, p_tname);
     return NULL;
+}
+
+void LuauBridge::push_uint64_t(lua_State* L, const uint64_t &p_uint64_t) {
+    uint64_t* uint_ptr = (uint64_t*)lua_newuserdatatagged(L, sizeof(uint64_t), UINT64_T_TAG);
+
+    if (uint_ptr != NULL) {
+        *uint_ptr = p_uint64_t;
+    }
+}
+
+uint64_t LuauBridge::get_uint64_t(lua_State* L, int p_index) {
+    luaL_checktype(L, p_index, LUA_TUSERDATA);
+
+    uint64_t* ud_ptr = (uint64_t*)lua_touserdatatagged(L, p_index, UINT64_T_TAG);
+    
+    if (ud_ptr == NULL) {
+        luaL_argerror(L, p_index, "Expected uint64 userdata");
+    }
+    
+    return *ud_ptr;
 }
 
 void LuauBridge::push_string(lua_State *L, const String &p_str) {
@@ -104,10 +133,10 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
             break;
         }
         
-        case Variant::OBJECT: { // Push GD Class Object to Lua
+        case Variant::OBJECT: {
             Object* obj = p_var.get_validated_object();
             if (obj) {
-                ObjectBridge::push_from(L, p_var.operator Object*());
+                ObjectBridge::push_from(L, obj);
             } else {
                 lua_pushnil(L);
             }
@@ -415,7 +444,8 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
                 return PackedColorArrayBridge::get_object(L, p_index);
 
             } else if (type_str == "Object") {
-                return ObjectBridge::get_object(L, p_index);
+                Object* obj = ObjectBridge::get_object(L, p_index);
+                return Variant(obj);
                 
             } else if (type_str == "OnReadyWrapper") {
                 void** proxy = (void**)lua_touserdata(L, p_index);
@@ -441,10 +471,9 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             int func_ref = lua_ref(L, -1);
             lua_pop(L, 1);
             
-            // Use main thread to ensure the Lua state stays valid
             lua_State* main_L = lua_mainthread(L);
             
-            LuaFunctionWrapper* wrapper = memnew(LuaFunctionWrapper); // wrapper obj for lua func ref
+            LuaFunctionWrapper* wrapper = memnew(LuaFunctionWrapper);
             wrapper->set_lua_state(main_L);
             wrapper->set_function_ref(func_ref);
             
