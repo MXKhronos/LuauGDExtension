@@ -39,12 +39,14 @@ void ObjectBridge::register_variant_class(lua_State* L) {
 template<>
 int VariantBridge<Object*>::on_index(lua_State* L, Object* const &object, const char* key) {
     LuauObject* luau_object = LuauObject::get_luau_object(object);
+    if (luau_object == nullptr) return;
+
     LuauScriptInstance* instance = luau_object->instance;
 
     int arg_count = lua_gettop(L); // 2: GDV, key
 
     // if (strcmp(key, "_notification") != 0) {
-        WARN_PRINT(vformat("on_index #(%s) %s.%s", arg_count, object, key));
+        WARN_PRINT(vformat("on_index #(%d) %s.%s", arg_count, object->to_string(), key));
     // }
 
     Variant ret;
@@ -67,9 +69,11 @@ int VariantBridge<Object*>::on_index(lua_State* L, Object* const &object, const 
     if (is_method) {
         // method_call
         LuauBridge::push_uint64_t(L, object->get_instance_id());
-        lua_pushstring(L, String(prop_name).utf8().get_data());
+        CharString key_cs = String(prop_name).utf8();
+        lua_pushstring(L, key_cs.get_data());
         lua_pushcclosure(L, [](lua_State *L) -> int {
-            LuauObject* luau_object = LuauObject::get_luau_object(lua_upvalueindex(1));
+            uint64_t obj_id = LuauBridge::get_uint64_t(L, lua_upvalueindex(1));
+            LuauObject* luau_object = LuauObject::get_luau_object(obj_id);
 
             if (luau_object == nullptr) {
                 return 0;
@@ -97,7 +101,7 @@ int VariantBridge<Object*>::on_index(lua_State* L, Object* const &object, const 
                 args.append(LuauBridge::get_variant(L, i));
             }
 
-            WARN_PRINT(vformat("method_call %s.%s argsv=%s", obj, method_name, args));
+            WARN_PRINT(vformat("method_call %s.%s argsv=%s", obj->to_string(), method_name, args));
 
             Variant result = obj->callv(StringName(method_name), args);
 

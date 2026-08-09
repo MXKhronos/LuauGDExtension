@@ -134,7 +134,11 @@ public:
             uint64_t obj_id = *(uint64_t*)ud;
             Object* obj = ObjectDB::get_instance(obj_id);
             
-            LuauBridge::push_string(L, obj->to_string());
+            if (obj != nullptr) {
+                LuauBridge::push_string(L, obj->to_string());
+            } else {
+                LuauBridge::push_string(L, "nil");
+            }
             return 1;
         }
 
@@ -161,7 +165,11 @@ public:
             uint64_t obj_id = *(uint64_t*)ud;
             Object* obj = ObjectDB::get_instance(obj_id);
             
-            return VariantBridge<Object*>::on_index(L, obj, key); 
+            if (obj != nullptr) {
+                return VariantBridge<Object*>::on_index(L, obj, key); 
+            } else {
+                return 0;
+            }
         }
 
 

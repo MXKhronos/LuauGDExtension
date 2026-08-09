@@ -25,6 +25,19 @@
                 "reveal": "always",
                 "panel": "shared"
             }
+        },
+        {
+            "label": "view-commits",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "git -C ${workspaceFolder} log -p --branches --not --remotes > \".\\.debug\\this_commits.diff\" && code \".\\.debug\\this_commits.diff\""
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
         }
     ]
 }

@@ -17,6 +17,10 @@ class ObjectBridge: public VariantBridge<Object*> {
 
         static Object* push_from(lua_State* L, const Variant& v) {
             Object* obj = (Object*)v;
+            if (obj == nullptr) {
+                lua_pushnil(L);
+                return nullptr;
+            }
 
             uint64_t* ud = (uint64_t*)lua_newuserdata(L, sizeof(uint64_t));
             new (ud) uint64_t(obj->get_instance_id());

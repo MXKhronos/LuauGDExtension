@@ -912,8 +912,9 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
         return false;
 	}
 
-	WARN_PRINT(vformat("LuauScriptInstance %s.%s", object, p_name));
-    const char* key = String(p_name).utf8().get_data();
+	WARN_PRINT(vformat("LuauScriptInstance %s.%s", object->to_string(), p_name));
+	CharString key_cs = String(p_name).utf8();
+	const char* key = key_cs.get_data();
 
     lua_getref(L, self_ref); // self
     lua_pushstring(L, key); // self, key
@@ -936,7 +937,7 @@ bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertyS
 			*r_err = PROP_OK;
 		}
 
-        r_ret = ObjectBridge::push_from(L, object);
+        r_ret = Variant(object);
         return true;
     }
 
@@ -3171,8 +3172,6 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 					lua_getref(L, self_ref);
 					LuauBridge::push_uint64_t(L, obj_id);
 					lua_pushcclosure(L, [](lua_State *L) -> int {
-						int t_idx = 1;
-
 						const char* key = lua_tostring(L, 2); // t, k
 						if (!key) {
 							WARN_PRINT("key == NULL");
@@ -3180,14 +3179,16 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 							return 1;
 						}
 
-						lua_pushvalue(L, lua_upvalueindex(1)); // t, k, ..., self
-						if (!lua_rawequal(L, -1, t_idx)) {
+						lua_pushvalue(L, lua_upvalueindex(1)); // t, k, self
+						if (!lua_rawequal(L, -1, 1)) {
 							WARN_PRINT("t != self");
+							lua_pop(L, 1);                     // pop self
 							lua_pushnil(L);
 							return 1;
 						}
+						lua_replace(L, 1);                     // self, k
 
-						// t, k, ..., self, obj
+						// self, k, obj
 						uint64_t obj_id = LuauBridge::get_uint64_t(L, lua_upvalueindex(2));
 						LuauObject* luau_object = LuauObject::get_luau_object(obj_id); 
 
