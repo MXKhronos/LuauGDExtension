@@ -175,7 +175,7 @@ namespace godot {
 
     //MARK: LuauScriptInstance
     class LuauScriptInstance : public ScriptInstance {
-        Object *owner = nullptr;
+        Object* owner = nullptr;
 
         Ref<LuauScript> script;
         LuauEngine::VMType vm_type;

@@ -12,19 +12,22 @@
 #include <luauscript/luau_script.h>
 
 namespace godot {
+    class LuauScriptInstance;
 
 
 const int UINT64_T_TAG = 1;
 
 class LuauObject {
+    friend class LuauScriptInstance;
+
     static HashMap<uint64_t, LuauObject*> list;
 
+public:
     uint64_t obj_id;
     LuauScriptInstance* instance;
 
-public:
-    operator Object*() const {
-        return ObjectDB::get_instance(obj_id); 
+    operator Object*() {
+        return instance->get_owner();//ObjectDB::get_instance(obj_id); 
     }
 
     void push_self(lua_State *p_M) {
@@ -43,6 +46,9 @@ public:
     }
     static LuauObject* get_luau_object(Object* p_obj_ptr) {
         uint64_t obj_id = p_obj_ptr->get_instance_id();
+        return list[obj_id];
+    }
+    static LuauObject* get_luau_object(uint64_t obj_id) {
         return list[obj_id];
     }
 

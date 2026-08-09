@@ -828,7 +828,7 @@ void LuauScriptInstance::notification(int32_t p_what) {
 	lua_xmove(L, ET, 1);
 	
 	// Get the method from the self table
-	lua_getfield(ET, -1, "_notification");
+	lua_rawgetfield(ET, -1, "_notification");
 	
 	if (!lua_isfunction(ET, -1)) {
 		lua_pop(ET, 2); // Remove non-function and self table
@@ -903,82 +903,47 @@ bool LuauScriptInstance::set(const StringName &p_name, const Variant &p_value, P
 }
 
 bool LuauScriptInstance::get(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err) {
-    if (!L || self_ref == LUA_NOREF) {
-        if (r_err) *r_err = PROP_NOT_FOUND;
-        return false;
-    }
-    
-    // Set recursion guard
-    getting_property = true;
+	Object* object = get_owner();
 
-    // Get the self table
-    lua_getref(L, self_ref);
-    
-    // Get the value from the self table
-    String prop_str = String(p_name);
-    lua_getfield(L, -1, prop_str.utf8().get_data());
-    
-    if (lua_isnil(L, -1)) {
-		// self[p_name] does not exist
-        lua_pop(L, 2); // pop nil and self table
-
-        // get from script constants as fallback
-        const LuauScript *s = script.ptr();
-        while (s) {
-            if (s->constants.has(p_name)) {
-                r_ret = s->constants[p_name];
-                if (r_err) *r_err = PROP_OK;
-                getting_property = false;
-                return true;
-            }
-            s = s->base.ptr();
-        }
-        
-        if (r_err) *r_err = PROP_NOT_FOUND;
-        getting_property = false;
-        return false;
-    }
-
-	if (lua_istable(L, -1)) {
-		//check if value is a godot class
-		lua_getmetatable(L, -1);
-		if (!lua_isnil(L, -1)) {
-			// check if metatable exist in LUA_REGISTRYINDEX
-			lua_getfield(L, -1, "__type");
-			if (!lua_isnil(L, -1)) {
-				const char* class_name = lua_tostring(L, -1);
-
-				lua_getfield(L, LUA_REGISTRYINDEX, class_name);
-				if (!lua_isnil(L, -1)) {
-					// compare tables
-					if (lua_rawequal(L, -1, -3)) {
-						// value is a godot class
-						if (r_err) *r_err = PROP_NOT_FOUND;
-						getting_property = false;
-						return false;
-					}
-				}
-			}
+	if (!L || self_ref == LUA_NOREF || object == nullptr) {
+        if (r_err) {
+			*r_err = PROP_NOT_FOUND;
 		}
+        return false;
 	}
 
-	if (lua_isfunction(L, -1)) {
-		// when a field is a function
-		r_ret = Variant();
-    	lua_pop(L, 2); // Remove value and self table
+	WARN_PRINT(vformat("LuauScriptInstance %s.%s", object, p_name));
+    const char* key = String(p_name).utf8().get_data();
 
-		if (r_err) *r_err = PROP_OK;
-		getting_property = false;
+    lua_getref(L, self_ref); // self
+    lua_pushstring(L, key); // self, key
+
+    lua_rawget(L, -2);
+    if (!lua_isnil(L, -1)) {
+		if (r_err) {
+			*r_err = PROP_OK;
+		}
+		
+		r_ret = LuauBridge::get_variant(L, -1);
+		lua_pop(L, 2);
+
 		return true;
+    }
+    lua_pop(L, 2);
+    
+    if (strcmp(key, "self") == 0) {
+		if (r_err) {
+			*r_err = PROP_OK;
+		}
+
+        r_ret = ObjectBridge::push_from(L, object);
+        return true;
+    }
+
+	if (r_err) {
+		*r_err = PROP_NOT_FOUND;
 	}
-
-    // Convert the Lua value to Variant
-    r_ret = LuauBridge::get_variant(L, -1);
-    lua_pop(L, 2); // Remove value and self table
-
-    if (r_err) *r_err = PROP_OK;
-    getting_property = false;
-    return true;
+	return false;
 }
 
 GDExtensionPropertyInfo *LuauScriptInstance::get_property_list(uint32_t *r_count) {
@@ -1129,7 +1094,7 @@ bool LuauScriptInstance::has_method(const StringName &p_name) const {
     if (L && self_ref != LUA_NOREF) {
         lua_getref(L, self_ref);
         String method_str = String(p_name);
-        lua_getfield(L, -1, method_str.utf8().get_data());
+        lua_rawgetfield(L, -1, method_str.utf8().get_data());
         bool is_func = lua_isfunction(L, -1);
         lua_pop(L, 2); // Remove function/nil and self table
         if (is_func) {
@@ -1148,7 +1113,7 @@ bool LuauScriptInstance::has_method(const StringName &p_name) const {
     return false;
 }
 
-Object *LuauScriptInstance::get_owner() const {
+Object* LuauScriptInstance::get_owner() const {
     return owner;
 }
 
@@ -1167,7 +1132,7 @@ int LuauScriptInstance::call_internal(const StringName &p_method, lua_State *ET,
     
     // Get the method from the self table
     String method_str = String(p_method);
-    lua_getfield(ET, -1, method_str.utf8().get_data());
+    lua_rawgetfield(ET, -1, method_str.utf8().get_data());
     
     if (!lua_isfunction(ET, -1)) {
         lua_pop(ET, 2); // Remove non-function and self table
@@ -3224,30 +3189,13 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 
 						// t, k, ..., self, obj
 						uint64_t obj_id = LuauBridge::get_uint64_t(L, lua_upvalueindex(2));
-						Object* obj = ObjectDB::get_instance(obj_id);
-						if (obj == nullptr) {
+						LuauObject* luau_object = LuauObject::get_luau_object(obj_id); 
+
+						if (luau_object == nullptr) {
 							WARN_PRINT("obj == nullptr");
 							lua_pushnil(L);
 							return 1;
 						}
-
-						// Ref<LuauScript> scr = obj->get_script();
-						// LuauScriptInstance* instance = (LuauScriptInstance*)scr->get_instance(obj->get_instance_id());
-
-						if (strcmp(key, "self") == 0) {
-							WARN_PRINT("r self");
-							// if (instance && !instance->is_ready) {
-							// 	lua_pushvalue(L, -2); // self
-							// 	return 1;
-							// }
-
-							ObjectBridge::push_from(L, obj);
-							return 1;
-						}
-
-						if (strcmp(key, "_notification") != 0) {
-							WARN_PRINT(vformat("k=%s", key));
-						}	
 
 						if (nobind::ClassDB::get_singleton()->class_exists(key)) {
 							//key e.g. = Node
@@ -3266,19 +3214,16 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 								lua_pop(L, 1); // Pop metatable
 
 								lua_setreadonly(L, -1, true);
-									WARN_PRINT(vformat("Got variant base: %s", key));
 								return 1;
 							}
 						}
 
 						lua_getglobal(L, key);
-						if (lua_isnil(L, -1)) {
-							//WARN_PRINT(vformat("Failed to get global: %s", key));
-							lua_pop(L, 1); // Pop nil
+						if (!lua_isnil(L, -1)) {
 							return 1;
 						}
 
-						return 1;
+						return VariantBridge<Object*>::on_index(L, static_cast<Object*>(*luau_object), key);
 					}, "__index", 2);
 					lua_setfield(L, -2, "__index");
 

@@ -3,8 +3,10 @@
 -- hello world
 print(self, typeof(self), "meta=", getmetatable(self));
 print(getfenv(), typeof(getfenv()), "meta=", getmetatable(getfenv()))
-print("ScriptName=", self.ScriptName);
-print("Node2D.Transform=", self.Transform);
+print("ScriptName=", self.ScriptName, ScriptName);
+print("Node2D.Transform=", self.Transform, Transform);
+print("Node2D:ApplyScale=", self.ApplyScale, typeof(self.ApplyScale), ApplyScale);
+--print("Const Node.NOTIFICATION_READY", Node.NOTIFICATION_READY);
 ACONST = 123;
 local BCONST = 345;
 acount = 1;
@@ -17,14 +19,18 @@ function _init()
 	print("[luau] init acount=", acount);
 	print("[luau] init bcount=", bcount);
 	hello();
+	
+	print("Before ApplyScale=", Scale, self.Scale);
+	ApplyScale(Vector2(2, 4))
+	print("After ApplyScale=", Scale, self.Scale);
 end
 
 function _ready()
 	print("[luau] ready!", self, self.Name, typeof(self.Name));
 	while true do
-		print("[luau] hello world!");
+		print("[luau] hello world! bcount=", bcount);
 		bcount = bcount +1;
-		if bcount > 5 then
+		if bcount > 3 then
 			break;
 		end
 	end
