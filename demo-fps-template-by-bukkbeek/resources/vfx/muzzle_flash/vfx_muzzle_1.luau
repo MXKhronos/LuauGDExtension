@@ -1,32 +1,42 @@
 --- @extends Node3D
+-- Translated from GodotFPS-Template-main/resources/vfx/muzzle_flash/vfx_muzzle_1.gd
 
-local mesh: MeshInstance3D = GetNode("MuzzleFlashFPS");
-local omniLight: OmniLight3D = GetNode("OmniLight3D");
-local smoke: GPUParticles3D = GetNode("Smoke");
-local sparks: GPUParticles3D = GetNode("Sparks");
+local mesh: MeshInstance3D = nil;
+local omniLight: OmniLight3D = nil;
+local smoke: GPUParticles3D = nil;
+local sparks: GPUParticles3D = nil;
 
-FlashDuration = 0.05;
+flashDuration = 0.05 :: number;
 
 function _ready(): nil
-	activate();
+	mesh = GetNode("MuzzleFlashFPS");
+	omniLight = GetNode("OmniLight3D");
+	smoke = GetNode("Smoke");
+	sparks = GetNode("Sparks");
+
+	Activate();
 end
 
-function activate(): nil
-	showEffects();
-	
-	local muzzleTimer: Timer = GetTree():CreateTimer(flash_duration);
-	muzzleTimer.OnTimeout:Connect(hideEffects);
+function Activate()
+	ShowEffects();
+
+	await(flashDuration);
+
+	HideEffects();
 end
 
-function showEffects(): nil
+function ShowEffects()
 	mesh.Visible = true;
 	omniLight.Visible = true;
 	smoke:Restart();
 	sparks:Restart();
 end
 
-function hideEffects(): nil
+function HideEffects()
 	mesh.Visible = false;
 	omniLight.Visible = false;
-	
+
+	await(2.0);
+
+	QueueFree();
 end

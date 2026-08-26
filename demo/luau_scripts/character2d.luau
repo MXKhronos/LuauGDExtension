@@ -8,7 +8,7 @@ function _ready(): nil
 end
 
 function _physics_process(delta: number): nil
-	local moveDir: Vector2 = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
+	local moveDir: Vector2 = Input:GetVector("ui_left", "ui_right", "ui_up", "ui_down");
 	
 	if not moveDir:IsZeroApprox() then
 		self.Velocity = moveDir * speed;

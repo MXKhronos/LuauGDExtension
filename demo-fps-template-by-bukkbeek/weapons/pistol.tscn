@@ -3,10 +3,10 @@
 [ext_resource type="PackedScene" uid="uid://dtkna74y7fni" path="res://common/weapon/weapon_base.tscn" id="1_1ohd4"]
 
 [node name="Pistol" unique_id=1058031305 instance=ExtResource("1_1ohd4")]
-animation_fire = "pistol_fire"
-animation_reload = "pistol_reload"
+animationFire = "pistol_fire"
+animationReload = "pistol_reload"
 cooldown = 0.25
-mag_capacity = 12
+magCapacity = 12
 
 [node name="StandardAimPosition" parent="." index="0" unique_id=643753700]
 transform = Transform3D(0.99999994, 0, 0, 0, 1, 0, 0, 0, 0.99999994, 0.15, -0.02, -0.1)

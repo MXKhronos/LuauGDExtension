@@ -11,13 +11,14 @@ config_version=5
 [application]
 
 config/name="LuauFpsTemplate"
-run/main_scene="uid://x864rhe4b188"
+run/main_scene="uid://4wonuqyiwe3i"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
 Global="*res://common/autoloads/global.luau"
+Bullets="*res://common/autoloads/bullets.luau"
 
 [dotnet]
 

@@ -7,6 +7,7 @@
 [ext_resource type="AudioStream" uid="uid://dufj8pnelaehr" path="res://resources/sfx/weapons/no_bullets.wav" id="4_tf77g"]
 [ext_resource type="PackedScene" uid="uid://bnkw33w13ruko" path="res://resources/player/fps_demo_arms.glb" id="7_tf77g"]
 [ext_resource type="Material" uid="uid://onk5amtjoel5" path="res://resources/materials/black_mat.material" id="8_s7o25"]
+[ext_resource type="Script" uid="uid://ddh8l4bn2oguo" path="res://common/weapon/weapon.luau" id="9_wpnluau"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_56b04"]
 shading_mode = 0
@@ -265,15 +266,16 @@ bind/32/name = &"Holder.L"
 bind/32/bone = -1
 bind/32/pose = Transform3D(1, 1.7763568e-15, -2.6846976e-17, 3.4742745e-10, -2.0959186e-08, -1.0000001, 8.847563e-09, 1, -4.428458e-12, 1.072849, 0.20220254, -0.004737806)
 
-[node name="Weapon" type="Node3D" unique_id=1058031305 node_paths=PackedStringArray("fps_arms_root", "animation_player", "firing_sfx", "reload_sfx", "empty_mag_sfx", "muzzle_flash_position")]
-fps_arms_root = NodePath("fps_demo_arms")
-animation_player = NodePath("fps_demo_arms/AnimationPlayer")
-firing_sfx = NodePath("SFX/FiringSFX")
-reload_sfx = NodePath("SFX/ReloadSFX")
-empty_mag_sfx = NodePath("SFX/EmptyMagSFX")
-firing_vfx = ExtResource("2_anvg0")
-muzzle_flash_position = NodePath("fps_demo_arms/MuzzleFlashPosition")
-bullet_decal = ExtResource("3_tf77g")
+[node name="Weapon" type="Node3D" unique_id=1058031305 node_paths=PackedStringArray("fpsArmsRoot", "animationPlayer", "firingSfx", "reloadSfx", "emptyMagSfx", "muzzleFlashPosition")]
+script = ExtResource("9_wpnluau")
+fpsArmsRoot = NodePath("fps_demo_arms")
+animationPlayer = NodePath("fps_demo_arms/AnimationPlayer")
+firingSfx = NodePath("SFX/FiringSFX")
+reloadSfx = NodePath("SFX/ReloadSFX")
+emptyMagSfx = NodePath("SFX/EmptyMagSFX")
+firingVfx = ExtResource("2_anvg0")
+muzzleFlashPosition = NodePath("fps_demo_arms/MuzzleFlashPosition")
+bulletDecal = ExtResource("3_tf77g")
 
 [node name="StandardAimPosition" type="Marker3D" parent="." unique_id=643753700]
 transform = Transform3D(0.99619466, 0.0075961226, 0.086824074, 0, 0.9961947, -0.08715573, -0.08715573, 0.08682408, 0.99240386, 0.2, -0.1, -0.25)
@@ -543,7 +545,7 @@ transform = Transform3D(0.99999976, 0, 0, 0, 0.9999998, 0, 0, 0, 0.9999998, 0, 0
 
 [node name="TestCamera" type="Camera3D" parent="." unique_id=1259688317]
 
-[connection signal="timeout" from="CooldownTimer" to="." method="_on_cooldown_timer_timeout"]
-[connection signal="timeout" from="ReloadTimer" to="." method="_on_reload_timer_timeout"]
+[connection signal="timeout" from="CooldownTimer" to="." method="OnCooldownTimerTimeout"]
+[connection signal="timeout" from="ReloadTimer" to="." method="OnReloadTimerTimeout"]
 
 [editable path="fps_demo_arms"]

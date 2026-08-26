@@ -19,4 +19,5 @@ demo/bin/**/*
 demo/.godot/**/*
 demo-fps-template-by-bukkbeek/bin/**/*
 demo-fps-template-by-bukkbeek/.godot/**/*
-.debug
+.debug/*
+.ref/*

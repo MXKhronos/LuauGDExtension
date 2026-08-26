@@ -3,17 +3,17 @@
 [ext_resource type="PackedScene" uid="uid://dtkna74y7fni" path="res://common/weapon/weapon_base.tscn" id="1_76etk"]
 
 [node name="LMG" unique_id=1058031305 instance=ExtResource("1_76etk")]
-firing_distance = 100.0
-animation_fire = "lmg_fire"
-animation_reload = "lmg_reload"
-bullet_type = 5
+firingDistance = 100.0
+animationFire = "lmg_fire"
+animationReload = "lmg_reload"
+bulletType = 5
 damage = 60.0
 cooldown = 0.1
-burst_mode = true
-mag_capacity = 250
-reload_time = 4.0
-focused_aim_angle = 1.5
-standard_aim_angle = 4.0
+burstMode = true
+magCapacity = 250
+reloadTime = 4.0
+focusedAimAngle = 1.5
+standardAimAngle = 4.0
 
 [node name="StandardAimPosition" parent="." index="0" unique_id=643753700]
 transform = Transform3D(0.99619466, 0.0075961226, 0.086824074, 0, 0.9961947, -0.08715573, -0.08715573, 0.08682408, 0.99240386, 0.4, -0.05, 0.2)

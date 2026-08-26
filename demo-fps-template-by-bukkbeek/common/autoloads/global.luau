@@ -1,7 +1,6 @@
 --- @extends Node
+-- Translated from GodotFPS-Template-main/common/autoloads/global.gd
 
-
---MARK: properties
 DebugMode = false :: boolean;
 EnemiesKilled = 0 :: number;
 IsInVehicle = false :: boolean;
@@ -9,21 +8,26 @@ IsInVehicle = false :: boolean;
 Player = nil :: CharacterBody3D;
 
 --MARK: signals
+OnEnemyKilled = signal("OnEnemyKilled");
+OnEnemyCountChanged = signal("OnEnemyCountChanged");
 OnAimModeChanged = signal("OnAimModeChanged");
+OnActiveCameraFovChanged = signal("OnActiveCameraFovChanged");
 OnFireInput = signal("OnFireInput");
 OnReloadInput = signal("OnReloadInput");
-OnWeaponSwitchInput = signal("OnWeaponSwitchInput");
+OnWeaponSwitchInput = signal("OnWeaponSwitchInput"); -- carries +1/-1 (port adaptation of weapon_switch_next/prev)
+OnBulletsChanged = signal("OnBulletsChanged");
+OnCameraShake = signal("OnCameraShake");
+OnPlayerVelocityChanged = signal("OnPlayerVelocityChanged");
+OnPlayerHealthChanged = signal("OnPlayerHealthChanged");
+OnPlayerDead = signal("OnPlayerDead");
+OnPlayerSprintingChanged = signal("OnPlayerSprintingChanged");
 OnActivatePressed = signal("OnActivatePressed");
 
-print("OnAimModeChanged", OnAimModeChanged, typeof(OnAimModeChanged));
-print("raw self.OnAimModeChanged", self.OnAimModeChanged, typeof(self.OnAimModeChanged));
 function _ready()
-	print("ready self typeof", typeof(self))
-	print("ready self", self)
-	print("ready self varToStr", varToStr(self))
-	print("ready OnAimModeChanged", OnAimModeChanged, typeof(OnAimModeChanged));
-	print("ready self.OnAimModeChanged", self.OnAimModeChanged, typeof(self.OnAimModeChanged));
+	OnEnemyKilled:Connect(OnEnemyKilledFired);
 end
--- print("self.OnAimModeChanged typeof", typeof(self.OnAimModeChanged));
---print("aim_mode_changed", aim_mode_changed, typeof(aim_mode_changed));
---print("self.aim_mode_changed", self.aim_mode_changed, typeof(self.aim_mode_changed));
+
+function OnEnemyKilledFired()
+	EnemiesKilled += 1;
+	OnEnemyCountChanged:Emit(EnemiesKilled);
+end

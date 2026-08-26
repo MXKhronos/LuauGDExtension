@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://cqug4sakhqc7g"]
 
-[ext_resource type="Script" uid="uid://fp638v571pfl" path="res://resources/undead/vfx/undead_death_vfx.gd" id="1_e1sii"]
-[ext_resource type="ArrayMesh" uid="uid://h5irgfap2gqc" path="res://resources/vfx/standard_particle_icosphere.mesh" id="1_r4cil"]
-[ext_resource type="ArrayMesh" uid="uid://rumxv4mhvxuk" path="res://resources/vfx/standard_particle_spike.mesh" id="2_e1sii"]
+[ext_resource type="Script" path="res://resources/undead/vfx/undead_death_vfx.luau" id="1_e1sii"]
+[ext_resource type="ArrayMesh" path="res://resources/vfx/standard_particle_icosphere.mesh" id="1_r4cil"]
+[ext_resource type="ArrayMesh" path="res://resources/vfx/standard_particle_spike.mesh" id="2_e1sii"]
 
 [sub_resource type="Curve" id="Curve_gxujb"]
 _data = [Vector2(0.0634328, 1), 0.0, 0.0, 0, 0, Vector2(0.697761, 0), 0.0, 0.0, 0, 0]

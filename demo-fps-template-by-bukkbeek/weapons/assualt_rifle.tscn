@@ -3,15 +3,15 @@
 [ext_resource type="PackedScene" uid="uid://dtkna74y7fni" path="res://common/weapon/weapon_base.tscn" id="1_gx0xw"]
 
 [node name="AssualtRifle" unique_id=1058031305 instance=ExtResource("1_gx0xw")]
-firing_distance = 100.0
-animation_fire = "assualt_fire"
-animation_reload = "assualt_reload"
-bullet_type = 3
+firingDistance = 100.0
+animationFire = "assualt_fire"
+animationReload = "assualt_reload"
+bulletType = 3
 damage = 65.0
 cooldown = 0.1
-mag_capacity = 40
-focused_aim_fov = 50.0
-focused_aim_angle = 0.5
+magCapacity = 40
+focusedAimFov = 50.0
+focusedAimAngle = 0.5
 
 [node name="StandardAimPosition" parent="." index="0" unique_id=643753700]
 transform = Transform3D(0.99999994, 0, 0, 0, 1, 0, 0, 0, 0.99999994, 0.25, -0.05, 0.05)

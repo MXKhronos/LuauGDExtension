@@ -10,6 +10,8 @@
 [ext_resource type="AudioStream" uid="uid://drpdbxpt2fu6u" path="res://player/sfx/footstep_jump.wav" id="20_s7qer"]
 [ext_resource type="AudioStream" uid="uid://ol7ybyeu817g" path="res://player/sfx/footstep_metal.ogg" id="21_g4c7l"]
 [ext_resource type="PackedScene" uid="uid://nf3e0uug5e5o" path="res://player/test_node_array.tscn" id="2_8t03j"]
+[ext_resource type="Script" path="res://common/utils/weapon_sub_viewport.luau" id="22_wpsvp"]
+[ext_resource type="Script" path="res://common/managers/audio_manager.luau" id="23_audmgr"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_rkbax"]
 radius = 0.2
@@ -66,12 +68,14 @@ transparent_bg = true
 handle_input_locally = false
 size = Vector2i(1152, 648)
 render_target_update_mode = 4
+script = ExtResource("22_wpsvp")
 
 [node name="Camera3D" type="Camera3D" parent="WeaponSubViewport/SubViewport" unique_id=63892889]
 transform = Transform3D(1, 0, -1.4210856e-14, 0, 1, 0, 1.4210856e-14, 0, 1, 0, 1.7, 0)
-cull_mask = 2
+cull_mask = 3
 
 [node name="AudioManager" type="Node3D" parent="." unique_id=654099561]
+script = ExtResource("23_audmgr")
 
 [node name="GroundDetectRayCast" type="RayCast3D" parent="AudioManager" unique_id=1429008395]
 target_position = Vector3(0, -0.1, 0)
