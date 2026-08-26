@@ -79,6 +79,15 @@ jobs:
           path: final-bundle
           merge-multiple: true
 
+      - name: Bundle Bin Into Zip
+        run: cd final-bundle && zip -r ../LuauGDExtension-bin.zip .
+
+      - name: Upload Zipped Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuauGDExtension-bin-zip
+          path: LuauGDExtension-bin.zip
+
       - name: Upload Combined Artifact
         uses: actions/upload-artifact@v4
         with:
