@@ -7,69 +7,13 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
-    name: Build on ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    
-    runs-on: ${{ matrix.os }}
-    
-    env:
-      SCONS_CACHE: ${{ github.workspace }}/scons_cache
-      SCONS_CACHE_LIMIT: 4096
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-          cache: 'pip'
-
-      - name: Install SCons
-        run: python -m pip install scons
-
-      - name: SCons Build Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.SCONS_CACHE }}
-            .sconsign.db.sqlite
-            godot-cpp/bin/*.a
-            godot-cpp/bin/*.lib
-          key: ${{ runner.os }}-scons-${{ hashFiles('**/SConstruct', 'godot-cpp/include/**') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-scons-${{ hashFiles('**/SConstruct', 'godot-cpp/include/**') }}-
-            ${{ runner.os }}-scons-
-
-      - name: Build Unit Tests
-        run: scons target=editor dev_build=yes debug_symbols=yes tests=true -j2
-
-      - name: Install Godot Engine
-        uses: chickensoft-games/setup-godot@v2
-        with:
-          version: "4.6.1"
-          use-dotnet: false
-
-      - name: Execute Tests
-        shell: bash
-        run: godot --headless --path ./demo -v --run-extension-tests --quit
-
-      - name: LuauGDExt Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output-${{ matrix.os }}
-          path: ./bin/
+  build:
+    name: Build & Test
+    uses: ./.github/workflows/build.yml
 
   package:
     name: Package
-    needs: build-and-test
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Download All Artifacts
