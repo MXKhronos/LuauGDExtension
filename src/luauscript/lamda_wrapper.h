@@ -3,6 +3,7 @@
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/object.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <functional>
@@ -11,8 +12,8 @@
 #include <lualib.h>
 
 namespace godot {
-    class LambdaWrapper : public godot::Object {
-        GDCLASS(LambdaWrapper, godot::Object);
+    class LambdaWrapper : public godot::RefCounted {
+        GDCLASS(LambdaWrapper, godot::RefCounted);
 
     private:
         std::function<void()> func;
@@ -36,7 +37,7 @@ namespace godot {
 
     private:
         lua_State* L = nullptr;
-        int function_ref = LUA_NOREF;
+        int func_ref = LUA_NOREF;
 
     protected:
         static void _bind_methods() {
@@ -47,17 +48,17 @@ namespace godot {
         LuaFunctionWrapper() = default;
         
         ~LuaFunctionWrapper() {
-            if (L && function_ref != LUA_NOREF) {
-                lua_unref(L, function_ref);
-                function_ref = LUA_NOREF;
+            if (L && func_ref != LUA_NOREF) {
+                lua_unref(L, func_ref);
+                func_ref = LUA_NOREF;
             }
         }
 
         void set_lua_state(lua_State* p_L) { L = p_L; }
-        void set_function_ref(int p_ref) { function_ref = p_ref; }
+        void set_func_ref(int p_ref) { func_ref = p_ref; }
         
         lua_State* get_lua_state() const { return L; }
-        int get_function_ref() const { return function_ref; }
+        int get_func_ref() const { return func_ref; }
 
         Variant invoke(const Variant** p_args, GDExtensionInt p_arg_count, GDExtensionCallError& r_error);
     };

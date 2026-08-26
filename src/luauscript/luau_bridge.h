@@ -27,7 +27,7 @@ public:
     LuauScriptInstance* instance;
 
     operator Object*() {
-        return instance->get_owner();//ObjectDB::get_instance(obj_id); 
+        return ObjectDB::get_instance(obj_id);
     }
 
     void push_self(lua_State *p_M) {
@@ -40,15 +40,36 @@ public:
 
         lua_xmove(L, p_M, 1);
     }
+
     static void register_object(Object* p_obj_ptr, LuauScriptInstance* p_scr_instance) {
         uint64_t obj_id = p_obj_ptr->get_instance_id();
+
+        if (list.has(obj_id) && list[obj_id] != nullptr) {
+            memdelete(list[obj_id]);
+        }
+
         list[obj_id] = memnew(LuauObject(obj_id, p_scr_instance));
     }
+
+    static void unregister_object(Object* p_obj_ptr) {
+        uint64_t obj_id = p_obj_ptr->get_instance_id();
+        if (!list.has(obj_id)) return;
+
+        LuauObject* luau_obj = list[obj_id];
+        if (luau_obj != nullptr) {
+            memdelete(luau_obj);
+        } else {
+            list.erase(obj_id);
+        }
+    }
+
     static LuauObject* get_luau_object(Object* p_obj_ptr) {
         uint64_t obj_id = p_obj_ptr->get_instance_id();
         return list[obj_id];
     }
+
     static LuauObject* get_luau_object(uint64_t obj_id) {
+        if (!list.has(obj_id)) return nullptr;
         return list[obj_id];
     }
 
@@ -60,6 +81,7 @@ public:
 class LuauBridge {
     public:
         static void *luaL_checkudata(lua_State *L, int p_index, const char *p_tname);
+        static void *luaL_testudata(lua_State *L, int p_index, const char *p_tname);
 
         static void push_uint64_t(lua_State* L, const uint64_t &p_uint64_t);
         static void push_string(lua_State *L, const godot::String &p_str);
@@ -129,7 +151,7 @@ public:
 	}
 
 	static int on_tostring(lua_State *L) {
-        void *ud = LuauBridge::luaL_checkudata(L, 1, "Object");
+	    void *ud = LuauBridge::luaL_testudata(L, 1, "Object");
         if (ud) {
             uint64_t obj_id = *(uint64_t*)ud;
             Object* obj = ObjectDB::get_instance(obj_id);
@@ -160,7 +182,7 @@ public:
             }
         }
 
-        void *ud = LuauBridge::luaL_checkudata(L, 1, "Object");
+        void *ud = LuauBridge::luaL_testudata(L, 1, "Object");
         if (ud) {
             uint64_t obj_id = *(uint64_t*)ud;
             Object* obj = ObjectDB::get_instance(obj_id);
@@ -168,14 +190,13 @@ public:
             if (obj != nullptr) {
                 return VariantBridge<Object*>::on_index(L, obj, key); 
             } else {
-                return 0;
+                lua_pushnil(L);
+                return 1;
             }
         }
 
 
-        WARN_PRINT(vformat("Variant on_index key=%s", key));
         // Variant::OBJECT should never reach here;
-
         Variant variant = get_object(L, 1);
 
         StringName prop_name = resolve_prop_name(L, key);
@@ -287,8 +308,20 @@ public:
 	}
 
 	static int on_newindex(lua_State *L) {
+        const char* key = lua_tostring(L, 2);
+
+        void *obj_ud = LuauBridge::luaL_testudata(L, 1, "Object");
+        if (obj_ud) {
+            uint64_t obj_id = *(uint64_t*)obj_ud;
+            Object* resolved = ObjectDB::get_instance(obj_id);
+            if (resolved != nullptr) {
+                return VariantBridge<Object*>::on_newindex(L, resolved, key);
+            }
+            WARN_PRINT("Cannot assign to a freed object");
+            return 0;
+        }
+
         Variant obj = get_object(L, 1);
-		const char* key = lua_tostring(L, 2);
 
         if (obj.get_type() == Variant::OBJECT) {
             return on_newindex(L, obj, key);
@@ -385,7 +418,10 @@ public:
         Variant::evaluate(Variant::Operator::OP_SUBTRACT, v1, v2, result, valid);
 
         if (!valid) {
-            luaL_error(L, "No subtraction operator for types: %s and %s", Variant::get_type_name(v1.get_type()), Variant::get_type_name(v2.get_type()));
+            luaL_error(L, "No subtraction operator for types: %s and %s",
+                Variant::get_type_name(v1.get_type()), 
+                Variant::get_type_name(v2.get_type())
+            );
             return 1;
         }
         LuauBridge::push_variant(L, result);

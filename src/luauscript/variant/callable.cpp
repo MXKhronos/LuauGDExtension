@@ -53,6 +53,38 @@ int VariantBridge<Callable>::on_newindex(lua_State* L, const Callable& object, c
 
 template<>
 int VariantBridge<Callable>::on_call(lua_State* L, bool& is_valid) {
+    if (!lua_istable(L, 1) && LuauBridge::luaL_testudata(L, 1, "Callable") != nullptr) {
+        Callable self = get_object(L, 1);
+        if (self.is_valid()) {
+            int start_idx = 2;
+
+            if (lua_gettop(L) >= 2) {
+                bool is_receiver = lua_rawequal(L, 1, 2) != 0;
+                if (!is_receiver) {
+                    Object *bound_obj = self.get_object();
+                    if (bound_obj != nullptr) {
+                        void *recv_ud = LuauBridge::luaL_testudata(L, 2, "Object");
+                        is_receiver = (recv_ud != nullptr &&
+                            *(uint64_t *)recv_ud == bound_obj->get_instance_id());
+                    }
+                }
+                if (is_receiver) {
+                    start_idx = 3;
+                }
+            }
+
+            Array args;
+            for (int i = start_idx; i <= lua_gettop(L); i++) {
+                args.append(LuauBridge::get_variant(L, i));
+            }
+
+            Variant result = self.callv(args);
+            LuauBridge::push_variant(L, result);
+            return 1;
+        }
+    }
+
+    // Constructor overloads: Callable(), Callable(cb), Callable(obj, "method")
     const int argc = lua_gettop(L)-1;
 
     if (argc == 0) {

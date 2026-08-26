@@ -14,6 +14,11 @@
 #include "luau_bridge.h"
 #include "variant/builtin_types.h"
 
+#include <godot_cpp/classes/file_access.hpp>
+#include <godot_cpp/classes/json.hpp>
+
+#include "luauscript/luau_await.h"
+
 using namespace godot;
 
 LuauEngine *LuauEngine::singleton = nullptr;
@@ -64,6 +69,53 @@ void lua_rawsetp(lua_State* L, int idx, const void* p) {
     lua_rawset(L, idx);
 }
 
+static HashMap<String, HashMap<String, int64_t>> &luau_enum_constant_cache() {
+    static HashMap<String, HashMap<String, int64_t>> cache;
+    static bool loaded = false;
+
+    if (!loaded) {
+        loaded = true;
+
+        Ref<FileAccess> file = FileAccess::open("res://bin/LuauGDExt/enums.json", FileAccess::READ);
+        if (file.is_valid()) {
+            Variant parsed = JSON::parse_string(file->get_as_text());
+            if (parsed.get_type() == Variant::DICTIONARY) {
+                Array enums = parsed.get("enums");
+                for (int i = 0; i < enums.size(); i++) {
+                    Dictionary enum_def = enums[i];
+                    String owner = enum_def.get("owner", "");
+                    if (owner.is_empty() || owner == "global") {
+                        continue;
+                    }
+
+                    Array values = enum_def.get("values", Array());
+                    for (int v = 0; v < values.size(); v++) {
+                        Dictionary value_def = values[v];
+                        cache[owner][String(value_def.get("name", ""))] = (int64_t)value_def.get("value", 0);
+                    }
+                }
+            }
+        }
+    }
+
+    return cache;
+}
+
+static bool luau_lookup_enum_constant(const String &p_owner, const String &p_name, int64_t &r_value) {
+    HashMap<String, HashMap<String, int64_t>> &cache = luau_enum_constant_cache();
+    HashMap<String, int64_t> *constants = cache.getptr(p_owner);
+    if (constants == nullptr) {
+        return false;
+    }
+
+    int64_t *value = constants->getptr(p_name);
+    if (value == nullptr) {
+        return false;
+    }
+
+    r_value = *value;
+    return true;
+}
 
 void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String &class_name) {
     CharString utf8 = class_name.utf8();
@@ -135,37 +187,50 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         const char* key = lua_tostring(L, 2);
         StringName godot_key = resolve_prop_name(L, key);
 
+        if (key != nullptr) {
+            int64_t enum_value = 0;
+            if (luau_lookup_enum_constant(String(class_name), String(key), enum_value)) {
+                lua_pushinteger(L, (lua_Integer)enum_value);
+                return 1;
+            }
+        }
+
         Object *singleton_obj = Engine::get_singleton()->get_singleton(StringName(class_name));
         if (!singleton_obj) {
             return 0;
         }
 
-        //check if key is a method
         if (singleton_obj->has_method(godot_key)) {
-            // push lua function that singleton_obj->call
-            lua_pushlightuserdata(L, singleton_obj); //pass to lamda without capture
+            lua_pushlightuserdata(L, singleton_obj);
             lua_pushstring(L, String(godot_key).utf8().get_data());
+            lua_pushvalue(L, 1);
             
             lua_pushcclosure(L, [](lua_State *L) -> int {
                 Object* singleton_obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
                 const char* key = lua_tostring(L, lua_upvalueindex(2));
 
+                int start_idx = 1;
+                if (lua_gettop(L) >= 1 
+                && lua_istable(L, 1) 
+                && lua_rawequal(L, 1, lua_upvalueindex(3))) {
+                    start_idx = 2;
+                }
+
                 Array args;
-                for (int i = 1; i <= lua_gettop(L); i++) {
+                for (int i = start_idx; i <= lua_gettop(L); i++) {
                     args.append(LuauBridge::get_variant(L, i));
                 }
 
                 Variant result = singleton_obj->callv(StringName(key), args);
-                Variant* heap_result = memnew(Variant(result));
                 LuauBridge::push_variant(L, result);
                 return 1;
-            }, key, 2);
+            }, key, 3);
             
             return 1;
         }
 
         Variant val = singleton_obj->get(godot_key);
-        //WARN_PRINT(vformat("Getting singleton property: %s = %s", key, String(val)));
+
         LuauBridge::push_variant(L, val);
 
         return 1;
@@ -183,37 +248,6 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
 
     lua_remove(L, -2);
     lua_setreadonly(L, -1, true);  
-}
-
-void LuauEngine::register_godot_enums(lua_State *L) {
-    // lua_newtable(L); //Enum table
-
-    // ClassDBSingleton* classdb_singleton = nobind::ClassDB::get_singleton();
-
-    // PackedStringArray class_list = classdb_singleton->get_class_list();
-    // for (int a = 0; a < class_list.size(); a++) {
-    //     String class_name = class_list[a];
-
-    //     lua_newtable(L);
-    //     //register enums
-    //     PackedStringArray enum_list = classdb_singleton->class_get_enum_list(class_name, true);
-    //     for (int b = 0; b < enum_list.size(); b++) {
-    //         String enum_name = enum_list[b];
-
-    //         PackedStringArray enum_constants = classdb_singleton->class_get_enum_constants(class_name, enum_name, true);
-    //         if (class_name == "Window") {
-    //             for (int c = 0; c < enum_constants.size(); c++) {
-    //                 String enum_constant = enum_constants[c];
-    //                 //WARN_PRINT(vformat("%s enum_name %s: %s", class_name , enum_name, enum_constant));
-
-
-
-    //             };
-    //         };
-    //     };
-    // };
-
-    // lua_setglobal(L, "Enum");
 }
 
 void LuauEngine::register_godot_functions(lua_State *L) {
@@ -592,6 +626,16 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     }, "lerp");
     lua_setglobal(L, "lerp");
     
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        double from = luaL_checknumber(L, 1);
+        double to = luaL_checknumber(L, 2);
+        double weight = luaL_checknumber(L, 3);
+        lua_pushnumber(L, UtilityFunctions::lerp_angle(from, to, weight));
+        return 1;
+    }, "lerpAngle");
+    lua_setglobal(L, "lerpAngle");
+    
+
     // Angle conversions
     lua_pushcfunction(L, [](lua_State *L) -> int {
         double deg = luaL_checknumber(L, 1);
@@ -744,47 +788,30 @@ void LuauEngine::register_godot_functions(lua_State *L) {
     }, "tick");
     lua_setglobal(L, "tick");
 
-    //MARK: signal(name)
     lua_pushcfunction(L, [](lua_State *L) -> int {
-        if (lua_gettop(L) < 1) {
-            luaL_error(L, "signal() requires a signal name argument");
-            return 0;
+        if (lua_gettop(L) < 1 || lua_isnil(L, 1)) {
+            lua_pushboolean(L, 0);
+            return 1;
         }
 
-        Variant arg1 = LuauBridge::get_variant(L, 1);
-        if (arg1.get_type() != Variant::STRING && arg1.get_type() != Variant::STRING_NAME) {
-            luaL_error(L, vformat("signal() requires a String or StringName argument, got %s.", arg1.get_type_name(arg1.get_type())).utf8().get_data());
-            return 0;
+        void *ud = LuauBridge::luaL_testudata(L, 1, "Object");
+        if (ud == nullptr) {
+            lua_pushboolean(L, 0);
+            return 1;
         }
 
-        LuauScriptInstance *inst = LuauScriptInstance::get_current();
-        if (!inst) {
-            luaL_error(L, "signal() can only be called from within a script instance");
-            return 0;
-        }
-
-        Object *owner = inst->get_owner();
-        if (!owner) {
-            luaL_error(L, "signal() called on an instance without an owner");
-            return 0;
-        }
-
-        StringName sig_name = StringName(String(arg1));
-
-        // Register to script definition
-        inst->register_signal(sig_name);
-
-        Signal sig(owner, sig_name);
-        LuauBridge::push_variant(L, sig);
-
+        uint64_t obj_id = *(uint64_t *)ud;
+        lua_pushboolean(L, ObjectDB::get_instance(obj_id) != nullptr);
         return 1;
-    }, "signal");
-    lua_setglobal(L, "signal");
+    }, "isValid");
+    lua_setglobal(L, "isValid");
+
+    // GDScript-style await(signal | seconds | nil)
+    luau_register_await(L);
 }
 
 
 void LuauEngine::register_godot_globals(lua_State *L) {
-    register_godot_enums(L);
     register_godot_functions(L);
 
     {
@@ -884,90 +911,57 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         Variant variant = LuauBridge::get_variant(L, 1);
 
         const char* key = lua_tostring(L, 2);
+        if (!key) {
+            lua_pushnil(L);
+            return 1;
+        }
 
-        String prop_name = String(godot::resolve_prop_name(L, key));
-        bool valid_get;
+        StringName prop_name = godot::resolve_prop_name(L, key);
 
-        Variant result = variant.get(prop_name, &valid_get);
-        Variant* heap_result = memnew(Variant(result));
-        //WARN_PRINT(vformat("OnReadyWrapper indexed %s of %s = %s", key, String(variant), String(*heap_result)));
-        if (valid_get) {
-            if (heap_result->get_type() == Variant::CALLABLE) {
-                
-                lua_pushlightuserdata(L, heap_result);
-                lua_pushstring(L, key);
-                lua_pushcclosure(L, [](lua_State *L) -> int {
-                    Variant* variant = (Variant*) lua_upvalueindex(1);
-                    const char* key = lua_tostring(L, lua_upvalueindex(2));
-                    Variant obj = LuauBridge::get_variant(L, 1);
-
-                    StringName method_name(godot::resolve_prop_name(L, key));
-
-                    if (!obj.has_method(method_name)) {
-                        luaL_error(L, vformat("Object does not have method: %s", method_name).utf8().get_data());
-                        return 1;
-                    }
-
-                    const int argc = lua_gettop(L) -1;
-                    Variant* var_buffer = (Variant*)memalloc(sizeof(Variant) * argc);
-                    const Variant** ptrs = (const Variant**)memalloc(sizeof(Variant*) * argc);
-                    for (int i = 0; i < argc; i++) {
-                        Variant v = LuauBridge::get_variant(L, i + 2);
-                        new (&var_buffer[i]) Variant(v);
-                        ptrs[i] = &var_buffer[i];
-                    }
-
-                        Variant result;
-                        GDExtensionCallError error;
-                        obj.callp(method_name, ptrs, argc, result, error);
-                        if (error.error != GDEXTENSION_CALL_OK) {
-                            GDExtensionCallErrorType error_type = error.error;
-                            switch (error_type) {
-                                case GDEXTENSION_CALL_ERROR_INVALID_METHOD: {
-                                    luaL_error(L, vformat("Object does not have method: %s", method_name).utf8().get_data());
-                                    break;
-                                };
-                                case GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT: {
-                                    luaL_error(L, vformat("Invalid argument for method: %s", method_name).utf8().get_data());
-                                    break;
-                                };
-                                case GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS: {
-                                    luaL_error(L, vformat("Too few arguments for method: %s, expected at least %s, got %s", method_name, error.argument, argc).utf8().get_data());
-                                    break;
-                                };
-                                case GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS: {
-                                    luaL_error(L, vformat("Too many arguments for method: %s, expected %s, got %s", method_name, error.argument, argc).utf8().get_data());
-                                    break;
-                                };
-                                case GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST: {
-                                    luaL_error(L, vformat("Method is not const: %s", method_name).utf8().get_data());
-                                    break;
-                                };
-                                default: {
-                                    luaL_error(L, vformat("Failed to call method(%s), Unkown error.", method_name).utf8().get_data());
-                                    break;
-                                };
-                            }
-                            
+        if (variant.get_type() == Variant::OBJECT) {
+            Object* obj = variant.get_validated_object();
+            if (obj) {
+                if (obj->has_method(prop_name)) {
+                    lua_pushlightuserdata(L, obj);
+                    lua_pushstring(L, key);
+                    lua_pushcclosure(L, [](lua_State *L) -> int {
+                        Object* obj = (Object*)lua_touserdata(L, lua_upvalueindex(1));
+                        const char* key = lua_tostring(L, lua_upvalueindex(2));
+                        if (!obj || !key) {
+                            lua_pushnil(L);
                             return 1;
                         }
-                        LuauBridge::push_variant(L, result);
 
-                        // Free the memory
-                        for (int i = 0; i < argc; i++) {
-                            var_buffer[i].~Variant();
+                        StringName method_name(godot::resolve_prop_name(L, key));
+
+                        Array args;
+                        int argc = lua_gettop(L);
+                        for (int i = 2; i <= argc; i++) {
+                            args.append(LuauBridge::get_variant(L, i));
                         }
-                        memfree(var_buffer);
-                        memfree(ptrs);
 
+                        Variant result = obj->callv(method_name, args);
+                        LuauBridge::push_variant(L, result);
                         return 1;
-                }, key, 2);
+                    }, "onready_method_call", 2);
+                    return 1;
+                }
 
-                return 1;
-
-            } else {
-                LuauBridge::push_variant(L, *heap_result);
+                Variant value = obj->get(prop_name);
+                if (value.get_type() != Variant::NIL) {
+                    LuauBridge::push_variant(L, value);
+                    return 1;
+                }
             }
+            lua_pushnil(L);
+            return 1;
+        }
+
+        // Non-object variant: read property
+        bool valid_get;
+        Variant result = variant.get(prop_name, &valid_get);
+        if (valid_get) {
+            LuauBridge::push_variant(L, result);
         } else {
             lua_pushnil(L);
         }
@@ -980,8 +974,11 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         Variant variant = LuauBridge::get_variant(L, 1);
 
         const char* key = lua_tostring(L, 2);
+        if (!key) {
+            return 0;
+        }
 
-        String prop_name = String(key);
+        StringName prop_name = godot::resolve_prop_name(L, key);
 
         Variant value = LuauBridge::get_variant(L, 3);
         variant.set(prop_name, value);
@@ -989,6 +986,17 @@ void LuauEngine::register_godot_globals(lua_State *L) {
         return 0;
     }, "onreadyobj_newindex_handler");
     lua_setfield(L, -2, "__newindex");
+
+    // Free the heap Variant stored in the proxy when the userdata is collected
+    lua_pushcfunction(L, [](lua_State *L) -> int {
+        void** proxy = (void**)lua_touserdata(L, 1);
+        if (proxy && *proxy) {
+            memdelete((Variant*)*proxy);
+            *proxy = nullptr;
+        }
+        return 0;
+    }, "onreadyobj_gc_handler");
+    lua_setfield(L, -2, "__gc");
 
     lua_pushstring(L, "__type");
     lua_pushstring(L, "OnReadyWrapper");

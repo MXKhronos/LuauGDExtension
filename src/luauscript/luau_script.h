@@ -2,6 +2,7 @@
 #define LUAU_SCRIPT_H
 
 #include <godot_cpp/godot.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/classes/script_extension.hpp>
 #include <godot_cpp/classes/script_language_extension.hpp>
@@ -15,6 +16,8 @@
 #include "nobind.h"
 #include "luau_constants.h"
 #include "luauscript/luau_engine.h"
+#include "luauscript/lamda_wrapper.h"
+#include <godot_cpp/templates/vector.hpp>
 
 // Forward declarations for Luau AST types
 namespace Luau {
@@ -192,11 +195,11 @@ namespace godot {
         // Recursion guard for property access (needs to be public for lambda access)
         mutable bool getting_property = false;
         mutable bool is_ready = false;
-        godot::TypedArray<godot::Callable> on_ready_funcs;
-
-        static LuauScriptInstance *s_current;
-        static LuauScriptInstance *get_current() { return s_current; }
-        static void set_current(LuauScriptInstance *p_inst) { s_current = p_inst; }
+        TypedArray<Callable> on_ready_funcs;
+        // Owns the LambdaWrappers behind on_ready_funcs until they execute;
+        // Callables store only an ObjectID and do not keep the wrapper alive.
+        Vector<Ref<LambdaWrapper>> on_ready_wrappers;
+        HashMap<StringName, RefCounted *> held_member_refs;
 
         lua_State* get_main_state() { return L; }
         lua_State* get_thread_state() { return T; }
@@ -212,6 +215,11 @@ namespace godot {
         
         bool set(const StringName &p_name, const Variant &p_value, PropertySetGetError *r_err = nullptr) override;
 	    bool get(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err = nullptr) override;
+        
+	    // Same as get(), but also reports whether the member is a Lua function
+	    // (used to build bound-method closures for script functions).
+	    bool get_with_kind(const StringName &p_name, Variant &r_ret, PropertySetGetError *r_err, bool &r_is_function);
+
         GDExtensionPropertyInfo *get_property_list(uint32_t *r_count) override;
         // virtual bool validate_property(GDExtensionPropertyInfo *p_property) const { return false; }
         Variant::Type get_property_type(const StringName &p_name, bool *r_is_valid) const override;

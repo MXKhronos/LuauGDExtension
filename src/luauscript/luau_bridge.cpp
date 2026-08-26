@@ -34,6 +34,21 @@ void *LuauBridge::luaL_checkudata(lua_State *L, int p_index, const char *p_tname
     return NULL;
 }
 
+void *LuauBridge::luaL_testudata(lua_State *L, int p_index, const char *p_tname) {
+    void *p = lua_touserdata(L, p_index);
+
+    if (p != NULL && lua_getmetatable(L, p_index)) {
+        lua_getfield(L, LUA_REGISTRYINDEX, p_tname);
+        bool matches = lua_rawequal(L, -1, -2) != 0;
+        lua_pop(L, 2);
+        if (matches) {
+            return p;
+        }
+    }
+
+    return NULL;
+}
+
 void LuauBridge::push_uint64_t(lua_State* L, const uint64_t &p_uint64_t) {
     uint64_t* uint_ptr = (uint64_t*)lua_newuserdatatagged(L, sizeof(uint64_t), UINT64_T_TAG);
 
@@ -247,7 +262,9 @@ Dictionary LuauBridge::get_dictionary(lua_State *L, int p_index) {
     if (lua_type(L, p_index) != LUA_TTABLE) {
         return dict;
     }
-    
+
+    p_index = lua_absindex(L, p_index);
+
     lua_pushnil(L); // First key
     while (lua_next(L, p_index) != 0) {
         // Key is at -2, value at -1
@@ -267,7 +284,9 @@ Array LuauBridge::get_array(lua_State *L, int p_index) {
     if (lua_type(L, p_index) != LUA_TTABLE) {
         return arr;
     }
-    
+
+    p_index = lua_absindex(L, p_index);
+
     // Get length of array
     int len = lua_objlen(L, p_index);
     
@@ -475,7 +494,7 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
             
             LuaFunctionWrapper* wrapper = memnew(LuaFunctionWrapper);
             wrapper->set_lua_state(main_L);
-            wrapper->set_function_ref(func_ref);
+            wrapper->set_func_ref(func_ref);
             
             Callable callable(wrapper, "invoke");
             return callable;
