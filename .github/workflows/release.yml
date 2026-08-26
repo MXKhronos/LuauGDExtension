@@ -1,35 +1,44 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build & Test"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
-  build:
-    name: Build & Test
-    uses: ./.github/workflows/build.yml
+  gate:
+    name: Await Successful Build & Test
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Proceed
+        run: echo "Build & Test passed; proceeding with release."
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: gate
     runs-on: ubuntu-latest
 
     steps:
+      - name: Determine Version
+        id: version
+        run: |
+          sha="${{ github.event.workflow_run.head_sha }}"
+          echo "short=${sha:0:7}" >> "$GITHUB_OUTPUT"
+
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: build-output-*
           path: final-bundle
           merge-multiple: true
-
-      - name: Determine Version
-        id: version
-        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Bundle Bin Into Zip
         run: cd final-bundle && zip -r "LuauGDExtension-${{ steps.version.outputs.short }}.zip" .
@@ -37,10 +46,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: release-${{ steps.version.outputs.short }}
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
           name: LuauGDExtension-${{ steps.version.outputs.short }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: false
           generate_release_notes: true
           files: final-bundle/LuauGDExtension-*.zip
         env:
