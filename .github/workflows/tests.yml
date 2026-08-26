@@ -48,12 +48,7 @@ jobs:
             ${{ runner.os }}-scons-${{ hashFiles('**/SConstruct', 'godot-cpp/include/**') }}-
             ${{ runner.os }}-scons-
 
-      - name: Build Unit Tests (Linux)
-        if: matrix.os != 'windows-latest'
-        run: scons target=editor dev_build=yes debug_symbols=no tests=true -j2
-
-      - name: Build Unit Tests (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Build Unit Tests
         run: scons target=editor dev_build=yes debug_symbols=yes tests=true -j2
 
       - name: Install Godot Engine

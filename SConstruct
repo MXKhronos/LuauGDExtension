@@ -133,10 +133,21 @@ for d in demo_dirs:
         Copy("$TARGET", "$SOURCE")
     )
 
-    pdb_name = "LuauGDExt{}.pdb".format(env["suffix"])
-    pdb_source = output_dir + pdb_name
-    pdb_copy = env.Command(d + pdb_name, pdb_source, Copy("$TARGET", "$SOURCE"))
-    env.Depends(lib_copy, pdb_copy) # Ensure the PDB moves with the library
+    debug_symbols = str(ARGUMENTS.get("debug_symbols", env.get("debug_symbols", "yes"))).lower()
+    if env["platform"] == "windows" and debug_symbols not in ("no", "false", "none", "0"):
+        def copy_pdb(target, source, env):
+            import shutil
+            src = str(source[0])
+            src = src[: -len(env["SHLIBSUFFIX"])] + ".pdb"
+            dst = str(target[0])
+            if os.path.exists(src):
+                shutil.copy2(src, dst)
+            else:
+                print(f"PDB not produced by this link (e.g. restored from SCons cache), skipping: {src}")
+
+        pdb_name = "LuauGDExt{}.pdb".format(env["suffix"])
+        pdb_copy = env.Command(d + pdb_name, library, copy_pdb)
+        env.Depends(lib_copy, pdb_copy) # Ensure the PDB moves with the library
     
     for f in extra_files:
         f_copy = env.Command(
