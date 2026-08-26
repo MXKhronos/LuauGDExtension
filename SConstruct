@@ -7,6 +7,9 @@ if 'SCONS_CACHE' in os.environ:
 
 if env["platform"] == "windows":
     env.Append(CXXFLAGS=["/EHsc"]) # Exception Handling
+    # Suppress LNK4099 (missing MSVC runtime PDB for third-party objs) so it is
+    # not promoted to LNK1218 by godot-cpp's /WX; other warnings stay as errors.
+    env.Append(LINKFLAGS=["/IGNORE:4099"])
 
 elif env["platform"] == "linux":
     env.Append(CCFLAGS=["-fexceptions"])
