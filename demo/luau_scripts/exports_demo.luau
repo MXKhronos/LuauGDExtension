@@ -1,6 +1,6 @@
 --- @extends Node2D
 
-Name = "HelloWorld" :: string;
+Title = "Exports" :: string;
 
 --- @export_group("Movement")
 --- @export_range(0, 1000)
@@ -16,12 +16,11 @@ Weapon = "Sword" :: string;
 --- @export_flags("Fire", "Ice", "Poison")
 Resistances = 0 :: number;
 
---- @export_file("*.png")
-Icon = "" :: string;
-
 --- @export_multiline
-Description = "" :: string;
+Description = "Select this node and edit these values in the Inspector." :: string;
 
-function _ready(): nil
-	print("Speed", self.Speed, "Health", self.Health, "Weapon", self.Weapon, "Resistances", self.Resistances);
+function _ready()
+	print(`[exports] title={Title} speed={Speed} health={Health}`);
+	print(`[exports] weapon={Weapon} resistances={Resistances}`);
+	print(`[exports] description={Description}`);
 end

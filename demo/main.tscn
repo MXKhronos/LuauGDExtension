@@ -1,12 +1,57 @@
-[gd_scene format=3 uid="uid://14fbpd8umjjt"]
+[gd_scene format=3 uid="uid://ddvsbn347oje"]
 
-[ext_resource type="Script" uid="uid://cg2xlu7vgu1d7" path="res://luau_scripts/helloworld.luau" id="1_ig7tw"]
-[ext_resource type="Script" uid="uid://cgi7uerv7qu48" path="res://scenes/test.gd" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://ctc4mxyu8k538" path="res://luau_scripts/hello_world.luau" id="1_hello"]
+[ext_resource type="Script" uid="uid://cispfqomgpwu3" path="res://luau_scripts/exports_demo.luau" id="2_exports"]
+[ext_resource type="Script" uid="uid://caj7lf1k41ibs" path="res://luau_scripts/signals_demo.luau" id="3_signals"]
+[ext_resource type="Script" uid="uid://bduoh4yeivjaq" path="res://luau_scripts/await_demo.luau" id="4_await"]
+[ext_resource type="Script" uid="uid://bjr4snd5j52pd" path="res://luau_scripts/autoload_demo.luau" id="5_autoload"]
+[ext_resource type="Script" uid="uid://mds4mscrgd5b" path="res://luau_scripts/node_factory.luau" id="6_factory"]
+[ext_resource type="Script" uid="uid://b25vnour0sgb2" path="res://luau_scripts/player.luau" id="7_player"]
+[ext_resource type="Texture2D" uid="uid://yqlw5w3emnoe" path="res://icon.svg" id="8_icon"]
 
-[node name="main" type="Node3D" unique_id=281102011]
+[sub_resource type="CircleShape2D" id="CircleShape2D_player"]
+radius = 30.0
 
-[node name="HelloWorld" type="Node2D" parent="." unique_id=1960593467]
-script = ExtResource("1_ig7tw")
+[node name="Main" type="Node2D" unique_id=214504025]
 
-[node name="GDTest" type="Node2D" parent="." unique_id=184069855]
-script = ExtResource("2_0xm2m")
+[node name="HelloWorld" type="Node2D" parent="." unique_id=53081881]
+script = ExtResource("1_hello")
+
+[node name="ExportsDemo" type="Node2D" parent="." unique_id=403841579]
+script = ExtResource("2_exports")
+
+[node name="SignalsDemo" type="Node2D" parent="." unique_id=2063773806]
+script = ExtResource("3_signals")
+
+[node name="AwaitDemo" type="Node2D" parent="." unique_id=366294507]
+script = ExtResource("4_await")
+
+[node name="AutoloadDemo" type="Node2D" parent="." unique_id=1675819170]
+script = ExtResource("5_autoload")
+
+[node name="NodeFactory" type="Node2D" parent="." unique_id=485298332]
+script = ExtResource("6_factory")
+
+[node name="Player" type="CharacterBody2D" parent="." unique_id=2033314977]
+position = Vector2(360, 320)
+script = ExtResource("7_player")
+
+[node name="Sprite2D" type="Sprite2D" parent="Player" unique_id=454048676]
+scale = Vector2(0.5, 0.5)
+texture = ExtResource("8_icon")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player" unique_id=1504732311]
+shape = SubResource("CircleShape2D_player")
+
+[node name="Camera2D" type="Camera2D" parent="Player" unique_id=1265336603]
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=1747881899]
+
+[node name="Info" type="Label" parent="UI" unique_id=2118197085]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 560.0
+offset_bottom = 96.0
+text = "Luau in Godot - watch the Output panel for script logs
+WASD / arrow keys: move the player
+Each child node runs a .luau script demo"
