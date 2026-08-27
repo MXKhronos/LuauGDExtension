@@ -60,7 +60,7 @@ function _process(delta: number)
 	totalDelta += delta;
 
 	local s = (sin(totalDelta)+1)/2;
-	modulate = Color.RED:Lerp(Color.BLUE, s);   -- Set's self.modulate
+	Modulate = Color.RED:Lerp(Color.BLUE, s);   -- Set's self.Modulate
 end
 
 ```

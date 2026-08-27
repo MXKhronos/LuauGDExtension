@@ -7,8 +7,9 @@ function _ready()
 end
 
 function Run()
-	print("[await] waiting 1 second...");
+	print("[await] waiting 1 second... tick=",tick());
 	await(1.0);
+	print("[await] waited 1 second... tick=",tick());
 
 	print("[await] waiting 3 frames...");
 	for i = 1, 3 do

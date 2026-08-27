@@ -50,5 +50,5 @@ function Animate(star: Polygon2D)
 		p.Y -= 24 * step;
 		star.Position = p;
 	end
-	star.QueueFree();
+	star:QueueFree();
 end
