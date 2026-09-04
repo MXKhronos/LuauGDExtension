@@ -2009,7 +2009,7 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 
 						} else if (var_type == Variant::ARRAY && !native_type.is_empty()) {
 							var_def.property.type = GDEXTENSION_VARIANT_TYPE_ARRAY;
-							var_def.property.hint = PROPERTY_HINT_ARRAY_TYPE;
+							var_def.property.hint = PROPERTY_HINT_TYPE_STRING;
 		
 							if (ClassDB::is_parent_class(native_type, StringName("Resource"))) {
 								Array hint_values;
@@ -2018,14 +2018,6 @@ Error LuauScript::load(LoadStage p_load_stage, bool p_force) {
 								hint_values[1] = PROPERTY_HINT_RESOURCE_TYPE;
 								hint_values[2] = native_type;
 								var_def.property.hint_string = String("{0}/{1}:{2}").format(hint_values);
-	
-							// } else if (ClassDB::is_parent_class(native_type, StringName("Node"))) {
-							// 	Array hint_values;
-							// 	hint_values.resize(3);
-							// 	hint_values[0] = Variant::OBJECT;
-							// 	hint_values[1] = PROPERTY_HINT_NODE_TYPE;
-							// 	hint_values[2] = native_type;
-							// 	var_def.property.hint_string = String("{0}/{1}:{2}").format(hint_values);
 	
 							} else {
 								Variant::Type typed_var = parse_type_name(native_type);

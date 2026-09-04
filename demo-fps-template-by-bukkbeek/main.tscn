@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://4wonuqyiwe3i"]
 
-[ext_resource type="Script" path="res://common/managers/input_manager.luau" id="1_272bh"]
-[ext_resource type="Script" path="res://common/main.luau" id="1_kek77"]
+[ext_resource type="Script" uid="uid://cvt1rvnmtwxg2" path="res://common/managers/input_manager.luau" id="1_272bh"]
+[ext_resource type="Script" uid="uid://0cqhym0f3bgw" path="res://common/main.luau" id="1_kek77"]
 [ext_resource type="PackedScene" uid="uid://i3v82muv47ra" path="res://world/test_level.tscn" id="2_5vw27"]
 [ext_resource type="PackedScene" uid="uid://cdbipjyx57al2" path="res://player/player.tscn" id="3_kek77"]
 [ext_resource type="PackedScene" uid="uid://cyu64gank77ya" path="res://common/hud/gameplay_hud.tscn" id="4_7mycd"]
