@@ -69,8 +69,35 @@ void lua_rawsetp(lua_State* L, int idx, const void* p) {
     lua_rawset(L, idx);
 }
 
-static HashMap<String, HashMap<String, int64_t>> &luau_enum_constant_cache() {
-    static HashMap<String, HashMap<String, int64_t>> cache;
+struct LuauEnumRegistry {
+    HashMap<String, HashMap<String, int64_t>> by_owner;
+    HashMap<String, HashMap<String, int64_t>> global_enums;
+};
+
+// "MouseButton" -> "MOUSE_BUTTON"
+static String luau_enum_screaming_snake(const String &p_name) {
+    String result;
+
+    for (int i = 0; i < p_name.length(); i++) {
+        char32_t c = p_name[i];
+
+        if (c >= 'A' && c <= 'Z') {
+            if (i > 0) {
+                result += '_';
+            }
+            result += c;
+        } else if (c >= 'a' && c <= 'z') {
+            result += (char32_t)(c - 'a' + 'A');
+        } else {
+            result += c;
+        }
+    }
+
+    return result;
+}
+
+static LuauEnumRegistry &luau_enum_registry() {
+    static LuauEnumRegistry registry;
     static bool loaded = false;
 
     if (!loaded) {
@@ -84,25 +111,56 @@ static HashMap<String, HashMap<String, int64_t>> &luau_enum_constant_cache() {
                 for (int i = 0; i < enums.size(); i++) {
                     Dictionary enum_def = enums[i];
                     String owner = enum_def.get("owner", "");
+                    String enum_name = enum_def.get("name", "");
+
+                    Array values = enum_def.get("values", Array());
+
                     if (owner.is_empty() || owner == "global") {
+                        if (enum_name.is_empty()) {
+                            continue;
+                        }
+
+                        String prefix = luau_enum_screaming_snake(enum_name) + "_";
+                        HashMap<String, int64_t> &constants = registry.global_enums[enum_name];
+
+                        for (int v = 0; v < values.size(); v++) {
+                            Dictionary value_def = values[v];
+                            String value_name = value_def.get("name", "");
+                            int64_t value = (int64_t)value_def.get("value", 0);
+
+                            if (value_name.is_empty() || constants.has(value_name)) {
+                                continue;
+                            }
+                            constants[value_name] = value;
+
+                            if (value_name.begins_with(prefix)) {
+                                String alias = value_name.substr(prefix.length());
+                                if (!alias.is_empty() && !constants.has(alias)) {
+                                    constants[alias] = value;
+                                }
+                            }
+                        }
                         continue;
                     }
 
-                    Array values = enum_def.get("values", Array());
                     for (int v = 0; v < values.size(); v++) {
                         Dictionary value_def = values[v];
-                        cache[owner][String(value_def.get("name", ""))] = (int64_t)value_def.get("value", 0);
+                        registry.by_owner[owner][String(value_def.get("name", ""))] = (int64_t)value_def.get("value", 0);
                     }
                 }
             }
         }
     }
 
-    return cache;
+    return registry;
+}
+
+const HashMap<String, HashMap<String, int64_t>> &LuauEngine::get_global_enums() {
+    return luau_enum_registry().global_enums;
 }
 
 static bool luau_lookup_enum_constant(const String &p_owner, const String &p_name, int64_t &r_value) {
-    HashMap<String, HashMap<String, int64_t>> &cache = luau_enum_constant_cache();
+    HashMap<String, HashMap<String, int64_t>> &cache = luau_enum_registry().by_owner;
     HashMap<String, int64_t> *constants = cache.getptr(p_owner);
     if (constants == nullptr) {
         return false;
@@ -115,6 +173,57 @@ static bool luau_lookup_enum_constant(const String &p_owner, const String &p_nam
 
     r_value = *value;
     return true;
+}
+
+//MARK: Enum indexing
+static int luau_enum_value_index(lua_State *L) {
+    const char *value_name = lua_tostring(L, 2);
+    if (value_name == nullptr) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    lua_getfield(L, 1, "Name");
+    const char *enum_name = lua_tostring(L, -1);
+    lua_pop(L, 1);
+    if (enum_name == nullptr) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    HashMap<String, HashMap<String, int64_t>> &enums = luau_enum_registry().global_enums;
+    HashMap<String, int64_t> *constants = enums.getptr(String(enum_name));
+    int64_t *value = constants ? constants->getptr(String(value_name)) : nullptr;
+    if (value == nullptr) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    lua_pushinteger(L, (lua_Integer)*value);
+    return 1;
+}
+
+static int luau_enum_table_index(lua_State *L) {
+    const char *enum_name = lua_tostring(L, 2);
+    if (enum_name == nullptr || !luau_enum_registry().global_enums.has(String(enum_name))) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    lua_newtable(L);
+    lua_pushstring(L, enum_name);
+    lua_setfield(L, -2, "Name");
+
+    if (luaL_newmetatable(L, "GodotGlobalEnum")) {
+        lua_pushcfunction(L, luau_enum_value_index, "enum_value_index");
+        lua_setfield(L, -2, "__index");
+        LuauBridge::protect_metatable(L, -1);
+        lua_setreadonly(L, -1, true);
+    }
+    lua_setmetatable(L, -2);
+
+    lua_setreadonly(L, -1, true);
+    return 1;
 }
 
 void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String &class_name) {
@@ -817,6 +926,19 @@ void LuauEngine::register_godot_globals(lua_State *L) {
     {
         lua_newtable(L);
         lua_setglobal(L, "_G");
+    }
+    //MARK: Global enum constants (Enum.<Name>.<VALUE>)
+    {
+        lua_newtable(L); // Enum
+
+        lua_newtable(L); // Metatable
+        lua_pushcfunction(L, luau_enum_table_index, "enum_table_index");
+        lua_setfield(L, -2, "__index");
+        LuauBridge::protect_metatable(L, -1);
+        lua_setmetatable(L, -2);
+
+        lua_setreadonly(L, -1, true);
+        lua_setglobal(L, "Enum");
     }
     //MARK: Register Variant types
     {   

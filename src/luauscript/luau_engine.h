@@ -4,6 +4,8 @@
 #include <lua.h>
 #include <godot_cpp/core/mutex_lock.hpp>
 #include <godot_cpp/core/type_info.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/variant/string.hpp>
 
 namespace godot {
 
@@ -32,6 +34,7 @@ private:
 
 public:
     static LuauEngine *get_singleton() { return singleton; };
+    static const HashMap<String, HashMap<String, int64_t>> &get_global_enums();
 
     lua_State *get_vm(VMType p_type) { 
         if (p_type >= 0 && p_type < VM_MAX) {

@@ -4149,12 +4149,13 @@ Dictionary LuauLanguage::_complete_code(const String &p_code, const String &p_pa
 	prefix = current_line.substr(prefix_end);
 
 	
+	int recv_start = -1;
 	if (prefix_end > 0) {
 		char32_t sep = current_line[prefix_end - 1];
 		if (sep == '.' || sep == ':') {
 			colon = (sep == ':');
 			int recv_end = prefix_end - 1;
-			int recv_start = recv_end;
+			recv_start = recv_end;
 			while (recv_start > 0) {
 				char32_t c = current_line[recv_start - 1];
 				if (c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
@@ -4223,6 +4224,24 @@ Dictionary LuauLanguage::_complete_code(const String &p_code, const String &p_pa
 		}
 	}
 
+	//MARK: Enum auto complete
+	if (dot) {
+		const HashMap<String, HashMap<String, int64_t>> &global_enums = LuauEngine::get_global_enums();
+
+		if (receiver == "Enum") {
+			for (const KeyValue<String, HashMap<String, int64_t>> &E : global_enums) {
+				luau_complete_add(result, E.key, LUAU_KIND_ENUM);
+			}
+		} else if (current_line.substr(0, recv_start).ends_with("Enum.")) {
+			const HashMap<String, int64_t> *values = global_enums.getptr(receiver);
+			if (values) {
+				for (const KeyValue<String, int64_t> &V : *values) {
+					luau_complete_add(result, V.key, LUAU_KIND_CONSTANT);
+				}
+			}
+		}
+	}
+
 	if (!dot) {
 		PackedStringArray keywords = _get_reserved_words();
 		for (int i = 0; i < keywords.size(); i++) {
@@ -4242,7 +4261,7 @@ Dictionary LuauLanguage::_complete_code(const String &p_code, const String &p_pa
 			"unpack", "rawequal", "rawget", "rawset", "rawlen", "setmetatable",
 			"getmetatable", "pcall", "xpcall", "error", "assert", "warn", "print",
 			"string", "table", "math", "task", "coroutine", "vector", "buffer",
-			"os", "utf8", "bit32", "debug", "typeof", "wait", nullptr
+			"os", "utf8", "bit32", "debug", "typeof", "wait", "Enum", nullptr
 		};
 		for (int i = 0; builtins[i] != nullptr; i++) {
 			luau_complete_add(result, String(builtins[i]), LUAU_KIND_PLAIN_TEXT /*KIND_GLOBAL*/);
