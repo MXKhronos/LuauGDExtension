@@ -7,6 +7,7 @@
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
 
 #include "nobind.h"
 
@@ -29,7 +30,7 @@ void initialize_luau_module(ModuleInitializationLevel p_level) {
         GDREGISTER_INTERNAL_CLASS(LambdaWrapper);
         GDREGISTER_INTERNAL_CLASS(LuaFunctionWrapper);
 
-        WARN_PRINT("[LuauGDExtension] Initializing Extension");
+        UtilityFunctions::print("[LuauGDExtension] Initializing Extension");
         GDREGISTER_INTERNAL_CLASS(LuauScript);
 
         GDREGISTER_INTERNAL_CLASS(LuauLanguage);
@@ -37,7 +38,7 @@ void initialize_luau_module(ModuleInitializationLevel p_level) {
         Error reg_script_lang = nobind::Engine::get_singleton()->register_script_language(script_language_luau);
         ERR_FAIL_COND_MSG(reg_script_lang != OK,
             "Failed to register Luau language.");
-        WARN_PRINT("[LuauGDExtension] Luau Script Language registered successfully");
+        UtilityFunctions::print("[LuauGDExtension] Luau Script Language registered successfully");
     } 
     else if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 
@@ -46,14 +47,14 @@ void initialize_luau_module(ModuleInitializationLevel p_level) {
         ERR_FAIL_COND_MSG(!resource_loader_luau.is_valid(), 
             "Failed to instantiate Luau resource loader.");
         nobind::ResourceLoader::get_singleton()->add_resource_format_loader(resource_loader_luau);
-        WARN_PRINT("[LuauGDExtension] Resource Loader registered successfully");
+        UtilityFunctions::print("[LuauGDExtension] Resource Loader registered successfully");
 
         GDREGISTER_INTERNAL_CLASS(ResourceFormatSaverLuau);
         resource_saver_luau.instantiate();
         ERR_FAIL_COND_MSG(!resource_saver_luau.is_valid(), 
             "Failed to instantiate Luau resource saver.");
         nobind::ResourceSaver::get_singleton()->add_resource_format_saver(resource_saver_luau);
-        WARN_PRINT("[LuauGDExtension] Resource Saver registered successfully");
+        UtilityFunctions::print("[LuauGDExtension] Resource Saver registered successfully");
     }
 
     if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
@@ -61,7 +62,7 @@ void initialize_luau_module(ModuleInitializationLevel p_level) {
         GDREGISTER_INTERNAL_CLASS(LuauSyntaxHighlighter);
 
         EditorPlugins::add_by_type<LuauPlugin>();
-        WARN_PRINT("[LuauGDExtension] Editor Plugin registered successfully");
+        UtilityFunctions::print("[LuauGDExtension] Editor Plugin registered successfully");
 
     }
 }
@@ -85,15 +86,33 @@ void uninitialize_luau_module(ModuleInitializationLevel p_level) {
 void startup_luau_module() {
     PackedStringArray args = OS::get_singleton()->get_cmdline_args();
     bool run_tests = false;
+    PackedStringArray doctest_args;
     for (int i = 0; i < args.size(); i++) {
         if (args[i] == "--run-extension-tests") {
             run_tests = true;
-            break;
+            continue;
+        }
+        if (run_tests) {
+            doctest_args.append(args[i]);
         }
     }
     if (run_tests) {
-        WARN_PRINT("[LuauGDExtension] Running tests");
-        doctest::Context().run();
-        WARN_PRINT("[LuauGDExtension] Tests finished");
-    }   
+        UtilityFunctions::print("[LuauGDExtension] Running tests");
+
+        Vector<CharString> storage;
+        for (int i = 0; i < doctest_args.size(); i++) {
+            storage.push_back(doctest_args[i].utf8());
+        }
+
+        Vector<const char *> argv;
+        argv.push_back("godot");
+        for (int i = 0; i < storage.size(); i++) {
+            argv.push_back(storage[i].get_data());
+        }
+
+        doctest::Context ctx(argv.size(), argv.ptr());
+        ctx.run();
+
+        UtilityFunctions::print("[LuauGDExtension] Tests finished");
+    }
 }
