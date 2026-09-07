@@ -922,6 +922,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
 
 void LuauEngine::register_godot_globals(lua_State *L) {
     register_godot_functions(L);
+    register_math_constants(L);
 
     {
         lua_newtable(L);
