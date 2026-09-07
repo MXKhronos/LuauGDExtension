@@ -3243,6 +3243,8 @@ void LuauLanguage::_init() {
 }
 
 void LuauLanguage::_finish() {
+    luau_await_shutdown();
+
     if (luau) {
         memdelete(luau);
     }

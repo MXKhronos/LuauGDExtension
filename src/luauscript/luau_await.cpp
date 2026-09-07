@@ -113,6 +113,11 @@ void luau_register_await(lua_State *L) {
 	lua_setglobal(L, "await");
 }
 
+void luau_await_shutdown() {
+	g_active_resumes.clear();
+	g_suspended_threads.clear();
+}
+
 void luau_track_suspended_thread(lua_State *ET, lua_State *owner_T, int stack_index) {
 	SuspendedThread &suspended = g_suspended_threads[ET];
 	suspended.owner = owner_T;

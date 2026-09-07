@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 import os
+import sys
+
 env = SConscript("extern/godot-cpp/SConstruct") # type: ignore
 
 if 'SCONS_CACHE' in os.environ:
@@ -95,7 +97,7 @@ extract_api_targets = [
 extract_api_cmd = env.Command(
     extract_api_targets,
     [extract_api_script, "extern/godot-cpp/gdextension/extension_api.json"],
-    "python $SOURCE",
+    '"{}" $SOURCE'.format(sys.executable),
 )
 env.AlwaysBuild(extract_api_cmd)
 env.Alias("extract_api", extract_api_cmd)
