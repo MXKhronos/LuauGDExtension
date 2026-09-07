@@ -3,6 +3,8 @@
 
 #include "luauscript_register.h"
 
+#include <cstdlib>
+
 #include <gdextension_interface.h>
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/godot.hpp>
@@ -111,8 +113,13 @@ void startup_luau_module() {
         }
 
         doctest::Context ctx(argv.size(), argv.ptr());
-        ctx.run();
-
+        const int test_exit_code = ctx.run();
+      
         UtilityFunctions::print("[LuauGDExtension] Tests finished");
+      
+        if (test_exit_code != 0) {
+        	UtilityFunctions::print("[LuauGDExtension] TESTS FAILED (exit code ", test_exit_code, ")");
+        	std::exit(test_exit_code);
+        }
     }
 }

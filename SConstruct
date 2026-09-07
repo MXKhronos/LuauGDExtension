@@ -128,8 +128,11 @@ demo_dirs = [
 extra_files = ["LuauGDExt.gdextension", "LuauScript.svg"]
 
 for d in demo_dirs:
-    # 1. Copy the compiled library to each demo folder
-    lib_name = "LuauGDExt{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
+    # 1. Copy the compiled library to each demo folder.
+    # Derive the filename from the actual built node: SCons prepends the
+    # "lib" prefix on POSIX platforms (e.g. libLuauGDExt.linux...so), which
+    # must match the paths listed in LuauGDExt.gdextension.
+    lib_name = os.path.basename(str(library[0]))
     lib_copy = env.Command(
         d + lib_name,
         library,

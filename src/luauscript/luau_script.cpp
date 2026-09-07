@@ -2723,6 +2723,8 @@ void *LuauScript::_instance_create(Object *obj_ptr) const {
 			if (!nobind::ClassDB::get_singleton()->is_parent_class(obj_ptr->get_class(), base_type)) {
 				// Type mismatch, use placeholder
 				should_create_placeholder = true;
+			} else if (nobind::ClassDB::get_singleton()->is_parent_class(base_type, StringName("MainLoop"))) {
+				should_create_placeholder = true;
 			}
 		}
 	}

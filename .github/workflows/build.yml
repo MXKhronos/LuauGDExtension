@@ -1,4 +1,4 @@
-name: Build & Test (Reusable)
+wname: Build & Test (Reusable)
 
 on:
   workflow_call:
@@ -53,6 +53,10 @@ jobs:
         with:
           version: "4.6.1"
           use-dotnet: false
+
+      - name: Import Project Assets
+        shell: bash
+        run: godot --headless --path ./demo --import
 
       - name: Execute Tests
         shell: bash
