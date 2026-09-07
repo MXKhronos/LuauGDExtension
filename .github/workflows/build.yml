@@ -1,4 +1,4 @@
-wname: Build & Test (Reusable)
+name: Build & Test (Reusable)
 
 on:
   workflow_call:
