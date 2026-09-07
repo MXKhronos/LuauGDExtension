@@ -11,6 +11,8 @@
 #include <lua.h>
 #include <lualib.h>
 
+#include "luau_engine.h"
+
 namespace godot {
     class LambdaWrapper : public godot::RefCounted {
         GDCLASS(LambdaWrapper, godot::RefCounted);
@@ -48,7 +50,7 @@ namespace godot {
         LuaFunctionWrapper() = default;
         
         ~LuaFunctionWrapper() {
-            if (L && func_ref != LUA_NOREF) {
+            if (L && !LuauEngine::vms_closed && func_ref != LUA_NOREF) {
                 lua_unref(L, func_ref);
                 func_ref = LUA_NOREF;
             }

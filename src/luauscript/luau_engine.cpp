@@ -97,7 +97,7 @@ static String luau_enum_screaming_snake(const String &p_name) {
 }
 
 static LuauEnumRegistry &luau_enum_registry() {
-    static LuauEnumRegistry registry;
+    static LuauEnumRegistry *registry = new LuauEnumRegistry();
     static bool loaded = false;
 
     if (!loaded) {
@@ -121,7 +121,7 @@ static LuauEnumRegistry &luau_enum_registry() {
                         }
 
                         String prefix = luau_enum_screaming_snake(enum_name) + "_";
-                        HashMap<String, int64_t> &constants = registry.global_enums[enum_name];
+                        HashMap<String, int64_t> &constants = registry->global_enums[enum_name];
 
                         for (int v = 0; v < values.size(); v++) {
                             Dictionary value_def = values[v];
@@ -145,14 +145,14 @@ static LuauEnumRegistry &luau_enum_registry() {
 
                     for (int v = 0; v < values.size(); v++) {
                         Dictionary value_def = values[v];
-                        registry.by_owner[owner][String(value_def.get("name", ""))] = (int64_t)value_def.get("value", 0);
+                        registry->by_owner[owner][String(value_def.get("name", ""))] = (int64_t)value_def.get("value", 0);
                     }
                 }
             }
         }
     }
 
-    return registry;
+    return *registry;
 }
 
 const HashMap<String, HashMap<String, int64_t>> &LuauEngine::get_global_enums() {
@@ -1151,7 +1151,11 @@ LuauEngine::LuauEngine() {
     }
 }
 
+bool LuauEngine::vms_closed = false;
+
 LuauEngine::~LuauEngine() {
+	vms_closed = true;
+
 	if (singleton == this) {
 		singleton = nullptr;
 	}

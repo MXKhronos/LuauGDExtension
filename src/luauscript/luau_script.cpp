@@ -1090,15 +1090,16 @@ LuauScriptInstance::~LuauScriptInstance() {
 	}
 	held_member_refs.clear();
 
-	// Clean up Lua state
-	if (L && thread_ref != LUA_NOREF) {
-		lua_unref(L, thread_ref);
-		thread_ref = LUA_NOREF;
-	}
-	
-	if (L && self_ref != LUA_NOREF) {
-		lua_unref(L, self_ref);
-		self_ref = LUA_NOREF;
+	if (L && !LuauEngine::vms_closed) {
+		if (thread_ref != LUA_NOREF) {
+			lua_unref(L, thread_ref);
+			thread_ref = LUA_NOREF;
+		}
+		
+		if (self_ref != LUA_NOREF) {
+			lua_unref(L, self_ref);
+			self_ref = LUA_NOREF;
+		}
 	}
 	
 	L = nullptr;

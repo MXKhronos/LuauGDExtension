@@ -36,6 +36,8 @@ public:
     static LuauEngine *get_singleton() { return singleton; };
     static const HashMap<String, HashMap<String, int64_t>> &get_global_enums();
 
+    static bool vms_closed;
+
     lua_State *get_vm(VMType p_type) { 
         if (p_type >= 0 && p_type < VM_MAX) {
             return vms[p_type];
