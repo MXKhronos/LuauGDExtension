@@ -120,6 +120,8 @@ for j in generated_json:
             Copy("$TARGET", "$SOURCE"),
         )
         env.Alias("extract_api", copy_cmd)
+        # must be generated and copied to every default build.
+        env.Default(copy_cmd)
 
 demo_dirs = [
     "./demo/bin/LuauGDExt/",
