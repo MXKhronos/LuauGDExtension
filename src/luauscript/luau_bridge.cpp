@@ -115,7 +115,7 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
             break;
 
         case Variant::AABB: {
-            AABBBridge::push_from(L, p_var.operator ::AABB());
+            AABBBridge::push_from(L, p_var);
             break;
         }
 
@@ -125,17 +125,17 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
         }
 
         case Variant::BASIS: {
-            BasisBridge::push_from(L, p_var.operator Basis());
+            BasisBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::CALLABLE: {
-            CallableBridge::push_from(L, p_var.operator Callable());
+            CallableBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::COLOR: {
-            ColorBridge::push_from(L, p_var.operator Color());
+            ColorBridge::push_from(L, p_var);
             break;
         }
             
@@ -161,27 +161,27 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
         }
 
         case Variant::PLANE: {
-            PlaneBridge::push_from(L, p_var.operator Plane());
+            PlaneBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::QUATERNION: {
-            QuaternionBridge::push_from(L, p_var.operator Quaternion());
+            QuaternionBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::RECT2: {
-            Rect2Bridge::push_from(L, p_var.operator Rect2());
+            Rect2Bridge::push_from(L, p_var);
             break;
         }
 
         case Variant::RECT2I: {
-            Rect2iBridge::push_from(L, p_var.operator Rect2i());
+            Rect2iBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::RID: {
-            RIDBridge::push_from(L, p_var.operator ::RID());
+            RIDBridge::push_from(L, p_var);
             break;
         }
             
@@ -196,47 +196,102 @@ void LuauBridge::push_variant(lua_State *L, const Variant &p_var) {
         }
 
         case Variant::TRANSFORM2D: {
-            Transform2DBridge::push_from(L, p_var.operator Transform2D());
+            Transform2DBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::TRANSFORM3D: {
-            Transform3DBridge::push_from(L, p_var.operator Transform3D());
+            Transform3DBridge::push_from(L, p_var);
             break;
         }   
 
         case Variant::VECTOR2: {
-            Vector2Bridge::push_from(L, p_var.operator Vector2());
+            Vector2Bridge::push_from(L, p_var);
             break;
         }
         
         case Variant::VECTOR2I: {
-            Vector2iBridge::push_from(L, p_var.operator Vector2i());
+            Vector2iBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::VECTOR3: {
-            Vector3Bridge::push_from(L, p_var.operator Vector3());
+            Vector3Bridge::push_from(L, p_var);
             break;
         }
 
         case Variant::VECTOR3I: {
-            Vector3iBridge::push_from(L, p_var.operator Vector3i());
+            Vector3iBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::VECTOR4: {
-            Vector4Bridge::push_from(L, p_var.operator Vector4());
+            Vector4Bridge::push_from(L, p_var);
             break;
         }
 
         case Variant::VECTOR4I: {
-            Vector4iBridge::push_from(L, p_var.operator Vector4i());
+            Vector4iBridge::push_from(L, p_var);
             break;
         }
 
         case Variant::SIGNAL: {
-            SignalBridge::push_from(L, p_var.operator Signal());
+            SignalBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_BYTE_ARRAY: {
+            PackedByteArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_INT32_ARRAY: {
+            PackedInt32ArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_INT64_ARRAY: {
+            PackedInt64ArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_FLOAT32_ARRAY: {
+            PackedFloat32ArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_FLOAT64_ARRAY: {
+            PackedFloat64ArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_STRING_ARRAY: {
+            PackedStringArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_VECTOR2_ARRAY: {
+            PackedVector2ArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_VECTOR3_ARRAY: {
+            PackedVector3ArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_VECTOR4_ARRAY: {
+            PackedVector4ArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PACKED_COLOR_ARRAY: {
+            PackedColorArrayBridge::push_from(L, p_var);
+            break;
+        }
+
+        case Variant::PROJECTION: {
+            ProjectionBridge::push_from(L, p_var);
             break;
         }
         
