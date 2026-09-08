@@ -180,6 +180,20 @@ static StringName *stringname_alloc(const String &p_str) {
 }
 
 //MARK: AST Helper Functions
+static Luau::AstType *unwrap_annotation_type(Luau::AstType *p_type) {
+	while (p_type) {
+		if (auto *union_type = p_type->as<Luau::AstTypeUnion>()) {
+			if (union_type->types.size == 0) {
+				return nullptr;
+			}
+			p_type = union_type->types.data[0];
+			continue;
+		}
+		break;
+	}
+	return p_type;
+}
+
 Variant::Type LuauScript::parse_type_name(const String& type_name) {
 	if (type_name == "boolean") return Variant::BOOL;
 	if (type_name == "number") return Variant::FLOAT;
@@ -371,11 +385,14 @@ AstExprResult LuauScript::extract_ast_expr_value(
 		result.value = Variant();
 		
 		if (annotation) {
-			if (auto* anno_type = annotation->as<Luau::AstTypeReference>()) {
-				result.native_type = StringName(anno_type->name.value);
-				result.type = parse_type_name(result.native_type);
-				result.success = true;
-				return result;
+			Luau::AstType *resolved = unwrap_annotation_type(annotation);
+			if (resolved) {
+				if (auto* anno_type = resolved->as<Luau::AstTypeReference>()) {
+					result.native_type = StringName(anno_type->name.value);
+					result.type = parse_type_name(result.native_type);
+					result.success = true;
+					return result;
+				}
 			}
 		}
 		
