@@ -464,6 +464,11 @@ Variant LuauBridge::get_variant(lua_State *L, int p_index) {
                 return PackedColorArrayBridge::get_object(L, p_index);
 
             } else if (type_str == "Object") {
+                LuauObjectUD* obj_ud = (LuauObjectUD*)lua_touserdata(L, p_index);
+                if (obj_ud != nullptr && obj_ud->ref.get_type() == Variant::OBJECT) {
+                    return obj_ud->ref;
+                }
+
                 Object* obj = ObjectBridge::get_object(L, p_index);
                 return Variant(obj);
                 
@@ -610,10 +615,6 @@ void VariantBridge<GDV, __eq>::register_variant(lua_State *L) {
 
     lua_pushstring(L, "__newindex");
     lua_pushcfunction(L, on_newindex, "__newindex");
-    lua_settable(L, -3);
-
-    lua_pushstring(L, "__gc");
-    lua_pushcfunction(L, on_gc, "__gc");
     lua_settable(L, -3);
 
     lua_pushstring(L, "__call");

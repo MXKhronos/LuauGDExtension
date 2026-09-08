@@ -37,6 +37,7 @@
 #include "luauscript/luau_script.h"
 #include "luauscript/luau_bridge.h"
 #include "luauscript/luau_cache.h"
+#include "luauscript/variant/object.h"
 
 using namespace godot;
 
@@ -1195,5 +1196,100 @@ TEST_SUITE("Benchmark")
 		CHECK_EQ((int64_t)node->get("Value"), ops - 1);
 
 		memdelete(node);
+	}
+}
+
+// ==============================================================================
+// Object userdata lifetime (dtor-tagged userdata holding LuauObjectUD)
+// ==============================================================================
+TEST_SUITE("Object userdata lifetime")
+{
+	TEST_CASE("push_variant holds a strong reference that follows the Lua GC") {
+		lua_State *L = LuauEngine::get_singleton()->get_vm(LuauEngine::VM_CORE);
+		REQUIRE(L != nullptr);
+
+		int top = lua_gettop(L);
+
+		RefCounted *rc = memnew(RefCounted);
+		REQUIRE(rc != nullptr);
+		const uint64_t id = rc->get_instance_id();
+
+		Ref<RefCounted> holder = rc;
+
+		LuauBridge::push_variant(L, Variant(rc));
+		void *ud = LuauBridge::luaL_testudata(L, -1, "Object");
+		REQUIRE(ud != nullptr);
+		CHECK(static_cast<LuauObjectUD *>(ud)->ref.get_type() == Variant::OBJECT);
+
+		lua_gc(L, LUA_GCCOLLECT, 0);
+		CHECK(ObjectDB::get_instance(id) != nullptr);
+
+		lua_pop(L, 1); //drop luau ref
+		CHECK(ObjectDB::get_instance(id) != nullptr);
+
+		holder = Ref<RefCounted>(); //drop the C++ ref
+		CHECK(ObjectDB::get_instance(id) != nullptr);
+
+		lua_gc(L, LUA_GCCOLLECT, 0);
+
+		CHECK(ObjectDB::get_instance(id) == nullptr);
+		CHECK_EQ(lua_gettop(L), top);
+	}
+
+	TEST_CASE("RefCounted constructed by a script survives the call and the instance") {
+		Ref<LuauScript> scr = make_script(
+				"--- @tool\n"
+				"--- @extends Node\n"
+				"function make_ref()\n"
+				"    return RefCounted()\n"
+				"end\n");
+		REQUIRE(scr.is_valid());
+		REQUIRE_EQ(scr->load(LuauScript::LOAD_FULL), OK);
+
+		Node *node = memnew(Node);
+		REQUIRE(node != nullptr);
+		node->set_script(scr);
+		REQUIRE(scr->_instance_has(node));
+
+		Variant ret = node->call("make_ref");
+		REQUIRE(ret.get_type() == Variant::OBJECT);
+
+		Object *made = ret.get_validated_object();
+		REQUIRE(made != nullptr);
+		CHECK(Object::cast_to<RefCounted>(made) != nullptr);
+
+		memdelete(node);
+
+		CHECK(ObjectDB::get_instance(made->get_instance_id()) != nullptr);
+	}
+
+	TEST_CASE("Non-RefCounted constructor results stay anchored until the VM closes") {
+		Ref<LuauScript> scr = make_script(
+				"--- @tool\n"
+				"--- @extends Node\n"
+				"function make_node()\n"
+				"    return Node()\n"
+				"end\n");
+		REQUIRE(scr.is_valid());
+		REQUIRE_EQ(scr->load(LuauScript::LOAD_FULL), OK);
+
+		Node *node = memnew(Node);
+		REQUIRE(node != nullptr);
+		node->set_script(scr);
+		REQUIRE(scr->_instance_has(node));
+
+		Variant ret = node->call("make_node");
+		REQUIRE(ret.get_type() == Variant::OBJECT);
+
+		Object *made = ret.get_validated_object();
+		REQUIRE(made != nullptr);
+		CHECK(Object::cast_to<RefCounted>(made) == nullptr);
+
+		const uint64_t id = made->get_instance_id();
+
+		memdelete(node);
+		lua_gc(LuauEngine::get_singleton()->get_vm(LuauEngine::VM_CORE), LUA_GCCOLLECT, 0);
+
+		CHECK(ObjectDB::get_instance(id) != nullptr);
 	}
 }

@@ -6,6 +6,7 @@
 #include "luauscript/luau_bridge.h"
 
 #include <godot_cpp/core/object.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
 
 namespace godot {
 
@@ -22,8 +23,13 @@ class ObjectBridge: public VariantBridge<Object*> {
                 return nullptr;
             }
 
-            uint64_t* ud = (uint64_t*)lua_newuserdata(L, sizeof(uint64_t));
-            new (ud) uint64_t(obj->get_instance_id());
+            LuauObjectUD* ud = (LuauObjectUD*)lua_newuserdatatagged(L, sizeof(LuauObjectUD), OBJECT_UD_TAG);
+            new (&ud->id) uint64_t(obj->get_instance_id());
+            if (Object::cast_to<RefCounted>(obj) != nullptr) {
+                new (&ud->ref) Variant(v);
+            } else {
+                new (&ud->ref) Variant();
+            }
 
             luaL_getmetatable(L, variant_name);
             lua_setmetatable(L, -2);
@@ -38,8 +44,7 @@ class ObjectBridge: public VariantBridge<Object*> {
                 luaL_error(L, "Invalid userdata");
             }
 
-            uint64_t obj_id = *(uint64_t*)ud;
-            return ObjectDB::get_instance(obj_id);
+            return ObjectDB::get_instance(luau_object_ud_id(ud));
         }
 
     private:

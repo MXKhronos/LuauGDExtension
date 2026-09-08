@@ -16,6 +16,21 @@ namespace godot {
 
 
 const int UINT64_T_TAG = 1;
+const int OBJECT_UD_TAG = 2;
+
+struct LuauObjectUD {
+    uint64_t id;
+    Variant ref;
+};
+
+inline void object_ud_dtor(lua_State *L, void *p_ud) {
+    (void)L;
+    static_cast<LuauObjectUD *>(p_ud)->ref.~Variant();
+}
+
+inline uint64_t luau_object_ud_id(void *p_ud) {
+    return static_cast<LuauObjectUD *>(p_ud)->id;
+}
 
 class LuauObject {
     friend class LuauScriptInstance;
@@ -145,15 +160,10 @@ public:
     static int on_newindex(lua_State* L, const GDV& object, const char* key);
     static int on_call(lua_State* L, bool& is_valid);
 
-    static int on_gc(lua_State *L) {
-		get_object(L, 1).~GDV();
-		return 0;
-	}
-
 	static int on_tostring(lua_State *L) {
 	    void *ud = LuauBridge::luaL_testudata(L, 1, "Object");
         if (ud) {
-            uint64_t obj_id = *(uint64_t*)ud;
+            uint64_t obj_id = luau_object_ud_id(ud);
             Object* obj = ObjectDB::get_instance(obj_id);
             
             if (obj != nullptr) {
@@ -184,7 +194,7 @@ public:
 
         void *ud = LuauBridge::luaL_testudata(L, 1, "Object");
         if (ud) {
-            uint64_t obj_id = *(uint64_t*)ud;
+            uint64_t obj_id = luau_object_ud_id(ud);
             Object* obj = ObjectDB::get_instance(obj_id);
             
             if (obj != nullptr) {
@@ -312,7 +322,7 @@ public:
 
         void *obj_ud = LuauBridge::luaL_testudata(L, 1, "Object");
         if (obj_ud) {
-            uint64_t obj_id = *(uint64_t*)obj_ud;
+            uint64_t obj_id = luau_object_ud_id(obj_ud);
             Object* resolved = ObjectDB::get_instance(obj_id);
             if (resolved != nullptr) {
                 return VariantBridge<Object*>::on_newindex(L, resolved, key);

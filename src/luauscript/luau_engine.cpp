@@ -16,6 +16,7 @@
 
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/json.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
 
 #include "luauscript/luau_await.h"
 
@@ -227,8 +228,8 @@ static int luau_enum_table_index(lua_State *L) {
 }
 
 static HashMap<uint64_t, Variant> &luau_owned_objects() {
- static HashMap<uint64_t, Variant> *owned_objects = new HashMap<uint64_t, Variant>();
- return *owned_objects;
+    static HashMap<uint64_t, Variant> *owned_objects = new HashMap<uint64_t, Variant>();
+    return *owned_objects;
 }
 
 void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String &class_name) {
@@ -272,7 +273,9 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
             return 0;
         }
 
-        luau_owned_objects()[obj->get_instance_id()] = Variant(obj); //hold ref
+        if (Object::cast_to<RefCounted>(obj) == nullptr) {
+            luau_owned_objects()[obj->get_instance_id()] = Variant(obj);
+        }
 
         // Set properties
         if (has_props) {
@@ -916,7 +919,7 @@ void LuauEngine::register_godot_functions(lua_State *L) {
             return 1;
         }
 
-        uint64_t obj_id = *(uint64_t *)ud;
+        uint64_t obj_id = luau_object_ud_id(ud);
         lua_pushboolean(L, ObjectDB::get_instance(obj_id) != nullptr);
         return 1;
     }, "isValid");
@@ -1167,7 +1170,6 @@ LuauEngine::~LuauEngine() {
 		singleton = nullptr;
 	}
 
-	// Release objects anchored by Luau class constructors before the VMs go away.
 	luau_owned_objects().clear();
 
     for (lua_State *&L : vms) {

@@ -21,6 +21,8 @@ const luaL_Reg ObjectBridge::static_library[] = {
 };
 
 void ObjectBridge::register_variant_class(lua_State* L) {
+    lua_setuserdatadtor(L, OBJECT_UD_TAG, object_ud_dtor);
+
     luaL_register(L, variant_name, static_library);
 
     // CONSTANTS
@@ -104,9 +106,12 @@ int VariantBridge<Object*>::on_index(lua_State* L, Object* const &object, const 
                     lua_getref(L, inst->get_self_ref());
                     is_receiver = lua_rawequal(L, 1, -1) != 0;
                     lua_pop(L, 1);
+
                 } else if (void *recv_ud = LuauBridge::luaL_testudata(L, 1, "Object")) {
-                    is_receiver = (*(uint64_t *)recv_ud == obj_id);
+                    is_receiver = (luau_object_ud_id(recv_ud) == obj_id);
+
                 }
+                
                 if (is_receiver) {
                     start_idx = 2;
                 }

@@ -65,7 +65,7 @@ int VariantBridge<Callable>::on_call(lua_State* L, bool& is_valid) {
                     if (bound_obj != nullptr) {
                         void *recv_ud = LuauBridge::luaL_testudata(L, 2, "Object");
                         is_receiver = (recv_ud != nullptr &&
-                            *(uint64_t *)recv_ud == bound_obj->get_instance_id());
+                            luau_object_ud_id(recv_ud) == bound_obj->get_instance_id());
                     }
                 }
                 if (is_receiver) {
