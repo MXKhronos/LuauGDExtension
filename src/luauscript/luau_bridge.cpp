@@ -3,6 +3,7 @@
 
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/callable.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include "variant/builtin_types.h"
 

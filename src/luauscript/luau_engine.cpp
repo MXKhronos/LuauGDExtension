@@ -226,6 +226,11 @@ static int luau_enum_table_index(lua_State *L) {
     return 1;
 }
 
+static HashMap<uint64_t, Variant> &luau_owned_objects() {
+ static HashMap<uint64_t, Variant> *owned_objects = new HashMap<uint64_t, Variant>();
+ return *owned_objects;
+}
+
 void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String &class_name) {
     CharString utf8 = class_name.utf8();
     const char *class_name_c = utf8.get_data();
@@ -260,12 +265,14 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         // has properties input
         bool has_props = lua_istable(L, 2);
 
-        // Instantiate
-        Object *obj = ClassDB::instantiate(StringName(class_name));
+        GodotObject *raw_obj = internal::gdextension_interface_classdb_construct_object2(StringName(class_name)._native_ptr());
+        Object *obj = raw_obj != nullptr ? internal::get_object_instance_binding(raw_obj) : nullptr;
         if (!obj) {
             luaL_error(L, "Failed to instantiate %s", class_name);
             return 0;
         }
+
+        luau_owned_objects()[obj->get_instance_id()] = Variant(obj); //hold ref
 
         // Set properties
         if (has_props) {
@@ -282,7 +289,7 @@ void godot::LuauEngine::register_and_push_godot_class(lua_State *L, const String
         }
 
         LuauBridge::push_variant(L, obj);
-        return 1; 
+        return 1;
     }, "godot_call_handler");
     lua_setfield(L, -2, "__call"); // [Stack: Metatable]
 
@@ -1160,8 +1167,13 @@ LuauEngine::~LuauEngine() {
 		singleton = nullptr;
 	}
 
+	// Release objects anchored by Luau class constructors before the VMs go away.
+	luau_owned_objects().clear();
+
     for (lua_State *&L : vms) {
 		luaGD_close(L);
 		L = nullptr;
 	}
 }
+
+
